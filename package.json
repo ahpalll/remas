@@ -4,7 +4,12 @@
   "private": true,
   "description": "Educational Center Management SaaS Monorepo",
   "scripts": {
-    "test:rules": "node --test firebase/firestore_rules.test.js"
+    "test:rules": "node --test firebase/firestore_rules.test.js",
+    "test:backend": "node --test firebase/trusted_backend.test.js",
+    "test:all": "npm run test:rules && npm run test:backend"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4"

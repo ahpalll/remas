@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { InstitutionProvider, useInstitution } from './context/InstitutionContext';
+import { UserManagementProvider } from './context/UserManagementContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
 import { SuperAdminInstitutions } from './components/SuperAdminInstitutions';
+import { UserList } from './components/UserList';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
   const { institution } = useInstitution();
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '950px', margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '1rem', marginBottom: '2rem' }}>
         <div>
           <h2 style={{ margin: 0 }}>لوحة إدارة المؤسسة التعليمية</h2>
@@ -36,9 +38,13 @@ function DashboardView() {
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم ربط وحساب سياق المؤسسة والجلسة الموثقة بنجاح (Phase 3 Tenant Foundation Active)
+          ✅ تم تفعيل سياق المؤسسة وإدارة المستخدمين الموثوقة بنجاح (Phase 4 User & Identity Management Active)
         </div>
       </main>
+
+      <UserManagementProvider>
+        <UserList />
+      </UserManagementProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />
