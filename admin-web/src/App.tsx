@@ -3,12 +3,14 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { InstitutionProvider, useInstitution } from './context/InstitutionContext';
 import { UserManagementProvider } from './context/UserManagementContext';
 import { AcademicProvider } from './context/AcademicContext';
+import { StudentProvider } from './context/StudentContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
 import { SuperAdminInstitutions } from './components/SuperAdminInstitutions';
 import { UserList } from './components/UserList';
 import { AcademicCoreDashboard } from './components/AcademicCoreDashboard';
+import { StudentsManager } from './components/student/StudentsManager';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -40,7 +42,7 @@ function DashboardView() {
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم تفعيل النواة الأكاديمية بنجاح (Phase 5 Academic Core Foundation Active)
+          ✅ تم تفعيل مرحلة الطلاب وتسجيلات المجموعات بنجاح (Phase 6 Students & Student Profiles Active)
         </div>
       </main>
 
@@ -51,6 +53,10 @@ function DashboardView() {
       <AcademicProvider>
         <AcademicCoreDashboard />
       </AcademicProvider>
+
+      <StudentProvider>
+        <StudentsManager />
+      </StudentProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />

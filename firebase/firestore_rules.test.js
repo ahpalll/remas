@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 5 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 6 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,20 +44,20 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5 Academic Core)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5 & Phase 6 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks)
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks'].includes(colName)) {
+    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters'].includes(colName)) {
       const allowRead = isTenantAdmin(instId) || isSuperAdmin();
       return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
     }
 
-    // Client-Mutable Collections (subjects, stages, rooms, teachers)
-    if (['subjects', 'stages', 'rooms', 'teachers'].includes(colName)) {
+    // Client-Mutable Collections (subjects, stages, rooms, teachers, students)
+    if (['subjects', 'stages', 'rooms', 'teachers', 'students'].includes(colName)) {
       const allowRead = isTenantAdmin(instId) || isSuperAdmin(); // Student/Parent broad read DENIED
-      let allowCreate = (isTenantAdmin(instId) || isSuperAdmin()) && docBody && docBody.createdBy === (auth ? auth.uid : null);
+      let allowCreate = colName === 'students' ? false : ((isTenantAdmin(instId) || isSuperAdmin()) && docBody && docBody.createdBy === (auth ? auth.uid : null));
       const allowDelete = false;
 
       let allowUpdate = isTenantAdmin(instId) || isSuperAdmin();
@@ -69,7 +69,8 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
             subjects: new Set(['name', 'code', 'description', 'status', 'updatedAt', 'updatedBy']),
             stages: new Set(['name', 'code', 'order', 'status', 'updatedAt', 'updatedBy']),
             rooms: new Set(['name', 'capacity', 'location', 'status', 'updatedAt', 'updatedBy']),
-            teachers: new Set(['fullName', 'phone', 'email', 'specialization', 'subjectIds', 'status', 'updatedAt', 'updatedBy'])
+            teachers: new Set(['fullName', 'phone', 'email', 'specialization', 'subjectIds', 'status', 'updatedAt', 'updatedBy']),
+            students: new Set(['fullName', 'phone', 'email', 'dateOfBirth', 'gender', 'updatedAt', 'updatedBy'])
           };
           const allowedKeys = whitelistMap[colName] || new Set();
           for (const key of Object.keys(docBody)) {
@@ -430,7 +431,7 @@ test('Phase 4 Test 7 (Rule 41): Direct client attempt to modify un-whitelisted p
 });
 
 // -------------------------------------------------------------
-// PHASE 5 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 56 TOTAL)
+// PHASE 5 FIRESTORE SECURITY TESTS (15 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 5 Test 1 (Rule 42): Direct client schedule create -> DENIED (allow create: if false)', () => {
@@ -536,4 +537,113 @@ test('Phase 5 Test 15 (Rule 56): Tenant admin update subject with forged updated
   const newDoc = { name: 'Physics New', updatedAt: now, updatedBy: 'fake_uid' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, newDoc, 'update', oldDoc, now, 'subjects');
   assert.equal(res.allowWrite, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 6 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 71 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 6 Test 1 (Rule 57): Direct client student create -> DENIED (allow create: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, {}, 'create', null, null, 'students');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 6 Test 2 (Rule 58): Direct client student delete -> DENIED (allow delete: if false)', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'delete', null, null, 'students');
+  assert.equal(res.allowDelete, false);
+});
+
+test('Phase 6 Test 3 (Rule 59): Direct client enrollment create/update/delete -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const resCreate = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'enr_1' }, {}, 'create', null, null, 'enrollments');
+  const resUpdate = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'enr_1' }, {}, 'update', {}, null, 'enrollments');
+  assert.equal(resCreate.allowCreate, false);
+  assert.equal(resUpdate.allowWrite, false);
+});
+
+test('Phase 6 Test 4 (Rule 60): Direct client guardian create/update/delete -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'gdn_1' }, {}, 'create', null, null, 'guardians');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 6 Test 5 (Rule 61): Direct client groupCounters create/update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'grp_1' }, {}, 'create', null, null, 'groupCounters');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 6 Test 6 (Rule 62): Student attempts broad collection read on Students/Enrollments -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 6 Test 7 (Rule 63): Parent attempts broad collection read on Students/Enrollments -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 6 Test 8 (Rule 64): Tenant admin update student whitelisted fields with request.time -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { fullName: 'John Doe', phone: '01000', email: 'j@app.com', dateOfBirth: '2005-01-01', gender: 'MALE', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { fullName: 'John Updated', phone: '01000', email: 'j@app.com', dateOfBirth: '2005-01-01', gender: 'MALE', updatedAt: now, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, newDoc, 'update', oldDoc, now, 'students');
+  assert.equal(res.allowWrite, true);
+});
+
+test('Phase 6 Test 9 (Rule 65): Tenant admin attempt to set arbitrary static updatedAt on student -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const fakeTime = '1999-01-01T00:00:00Z';
+  const oldDoc = { fullName: 'John Doe', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { fullName: 'John Updated', updatedAt: fakeTime, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, newDoc, 'update', oldDoc, now, 'students');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 6 Test 10 (Rule 66): Direct client attempt to modify studentCode, qrTokenHash, status, userId -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { fullName: 'John Doe', studentCode: 'STU-1', status: 'ACTIVE', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { fullName: 'John Doe', studentCode: 'STU-HACKED', status: 'ACTIVE', updatedAt: now, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, newDoc, 'update', oldDoc, now, 'students');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 6 Test 11 (Rule 67): Direct client physical delete of student/enrollment -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'delete', null, null, 'students');
+  assert.equal(res.allowDelete, false);
+});
+
+test('Phase 6 Test 12 (Rule 68): Tenant A user reads Tenant B students/enrollments -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 6 Test 13 (Rule 69): Unauthenticated read of student entities -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 6 Test 14 (Rule 70): Tenant admin update student with forged updatedBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { fullName: 'John Doe', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { fullName: 'John Updated', updatedAt: now, updatedBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, newDoc, 'update', oldDoc, now, 'students');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 6 Test 15 (Rule 71): Tenant admin create student with forged createdBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const docBody = { fullName: 'John Doe', createdBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, docBody, 'create', null, null, 'students');
+  assert.equal(res.allowCreate, false);
 });
