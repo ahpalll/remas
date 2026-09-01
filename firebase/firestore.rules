@@ -1,15 +1,15 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 3 Institution & Tenant Management)
+ * Educational Center SaaS - Firestore Security Rules (Phase 3 Institution & Tenant Management - Hardened)
  * 1. Default Deny: All unmatched paths are strictly denied.
  * 2. Institution Document Rules:
  *    - Document ID MUST equal institutionId field.
- *    - institutionId and ownerId are strictly IMMUTABLE post-creation for ALL roles (including superAdmin).
+ *    - institutionId, id, ownerId, createdBy, and createdAt are strictly IMMUTABLE post-creation for ALL roles (including superAdmin).
  *    - createdBy MUST equal request.auth.uid on creation.
  *    - updatedBy MUST equal request.auth.uid on update.
  *    - Read: Tenant users of that institution or Super Admin.
- *    - Update: Tenant admins of that institution or Super Admin (with updatedBy check and immutable key protections).
+ *    - Update: Tenant admins of that institution or Super Admin (with updatedBy check and immutable audit key protections).
  *    - Create / Delete: Super Admin only (with structural validation).
  * 3. User Profile Rules:
  *    - Self profile read within tenant boundary, or Tenant Admin within tenant scope, or Super Admin globally.
@@ -42,7 +42,7 @@ service cloud.firestore {
         && request.auth.token.role in ["institutionOwner", "admin"];
     }
 
-    // Phase 3 Institution Document Rules
+    // Phase 3 Institution Document Rules (Hardened Audit Fields)
     match /institutions/{institutionId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
       
@@ -54,7 +54,7 @@ service cloud.firestore {
 
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.updatedBy == request.auth.uid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'id', 'ownerId']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'id', 'ownerId', 'createdBy', 'createdAt']);
 
       allow delete: if isSuperAdmin();
     }

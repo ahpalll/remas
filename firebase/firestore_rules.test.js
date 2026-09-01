@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 3 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 3 Firestore Security Rules (Hardened Audit Fields)
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null) {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -57,12 +57,14 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
         allowUpdate = false;
       }
 
-      // Check for immutable keys: institutionId, id, ownerId for ALL roles (including superAdmin in normal update)
+      // Check for immutable keys: institutionId, id, ownerId, createdBy, createdAt for ALL roles
       if (oldDocBody) {
         if (
           (docBody.institutionId && docBody.institutionId !== oldDocBody.institutionId) ||
           (docBody.id && docBody.id !== oldDocBody.id) ||
-          (docBody.ownerId && docBody.ownerId !== oldDocBody.ownerId)
+          (docBody.ownerId && docBody.ownerId !== oldDocBody.ownerId) ||
+          (docBody.createdBy && docBody.createdBy !== oldDocBody.createdBy) ||
+          (docBody.createdAt && docBody.createdAt !== oldDocBody.createdAt)
         ) {
           allowUpdate = false;
         }
@@ -168,7 +170,7 @@ test('Phase 2 Test 14: Scenario F1 (Client Claims Override Rejection)', () => {
 });
 
 // -------------------------------------------------------------
-// PHASE 3 SECURITY TESTS (16 ASSERTIONS FROM APPROVED PLAN)
+// PHASE 3 SECURITY TESTS (HARDENED AUDIT FIELDS)
 // -------------------------------------------------------------
 
 test('Phase 3 Test 1: Unauthenticated institution document read is DENIED', () => {
@@ -198,13 +200,13 @@ test('Phase 3 Test 5: Normal tenant user (student) attempts to update institutio
   const oldDoc = { institutionId: 'inst_A', name: 'Center A', ownerId: 'owner_1' };
   const newDoc = { institutionId: 'inst_A', name: 'Modified A', updatedBy: 'user_1' };
   const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
-  assert.equal(res.allowWrite, false, 'Student role cannot update institution document');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 3 Test 6: Tenant admin updates own institution with valid updatedBy -> ALLOWED', () => {
   const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
-  const oldDoc = { institutionId: 'inst_A', name: 'Old Center', ownerId: 'owner_1' };
-  const newDoc = { institutionId: 'inst_A', name: 'New Center Name', ownerId: 'owner_1', updatedBy: 'admin_1' };
+  const oldDoc = { institutionId: 'inst_A', name: 'Old Center', ownerId: 'owner_1', createdBy: 'super_1', createdAt: '2026-01-01' };
+  const newDoc = { institutionId: 'inst_A', name: 'New Center Name', ownerId: 'owner_1', createdBy: 'super_1', createdAt: '2026-01-01', updatedBy: 'admin_1' };
   const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
   assert.equal(res.allowWrite, true);
 });
@@ -246,7 +248,7 @@ test('Phase 3 Test 11: SuperAdmin attempts to change institutionId post-creation
   const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
   const newDoc = { institutionId: 'inst_MUTATED', name: 'Inst A', ownerId: 'owner_1', updatedBy: 'super_1' };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
-  assert.equal(res.allowWrite, false, 'institutionId is immutable post-creation even for superAdmin');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 3 Test 12: SuperAdmin attempts to change ownerId in normal update -> DENIED', () => {
@@ -254,21 +256,21 @@ test('Phase 3 Test 12: SuperAdmin attempts to change ownerId in normal update ->
   const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
   const newDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'new_owner_2', updatedBy: 'super_1' };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
-  assert.equal(res.allowWrite, false, 'ownerId is immutable post-creation in normal update even for superAdmin');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 3 Test 13: Create institution with document ID / institutionId field mismatch -> DENIED', () => {
   const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const docBody = { institutionId: 'inst_MISMATCH', name: 'Center', status: 'ACTIVE', createdBy: 'super_1' };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_REAL' }, docBody, 'create');
-  assert.equal(res.allowCreate, false, 'Mismatch between doc ID and institutionId field must be denied');
+  assert.equal(res.allowCreate, false);
 });
 
 test('Phase 3 Test 14: Client attempting to forge createdBy on creation -> DENIED', () => {
   const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const docBody = { institutionId: 'inst_A', name: 'Center', status: 'ACTIVE', createdBy: 'fake_uid' };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, docBody, 'create');
-  assert.equal(res.allowCreate, false, 'createdBy must equal request.auth.uid');
+  assert.equal(res.allowCreate, false);
 });
 
 test('Phase 3 Test 15: Client attempting to forge updatedBy on update -> DENIED', () => {
@@ -276,12 +278,44 @@ test('Phase 3 Test 15: Client attempting to forge updatedBy on update -> DENIED'
   const oldDoc = { institutionId: 'inst_A', name: 'Inst A' };
   const newDoc = { institutionId: 'inst_A', name: 'Inst A New', updatedBy: 'fake_uid' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
-  assert.equal(res.allowWrite, false, 'updatedBy must equal request.auth.uid');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 3 Test 16: SuperAdmin creating valid institution with structural checks -> ALLOWED', () => {
   const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const docBody = { institutionId: 'inst_valid', name: 'Valid Center', status: 'ACTIVE', createdBy: 'super_1' };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_valid' }, docBody, 'create');
-  assert.equal(res.allowCreate, true, 'Valid creation by SuperAdmin with structural checks must be allowed');
+  assert.equal(res.allowCreate, true);
+});
+
+test('Phase 3 Test 17: Tenant admin attempts to modify createdBy on update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', createdBy: 'super_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A New', createdBy: 'hacker_uid', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'createdBy is immutable post-creation for tenant admin');
+});
+
+test('Phase 3 Test 18: Tenant admin attempts to modify createdAt on update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', createdAt: '2026-01-01' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A New', createdAt: '2020-01-01', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'createdAt is immutable post-creation for tenant admin');
+});
+
+test('Phase 3 Test 19: SuperAdmin attempts to modify createdBy on update -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', createdBy: 'super_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A New', createdBy: 'forged_uid', updatedBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'createdBy is immutable post-creation for SuperAdmin');
+});
+
+test('Phase 3 Test 20: SuperAdmin attempts to modify createdAt on update -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', createdAt: '2026-01-01' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A New', createdAt: '2020-01-01', updatedBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'createdAt is immutable post-creation for SuperAdmin');
 });
