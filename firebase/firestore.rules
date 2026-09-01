@@ -1,59 +1,47 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 1 Foundation)
- * 1. Secure Default Deny (unmatched access denied)
- * 2. Multi-tenant isolation via institutionId custom claim / document path
- * 3. Role-based access control placeholders
+ * Educational Center SaaS - Firestore Security Rules (Phase 2 Auth & Least Privilege)
+ * 1. Default Deny: All unmatched paths are strictly denied.
+ * 2. Identity Verification: Users can read ONLY their own user profile document.
+ * 3. Tenant Isolation: Institution Admins can access profiles strictly within their institution.
+ * 4. Super Admin: Global platform read/write access.
+ * 5. No Root Wildcard / No Public Access.
  */
 
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default Deny: All reads and writes are denied unless explicitly allowed below.
-
-    // Super Admin: Global full access across all institutions
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.role == "superAdmin";
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSelf(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.role == "superAdmin";
     }
 
-    // Institution Owner: Full access to their own institution data
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.role == "institutionOwner" 
-        && request.auth.token.institutionId == institutionId;
+    function isTenantAdmin(institutionId) {
+      return isAuthenticated() 
+        && request.auth.token.institutionId == institutionId 
+        && request.auth.token.role in ["institutionOwner", "admin"];
     }
 
-    // Institution Staff (Admin, Secretary, Accountant, Data Entry): Access within their institution
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.institutionId == institutionId
-        && (request.auth.token.role == "admin" 
-            || request.auth.token.role == "secretary"
-            || request.auth.token.role == "accountant"
-            || request.auth.token.role == "dataEntry");
+    function isTenantUser(institutionId) {
+      return isAuthenticated() && request.auth.token.institutionId == institutionId;
     }
 
-    // Teacher: Access limited to institution scope
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.role == "teacher" 
-        && request.auth.token.institutionId == institutionId;
-    }
-
-    // Parent: Access limited to institution scope
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.role == "parent" 
-        && request.auth.token.institutionId == institutionId;
-    }
-
-    // Student: Access limited to institution scope
-    match /institutions/{institutionId}/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.role == "student" 
-        && request.auth.token.institutionId == institutionId;
+    // User Profile Rules (Least Privilege)
+    match /institutions/{institutionId}/users/{userId} {
+      // User can read ONLY their own document, or tenant admin can read within tenant scope, or super admin globally
+      allow read: if isSelf(userId) || isTenantAdmin(institutionId) || isSuperAdmin();
+      
+      // Writes allowed strictly by tenant admins or super admins
+      allow write: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
   }
 }
