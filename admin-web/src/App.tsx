@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { InstitutionProvider, useInstitution } from './context/InstitutionContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
+import { InstitutionSettings } from './components/InstitutionSettings';
+import { SuperAdminInstitutions } from './components/SuperAdminInstitutions';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
+  const { institution } = useInstitution();
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '1rem', marginBottom: '2rem' }}>
         <div>
-          <h2 style={{ margin: 0 }}>لوحة الإدارة الرئيسية</h2>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>نظام إدارة السناتر التعليمية - SaaS</span>
+          <h2 style={{ margin: 0 }}>لوحة إدارة المؤسسة التعليمية</h2>
+          <span style={{ fontSize: '0.85rem', color: '#666' }}>
+            المؤسسة الحالية: <strong>{institution?.name || institutionId || 'غير محدد'}</strong>
+          </span>
         </div>
         <button
           onClick={logout}
@@ -22,15 +28,20 @@ function DashboardView() {
       </header>
 
       <main style={{ background: '#fafafa', padding: '1.5rem', borderRadius: '8px', border: '1px solid #eee' }}>
-        <h3>بيانات الجلسة الحالية (Authenticated Session)</h3>
+        <h3>بيانات الجلسة الموثقة (Tenant & Auth Session)</h3>
         <p><strong>البريد الإلكتروني:</strong> {currentUser?.email}</p>
         <p><strong>معرف المستخدم (UID):</strong> {currentUser?.uid}</p>
         <p><strong>الدور (Role Claim):</strong> {role || 'غير محدد'}</p>
-        <p><strong>معرف المؤسسة (Tenant ID):</strong> {institutionId || 'غير محدد'}</p>
+        <p><strong>معرف السنتر (Tenant ID):</strong> {institutionId || 'غير محدد'}</p>
+        <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
+
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم إثبات الهوية والجلسة بنجاح (Phase 2 Identity Foundation Active)
+          ✅ تم ربط وحساب سياق المؤسسة والجلسة الموثقة بنجاح (Phase 3 Tenant Foundation Active)
         </div>
       </main>
+
+      <InstitutionSettings />
+      <SuperAdminInstitutions />
     </div>
   );
 }
@@ -40,7 +51,11 @@ function MainContent() {
   const [view, setView] = useState<'login' | 'reset'>('login');
 
   if (currentUser) {
-    return <DashboardView />;
+    return (
+      <InstitutionProvider>
+        <DashboardView />
+      </InstitutionProvider>
+    );
   }
 
   return (

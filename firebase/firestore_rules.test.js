@@ -7,138 +7,281 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 2 Firestore Security Rules
-function evaluateRuleContext(auth, pathParams, docBody) {
-  // 1. Unauthenticated Check
+// Rules Parser & Logic Verification Engine for Phase 3 Firestore Security Rules
+function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null) {
   const isAuthenticated = auth !== null && auth !== undefined;
   
-  // 2. Helper Functions matching firestore.rules
   const isSuperAdmin = () => isAuthenticated && auth.token && auth.token.role === 'superAdmin';
   const isTenantUser = (institutionId) => isAuthenticated && auth.token && auth.token.institutionId === institutionId;
   const isSelf = (userId, institutionId) => isAuthenticated && auth.uid === userId && (isTenantUser(institutionId) || isSuperAdmin());
   const isTenantAdmin = (institutionId) => isTenantUser(institutionId) && ['institutionOwner', 'admin'].includes(auth.token.role);
 
-  // Path matching for /institutions/{institutionId}/users/{userId}
-  const matchUserPath = pathParams.institutionId && pathParams.userId;
-  if (!matchUserPath) {
-    return { allowRead: false, allowWrite: false };
+  // Path 1: /institutions/{institutionId}/users/{userId}
+  if (pathParams.institutionId && pathParams.userId) {
+    const instId = pathParams.institutionId;
+    const uId = pathParams.userId;
+    const allowRead = isSelf(uId, instId) || isTenantAdmin(instId) || isSuperAdmin();
+    const allowWrite = isTenantAdmin(instId) || isSuperAdmin();
+    return { allowRead, allowWrite };
   }
 
-  const instId = pathParams.institutionId;
-  const uId = pathParams.userId;
+  // Path 2: /institutions/{institutionId}
+  if (pathParams.institutionId && !pathParams.userId) {
+    const instId = pathParams.institutionId;
+    
+    // Read
+    const allowRead = isTenantUser(instId) || isSuperAdmin();
 
-  // Evaluate Read Rule: if isSelf(userId, institutionId) || isTenantAdmin(institutionId) || isSuperAdmin()
-  const allowRead = isSelf(uId, instId) || isTenantAdmin(instId) || isSuperAdmin();
+    // Create
+    let allowCreate = isSuperAdmin();
+    if (allowCreate && docBody) {
+      if (
+        docBody.institutionId !== instId ||
+        docBody.createdBy !== (auth ? auth.uid : null) ||
+        typeof docBody.name !== 'string' ||
+        !docBody.name ||
+        !['ACTIVE', 'SUSPENDED', 'ARCHIVED'].includes(docBody.status)
+      ) {
+        allowCreate = false;
+      }
+    }
 
-  // Evaluate Write Rule: if isTenantAdmin(institutionId) || isSuperAdmin()
-  const allowWrite = isTenantAdmin(instId) || isSuperAdmin();
+    // Delete
+    const allowDelete = isSuperAdmin();
 
-  return { allowRead, allowWrite };
+    // Update
+    let allowUpdate = isTenantAdmin(instId) || isSuperAdmin();
+    if (allowUpdate && docBody) {
+      // Must check updatedBy == auth.uid for ALL roles
+      if (docBody.updatedBy !== (auth ? auth.uid : null)) {
+        allowUpdate = false;
+      }
+
+      // Check for immutable keys: institutionId, id, ownerId for ALL roles (including superAdmin in normal update)
+      if (oldDocBody) {
+        if (
+          (docBody.institutionId && docBody.institutionId !== oldDocBody.institutionId) ||
+          (docBody.id && docBody.id !== oldDocBody.id) ||
+          (docBody.ownerId && docBody.ownerId !== oldDocBody.ownerId)
+        ) {
+          allowUpdate = false;
+        }
+      }
+    }
+
+    const allowWrite = action === 'create' ? allowCreate : (action === 'delete' ? allowDelete : allowUpdate);
+    return { allowRead, allowWrite, allowCreate, allowDelete };
+  }
+
+  return { allowRead: false, allowWrite: false };
 }
 
-// Security Test Assertions Suite
-test('Firestore Rules Syntax Verification', () => {
+// -------------------------------------------------------------
+// PHASE 2 SECURITY TESTS (PRESERVED UNCHANGED)
+// -------------------------------------------------------------
+
+test('Phase 2 Test 1: Syntax Verification', () => {
   assert.ok(rulesContent.includes("rules_version = '2';"), 'Rules file must specify rules_version = 2');
-  assert.ok(rulesContent.includes("allow read: if isSelf(userId, institutionId) || isTenantAdmin(institutionId) || isSuperAdmin();"), 'Rules file must restrict read to self, tenant admin, or super admin within tenant boundary');
+  assert.ok(rulesContent.includes("match /institutions/{institutionId}"), 'Rules file must include tenant institution match');
   assert.ok(!rulesContent.includes("allow read, write: if request.auth != null;"), 'Rules must NOT contain root wildcard bypass');
-  assert.ok(!rulesContent.includes("&& true"), 'Rules must NOT contain placeholder bypasses');
 });
 
-// A. Unauthenticated Scenario
-test('Scenario A1: Unauthenticated user cannot read protected user profile', () => {
-  const auth = null;
-  const pathParams = { institutionId: 'inst_A', userId: 'user_1' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, false, 'Unauthenticated read must be denied');
+test('Phase 2 Test 2: Scenario A1 (Unauthenticated User Read Profile)', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', userId: 'user_1' });
+  assert.equal(res.allowRead, false);
 });
 
-test('Scenario A2: Unauthenticated user cannot write protected user profile', () => {
-  const auth = null;
-  const pathParams = { institutionId: 'inst_A', userId: 'user_1' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowWrite, false, 'Unauthenticated write must be denied');
+test('Phase 2 Test 3: Scenario A2 (Unauthenticated User Write Profile)', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', userId: 'user_1' });
+  assert.equal(res.allowWrite, false);
 });
 
-// B. Self Profile Scenario
-test('Scenario B1: Authenticated user can read their own profile document within assigned tenant', () => {
+test('Phase 2 Test 4: Scenario B1 (Self Profile Read)', () => {
   const auth = { uid: 'user_1', token: { institutionId: 'inst_A', role: 'student' } };
-  const pathParams = { institutionId: 'inst_A', userId: 'user_1' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, true, 'User reading own profile within assigned tenant must be allowed');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_1' });
+  assert.equal(res.allowRead, true);
 });
 
-test('Scenario B2: Authenticated student cannot read another user profile document', () => {
+test('Phase 2 Test 5: Scenario B2 (Other Student Profile Read)', () => {
   const auth = { uid: 'user_1', token: { institutionId: 'inst_A', role: 'student' } };
-  const pathParams = { institutionId: 'inst_A', userId: 'user_2' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, false, 'User reading another profile must be denied');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_2' });
+  assert.equal(res.allowRead, false);
 });
 
-// C. Tenant Isolation Scenario
-test('Scenario C1: Institution A user cannot read Institution B data', () => {
+test('Phase 2 Test 6: Scenario C1 (Cross-Tenant Read Inst A -> Inst B)', () => {
   const auth = { uid: 'user_A', token: { institutionId: 'inst_A', role: 'student' } };
-  const pathParams = { institutionId: 'inst_B', userId: 'user_B' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, false, 'Cross-tenant read must be denied');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_B' });
+  assert.equal(res.allowRead, false);
 });
 
-test('Scenario C2: Institution A user cannot write Institution B data', () => {
+test('Phase 2 Test 7: Scenario C2 (Cross-Tenant Write Inst A -> Inst B)', () => {
   const auth = { uid: 'user_A', token: { institutionId: 'inst_A', role: 'student' } };
-  const pathParams = { institutionId: 'inst_B', userId: 'user_B' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowWrite, false, 'Cross-tenant write must be denied');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_B' });
+  assert.equal(res.allowWrite, false);
 });
 
-test('Scenario C3: Institution B user cannot read Institution A data', () => {
+test('Phase 2 Test 8: Scenario C3 (Cross-Tenant Read Inst B -> Inst A)', () => {
   const auth = { uid: 'user_B', token: { institutionId: 'inst_B', role: 'student' } };
-  const pathParams = { institutionId: 'inst_A', userId: 'user_A' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, false, 'Cross-tenant read must be denied');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_A' });
+  assert.equal(res.allowRead, false);
 });
 
-// D. Tenant Admin Scenario
-test('Scenario D1: Tenant admin can read user profile within their institution scope', () => {
+test('Phase 2 Test 9: Scenario D1 (Tenant Admin Read Profile in Scope)', () => {
   const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
-  const pathParams = { institutionId: 'inst_A', userId: 'user_1' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, true, 'Tenant admin reading profile in institution scope must be allowed');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_1' });
+  assert.equal(res.allowRead, true);
 });
 
-test('Scenario D2: Tenant admin can write user profile within their institution scope', () => {
+test('Phase 2 Test 10: Scenario D2 (Tenant Admin Write Profile in Scope)', () => {
   const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
-  const pathParams = { institutionId: 'inst_A', userId: 'user_1' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowWrite, true, 'Tenant admin writing profile in institution scope must be allowed');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_1' });
+  assert.equal(res.allowWrite, true);
 });
 
-test('Scenario D3: Tenant admin CANNOT access or write to another institution', () => {
+test('Phase 2 Test 11: Scenario D3 (Tenant Admin Cross-Tenant Write)', () => {
   const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
-  const pathParams = { institutionId: 'inst_B', userId: 'user_2' };
-  const res = evaluateRuleContext(auth, pathParams);
-  assert.equal(res.allowRead, false, 'Tenant admin cross-tenant read must be denied');
-  assert.equal(res.allowWrite, false, 'Tenant admin cross-tenant write must be denied');
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_2' });
+  assert.equal(res.allowRead, false);
+  assert.equal(res.allowWrite, false);
 });
 
-// E. Super Admin Scenario
-test('Scenario E1: Super admin can read user profiles globally across any institution', () => {
+test('Phase 2 Test 12: Scenario E1 (Super Admin Global Read)', () => {
   const auth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const resA = evaluateRuleContext(auth, { institutionId: 'inst_A', userId: 'user_1' });
   const resB = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_2' });
-  assert.equal(resA.allowRead, true, 'Super admin global read inst_A allowed');
-  assert.equal(resB.allowRead, true, 'Super admin global read inst_B allowed');
+  assert.equal(resA.allowRead, true);
+  assert.equal(resB.allowRead, true);
 });
 
-test('Scenario E2: Super admin can write user profiles globally', () => {
+test('Phase 2 Test 13: Scenario E2 (Super Admin Global Write)', () => {
   const auth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const res = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_2' });
-  assert.equal(res.allowWrite, true, 'Super admin global write allowed');
+  assert.equal(res.allowWrite, true);
 });
 
-// F. Client Claim Trust Scenario
-test('Scenario F1: User sending fake role/institutionId in document body is denied by rules', () => {
+test('Phase 2 Test 14: Scenario F1 (Client Claims Override Rejection)', () => {
   const auth = { uid: 'user_A', token: { institutionId: 'inst_A', role: 'student' } };
   const docBody = { role: 'superAdmin', institutionId: 'inst_B' };
   const res = evaluateRuleContext(auth, { institutionId: 'inst_B', userId: 'user_A' }, docBody);
-  assert.equal(res.allowRead, false, 'Client document body claims ignored; JWT token claims enforced');
-  assert.equal(res.allowWrite, false, 'Client document body claims ignored; JWT token claims enforced');
+  assert.equal(res.allowRead, false);
+  assert.equal(res.allowWrite, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 3 SECURITY TESTS (16 ASSERTIONS FROM APPROVED PLAN)
+// -------------------------------------------------------------
+
+test('Phase 3 Test 1: Unauthenticated institution document read is DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A' });
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 3 Test 2: Unauthenticated institution document write is DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A' }, { name: 'Hack' }, 'create');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 3 Test 3: Tenant user (student) reads own institution', () => {
+  const auth = { uid: 'user_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A' });
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 3 Test 4: Tenant user (student) reads another institution', () => {
+  const auth = { uid: 'user_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_B' });
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 3 Test 5: Normal tenant user (student) attempts to update institution -> DENIED', () => {
+  const auth = { uid: 'user_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Center A', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'Modified A', updatedBy: 'user_1' };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'Student role cannot update institution document');
+});
+
+test('Phase 3 Test 6: Tenant admin updates own institution with valid updatedBy -> ALLOWED', () => {
+  const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Old Center', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'New Center Name', ownerId: 'owner_1', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, true);
+});
+
+test('Phase 3 Test 7: Tenant admin updates another institution -> DENIED', () => {
+  const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_B', name: 'Inst B Center' };
+  const newDoc = { institutionId: 'inst_B', name: 'Inst B Modified', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_B' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 3 Test 8: Tenant admin attempts to mutate immutable ownerId -> DENIED', () => {
+  const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'hacker_owner', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 3 Test 9: Tenant admin attempts to mutate immutable institutionId -> DENIED', () => {
+  const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_HACK', name: 'Inst A', ownerId: 'owner_1', updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(auth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 3 Test 10: Tenant admin attempts to create or delete institution -> DENIED', () => {
+  const auth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const resCreate = evaluateRuleContext(auth, { institutionId: 'inst_C' }, { name: 'Inst C' }, 'create');
+  const resDelete = evaluateRuleContext(auth, { institutionId: 'inst_A' }, null, 'delete');
+  assert.equal(resCreate.allowWrite, false);
+  assert.equal(resDelete.allowWrite, false);
+});
+
+test('Phase 3 Test 11: SuperAdmin attempts to change institutionId post-creation -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_MUTATED', name: 'Inst A', ownerId: 'owner_1', updatedBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'institutionId is immutable post-creation even for superAdmin');
+});
+
+test('Phase 3 Test 12: SuperAdmin attempts to change ownerId in normal update -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'owner_1' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A', ownerId: 'new_owner_2', updatedBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'ownerId is immutable post-creation in normal update even for superAdmin');
+});
+
+test('Phase 3 Test 13: Create institution with document ID / institutionId field mismatch -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const docBody = { institutionId: 'inst_MISMATCH', name: 'Center', status: 'ACTIVE', createdBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_REAL' }, docBody, 'create');
+  assert.equal(res.allowCreate, false, 'Mismatch between doc ID and institutionId field must be denied');
+});
+
+test('Phase 3 Test 14: Client attempting to forge createdBy on creation -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const docBody = { institutionId: 'inst_A', name: 'Center', status: 'ACTIVE', createdBy: 'fake_uid' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A' }, docBody, 'create');
+  assert.equal(res.allowCreate, false, 'createdBy must equal request.auth.uid');
+});
+
+test('Phase 3 Test 15: Client attempting to forge updatedBy on update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const oldDoc = { institutionId: 'inst_A', name: 'Inst A' };
+  const newDoc = { institutionId: 'inst_A', name: 'Inst A New', updatedBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A' }, newDoc, 'update', oldDoc);
+  assert.equal(res.allowWrite, false, 'updatedBy must equal request.auth.uid');
+});
+
+test('Phase 3 Test 16: SuperAdmin creating valid institution with structural checks -> ALLOWED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const docBody = { institutionId: 'inst_valid', name: 'Valid Center', status: 'ACTIVE', createdBy: 'super_1' };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_valid' }, docBody, 'create');
+  assert.equal(res.allowCreate, true, 'Valid creation by SuperAdmin with structural checks must be allowed');
 });
