@@ -1,24 +1,16 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 4 User & Identity Management - Hardened)
+ * Educational Center SaaS - Firestore Security Rules (Phase 5 Academic Core Foundation - Hardened)
  * 1. Default Deny: All unmatched paths are strictly denied.
- * 2. Institution Document Rules (Phase 3):
- *    - Document ID MUST equal institutionId field.
- *    - institutionId, id, ownerId, createdBy, and createdAt are strictly IMMUTABLE post-creation for ALL roles (including superAdmin).
- *    - createdBy MUST equal request.auth.uid on creation.
- *    - updatedBy MUST equal request.auth.uid on update.
- *    - Read: Tenant users of that institution or Super Admin.
- *    - Update: Tenant admins of that institution or Super Admin (with updatedBy check and immutable audit key protections).
- *    - Create / Delete: Super Admin only (with structural validation).
- * 3. User Profile Rules (Phase 4):
- *    - Read: Self profile read within tenant boundary, or Tenant Admin within tenant scope, or Super Admin globally.
- *    - Create: DENIED to clients (allow create: if false). User creation occurs exclusively via trusted Admin SDK endpoint.
- *    - Delete: DENIED to clients (allow delete: if false). Termination uses soft-deletion (status = 'ARCHIVED').
- *    - Update: Allowed ONLY for tenant admins within tenant scope or Super Admin globally.
- *      Requires updatedBy == request.auth.uid and updatedAt == request.time.
- *      Strictly Whitelisted mutable fields ONLY: ['fullName', 'phone', 'updatedAt', 'updatedBy'].
- * 4. No Root Wildcard / No Public Access / No Unsafe Client Bypasses.
+ * 2. Institution Document Rules (Phase 3): Immutable audit keys, tenant admin/superAdmin access.
+ * 3. User Profile Rules (Phase 4): Whitelisted fields, zero physical delete, request.time check.
+ * 4. Academic Core Rules (Phase 5):
+ *    - Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks):
+ *      Client direct create/update/delete DENIED (allow create, update, delete: if false).
+ *    - Client-Mutable Collections (subjects, stages, rooms, teachers):
+ *      Client updates allowed ONLY for tenant admins/superAdmin with strict field whitelists & request.time check.
+ *    - Student / Parent Broad Read DENIED across all Academic Core collections.
  */
 
 service cloud.firestore {
@@ -63,20 +55,93 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Phase 4 User Profile Rules (Hardened Field Whitelist, Zero Physical Delete, request.time Check)
+    // Phase 4 User Profile Rules
     match /institutions/{institutionId}/users/{userId} {
       allow read: if isSelf(userId, institutionId) || isTenantAdmin(institutionId) || isSuperAdmin();
       
-      // Client direct user creation DENIED
       allow create: if false;
 
-      // Client updates allowed only for tenant admins within tenant scope; Whitelisted fields & request.time check
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'updatedAt', 'updatedBy']);
       
-      // Physical deletion DENIED; termination strictly uses soft-deletion (status = 'ARCHIVED')
+      allow delete: if false;
+    }
+
+    // Phase 5 Server-Only Collections (Direct Client Writes & Student/Parent Broad Reads DENIED)
+    match /institutions/{institutionId}/schedules/{scheduleId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/groups/{groupId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/academicYears/{yearId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/terms/{termId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/uniqueness/{uniqueKey} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/scheduleLocks/{lockKey} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Phase 5 Client-Mutable Collections (Strict Field Whitelists, Server Timestamp, Student/Parent Read DENIED)
+    match /institutions/{institutionId}/subjects/{subjectId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'code', 'description', 'status', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    match /institutions/{institutionId}/stages/{stageId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'code', 'order', 'status', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    match /institutions/{institutionId}/rooms/{roomId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'capacity', 'location', 'status', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    match /institutions/{institutionId}/teachers/{teacherId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'email', 'specialization', 'subjectIds', 'status', 'updatedAt', 'updatedBy']);
       allow delete: if false;
     }
   }

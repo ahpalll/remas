@@ -6,7 +6,8 @@
   "scripts": {
     "test:rules": "node --test firebase/firestore_rules.test.js",
     "test:backend": "node --test firebase/trusted_backend.test.js",
-    "test:all": "npm run test:rules && npm run test:backend"
+    "test:academic": "node --test firebase/academic_backend.test.js",
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"

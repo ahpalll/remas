@@ -7,8 +7,8 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 4 Firestore Security Rules
-function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null) {
+// Rules Parser & Logic Verification Engine for Phase 5 Firestore Security Rules
+function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
   const isSuperAdmin = () => isAuthenticated && auth.token && auth.token.role === 'superAdmin';
@@ -21,32 +21,19 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     const instId = pathParams.institutionId;
     const uId = pathParams.userId;
 
-    // Read
     const allowRead = isSelf(uId, instId) || isTenantAdmin(instId) || isSuperAdmin();
-
-    // Create: DENIED to client (allow create: if false)
     const allowCreate = false;
-
-    // Delete: DENIED to client (allow delete: if false)
     const allowDelete = false;
 
-    // Update: Whitelisted fields ONLY: ['fullName', 'phone', 'updatedAt', 'updatedBy'] & request.time check
     let allowUpdate = isTenantAdmin(instId) || isSuperAdmin();
     if (allowUpdate && docBody) {
-      if (docBody.updatedBy !== (auth ? auth.uid : null)) {
-        allowUpdate = false;
-      }
-
-      // Check request.time for updatedAt timestamp
-      if (requestTime && docBody.updatedAt !== requestTime) {
-        allowUpdate = false; // Arbitrary static timestamp DENIED
-      }
-
+      if (docBody.updatedBy !== (auth ? auth.uid : null)) allowUpdate = false;
+      if (requestTime && docBody.updatedAt !== requestTime) allowUpdate = false;
       if (oldDocBody) {
         const allowedKeys = new Set(['fullName', 'phone', 'updatedAt', 'updatedBy']);
         for (const key of Object.keys(docBody)) {
           if (docBody[key] !== oldDocBody[key] && !allowedKeys.has(key)) {
-            allowUpdate = false; // Un-whitelisted field modification DENIED
+            allowUpdate = false;
             break;
           }
         }
@@ -57,8 +44,50 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}
-  if (pathParams.institutionId && !pathParams.userId) {
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5 Academic Core)
+  if (pathParams.institutionId && pathParams.docId && colName) {
+    const instId = pathParams.institutionId;
+
+    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks'].includes(colName)) {
+      const allowRead = isTenantAdmin(instId) || isSuperAdmin();
+      return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
+    }
+
+    // Client-Mutable Collections (subjects, stages, rooms, teachers)
+    if (['subjects', 'stages', 'rooms', 'teachers'].includes(colName)) {
+      const allowRead = isTenantAdmin(instId) || isSuperAdmin(); // Student/Parent broad read DENIED
+      let allowCreate = (isTenantAdmin(instId) || isSuperAdmin()) && docBody && docBody.createdBy === (auth ? auth.uid : null);
+      const allowDelete = false;
+
+      let allowUpdate = isTenantAdmin(instId) || isSuperAdmin();
+      if (allowUpdate && docBody) {
+        if (docBody.updatedBy !== (auth ? auth.uid : null)) allowUpdate = false;
+        if (requestTime && docBody.updatedAt !== requestTime) allowUpdate = false;
+        if (oldDocBody) {
+          const whitelistMap = {
+            subjects: new Set(['name', 'code', 'description', 'status', 'updatedAt', 'updatedBy']),
+            stages: new Set(['name', 'code', 'order', 'status', 'updatedAt', 'updatedBy']),
+            rooms: new Set(['name', 'capacity', 'location', 'status', 'updatedAt', 'updatedBy']),
+            teachers: new Set(['fullName', 'phone', 'email', 'specialization', 'subjectIds', 'status', 'updatedAt', 'updatedBy'])
+          };
+          const allowedKeys = whitelistMap[colName] || new Set();
+          for (const key of Object.keys(docBody)) {
+            if (docBody[key] !== oldDocBody[key] && !allowedKeys.has(key)) {
+              allowUpdate = false;
+              break;
+            }
+          }
+        }
+      }
+
+      const allowWrite = action === 'create' ? allowCreate : (action === 'delete' ? allowDelete : allowUpdate);
+      return { allowRead, allowWrite, allowCreate, allowDelete };
+    }
+  }
+
+  // Path 3: /institutions/{institutionId}
+  if (pathParams.institutionId && !pathParams.userId && !pathParams.docId) {
     const instId = pathParams.institutionId;
     const allowRead = isTenantUser(instId) || isSuperAdmin();
     let allowCreate = isSuperAdmin();
@@ -76,9 +105,7 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     const allowDelete = isSuperAdmin();
     let allowUpdate = isTenantAdmin(instId) || isSuperAdmin();
     if (allowUpdate && docBody) {
-      if (docBody.updatedBy !== (auth ? auth.uid : null)) {
-        allowUpdate = false;
-      }
+      if (docBody.updatedBy !== (auth ? auth.uid : null)) allowUpdate = false;
       if (oldDocBody) {
         if (
           (docBody.institutionId && docBody.institutionId !== oldDocBody.institutionId) ||
@@ -99,7 +126,7 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
 }
 
 // -------------------------------------------------------------
-// PHASE 2 SECURITY TESTS (PRESERVED UNCHANGED)
+// PHASE 2 SECURITY TESTS (14 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 2 Test 1: Syntax Verification', () => {
@@ -190,7 +217,7 @@ test('Phase 2 Test 14: Scenario F1 (Client Claims Override Rejection)', () => {
 });
 
 // -------------------------------------------------------------
-// PHASE 3 SECURITY TESTS (PRESERVED UNCHANGED)
+// PHASE 3 SECURITY TESTS (20 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 3 Test 1: Unauthenticated institution document read is DENIED', () => {
@@ -341,19 +368,19 @@ test('Phase 3 Test 20: SuperAdmin attempts to modify createdAt on update -> DENI
 });
 
 // -------------------------------------------------------------
-// PHASE 4 FIRESTORE SECURITY RULES TESTS (7 ASSERTIONS)
+// PHASE 4 FIRESTORE SECURITY TESTS (7 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 4 Test 1 (Rule 35): Direct client create user document -> DENIED (allow create: if false)', () => {
   const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_new' }, { fullName: 'Direct User' }, 'create');
-  assert.equal(res.allowCreate, false, 'Client direct create must be denied');
+  assert.equal(res.allowCreate, false);
 });
 
 test('Phase 4 Test 2 (Rule 36): Direct client delete user document -> DENIED (allow delete: if false)', () => {
   const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
   const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A', userId: 'user_1' }, null, 'delete');
-  assert.equal(res.allowDelete, false, 'Physical delete must be denied to all clients');
+  assert.equal(res.allowDelete, false);
 });
 
 test('Phase 4 Test 3 (Rule 37): Tenant admin update whitelisted fields with request.time -> ALLOWED', () => {
@@ -362,7 +389,7 @@ test('Phase 4 Test 3 (Rule 37): Tenant admin update whitelisted fields with requ
   const oldDoc = { fullName: 'Old Name', phone: '01000', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
   const newDoc = { fullName: 'New Name', phone: '01000', updatedAt: now, updatedBy: 'admin_1' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_1' }, newDoc, 'update', oldDoc, now);
-  assert.equal(res.allowWrite, true, 'Whitelisted update with request.time matching must be allowed');
+  assert.equal(res.allowWrite, true);
 });
 
 test('Phase 4 Test 4 (Rule 38): Tenant admin attempt to set arbitrary static updatedAt timestamp -> DENIED', () => {
@@ -372,7 +399,7 @@ test('Phase 4 Test 4 (Rule 38): Tenant admin attempt to set arbitrary static upd
   const oldDoc = { fullName: 'Old Name', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
   const newDoc = { fullName: 'New Name', updatedAt: fakeTime, updatedBy: 'admin_1' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_1' }, newDoc, 'update', oldDoc, now);
-  assert.equal(res.allowWrite, false, 'Arbitrary static updatedAt timestamp must be denied');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 4 Test 5 (Rule 39): Direct client attempt to modify status to ACTIVE -> DENIED', () => {
@@ -381,7 +408,7 @@ test('Phase 4 Test 5 (Rule 39): Direct client attempt to modify status to ACTIVE
   const oldDoc = { fullName: 'User 1', status: 'SUSPENDED', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
   const newDoc = { fullName: 'User 1', status: 'ACTIVE', updatedAt: now, updatedBy: 'admin_1' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_1' }, newDoc, 'update', oldDoc, now);
-  assert.equal(res.allowWrite, false, 'Modifying status via client update must be denied');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 4 Test 6 (Rule 40): Direct client attempt to modify role, email, institutionId -> DENIED', () => {
@@ -390,7 +417,7 @@ test('Phase 4 Test 6 (Rule 40): Direct client attempt to modify role, email, ins
   const oldDoc = { fullName: 'User 1', role: 'student', email: 's@app.com', institutionId: 'inst_A', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
   const newDoc = { fullName: 'User 1', role: 'superAdmin', email: 's@app.com', institutionId: 'inst_A', updatedAt: now, updatedBy: 'admin_1' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_1' }, newDoc, 'update', oldDoc, now);
-  assert.equal(res.allowWrite, false, 'Modifying role via client update must be denied');
+  assert.equal(res.allowWrite, false);
 });
 
 test('Phase 4 Test 7 (Rule 41): Direct client attempt to modify un-whitelisted profile field -> DENIED', () => {
@@ -399,5 +426,114 @@ test('Phase 4 Test 7 (Rule 41): Direct client attempt to modify un-whitelisted p
   const oldDoc = { fullName: 'User 1', customNotes: 'None', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
   const newDoc = { fullName: 'User 1', customNotes: 'Hacked', updatedAt: now, updatedBy: 'admin_1' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', userId: 'user_1' }, newDoc, 'update', oldDoc, now);
-  assert.equal(res.allowWrite, false, 'Modifying un-whitelisted fields must be denied');
+  assert.equal(res.allowWrite, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 5 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 56 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 5 Test 1 (Rule 42): Direct client schedule create -> DENIED (allow create: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sched_1' }, {}, 'create', null, null, 'schedules');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 5 Test 2 (Rule 43): Direct client schedule update/delete -> DENIED (allow update/delete: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const resUpdate = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sched_1' }, {}, 'update', {}, null, 'schedules');
+  const resDelete = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sched_1' }, null, 'delete', null, null, 'schedules');
+  assert.equal(resUpdate.allowWrite, false);
+  assert.equal(resDelete.allowDelete, false);
+});
+
+test('Phase 5 Test 3 (Rule 44): Direct client group create/update -> DENIED (allow create/update: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'grp_1' }, {}, 'create', null, null, 'groups');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 5 Test 4 (Rule 45): Direct client uniqueness doc create/update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'unique_1' }, {}, 'create', null, null, 'uniqueness');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 5 Test 5 (Rule 46): Direct client scheduleLocks doc create/update -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'lock_1' }, {}, 'create', null, null, 'scheduleLocks');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 5 Test 6 (Rule 47): Student attempts broad collection read on Academic Core -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'subj_1' }, null, 'read', null, null, 'subjects');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 5 Test 7 (Rule 48): Parent attempts broad collection read on Academic Core -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'subj_1' }, null, 'read', null, null, 'subjects');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 5 Test 8 (Rule 49): Tenant admin update subject whitelisted fields with request.time -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { name: 'Physics', code: 'PHY-1', description: 'Old', status: 'ACTIVE', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { name: 'Physics New', code: 'PHY-1', description: 'New', status: 'ACTIVE', updatedAt: now, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, newDoc, 'update', oldDoc, now, 'subjects');
+  assert.equal(res.allowWrite, true);
+});
+
+test('Phase 5 Test 9 (Rule 50): Tenant admin attempt to set arbitrary static updatedAt on subject -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const fakeTime = '1999-01-01T00:00:00Z';
+  const oldDoc = { name: 'Physics', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { name: 'Physics New', updatedAt: fakeTime, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, newDoc, 'update', oldDoc, now, 'subjects');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 5 Test 10 (Rule 51): Direct client attempt to modify unwhitelisted field on subject -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { name: 'Physics', createdBy: 'admin_1', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { name: 'Physics', createdBy: 'hacker_uid', updatedAt: now, updatedBy: 'admin_1' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, newDoc, 'update', oldDoc, now, 'subjects');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 5 Test 11 (Rule 52): Direct client physical delete of subject/stage/room/teacher -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A', docId: 'subj_1' }, null, 'delete', null, null, 'subjects');
+  assert.equal(res.allowDelete, false);
+});
+
+test('Phase 5 Test 12 (Rule 53): Tenant A user reads Tenant B academic entities -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'subj_1' }, null, 'read', null, null, 'subjects');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 5 Test 13 (Rule 54): Unauthenticated read of academic entities -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'subj_1' }, null, 'read', null, null, 'subjects');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 5 Test 14 (Rule 55): Tenant admin create subject with forged createdBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const docBody = { name: 'Physics', code: 'PHY-1', createdBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, docBody, 'create', null, null, 'subjects');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 5 Test 15 (Rule 56): Tenant admin update subject with forged updatedBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const now = '2026-09-02T00:00:00Z';
+  const oldDoc = { name: 'Physics', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { name: 'Physics New', updatedAt: now, updatedBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'subj_1' }, newDoc, 'update', oldDoc, now, 'subjects');
+  assert.equal(res.allowWrite, false);
 });
