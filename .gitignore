@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+/.packages
+/.fvm/
+/.flutter-plugins
+/.flutter-plugins-registration
+/.metadata
+/build/
+/.dart_tool/
+/.dart_tool/
+
+# Environment
+.env
+!.env.example
+
+# Flutter Gen
+generated/
+
+# Firebase
+.firebaserc
+firebase-token.json
+
+# Cloudflare
+.wrangler/
+.env.cloudflare
+
+# Videos and large files (handled by R2)
+/videos/
+/pdfs/
+/images/
+/audio/
+
+# Android build artifacts
+/*/build/
+*.apk
+*.aab
+
+# IOS build artifacts
+*.app
+*.ipa
+
+# Logs
+/*.log
+/logs/
+
+# OS generated
+.DS_Store
+/Thumbs.db

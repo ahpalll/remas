@@ -1,0 +1,59 @@
+rules_version = '2';
+
+/*
+ * Educational Center SaaS - Firestore Security Rules (Phase 1 Foundation)
+ * 1. Secure Default Deny (unmatched access denied)
+ * 2. Multi-tenant isolation via institutionId custom claim / document path
+ * 3. Role-based access control placeholders
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny: All reads and writes are denied unless explicitly allowed below.
+
+    // Super Admin: Global full access across all institutions
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.role == "superAdmin";
+    }
+
+    // Institution Owner: Full access to their own institution data
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.role == "institutionOwner" 
+        && request.auth.token.institutionId == institutionId;
+    }
+
+    // Institution Staff (Admin, Secretary, Accountant, Data Entry): Access within their institution
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.institutionId == institutionId
+        && (request.auth.token.role == "admin" 
+            || request.auth.token.role == "secretary"
+            || request.auth.token.role == "accountant"
+            || request.auth.token.role == "dataEntry");
+    }
+
+    // Teacher: Access limited to institution scope
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.role == "teacher" 
+        && request.auth.token.institutionId == institutionId;
+    }
+
+    // Parent: Access limited to institution scope
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.role == "parent" 
+        && request.auth.token.institutionId == institutionId;
+    }
+
+    // Student: Access limited to institution scope
+    match /institutions/{institutionId}/{document=**} {
+      allow read, write: if request.auth != null 
+        && request.auth.token.role == "student" 
+        && request.auth.token.institutionId == institutionId;
+    }
+  }
+}
