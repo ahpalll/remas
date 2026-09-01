@@ -1,0 +1,12 @@
+{
+  "name": "remas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Educational Center Management SaaS Monorepo",
+  "scripts": {
+    "test:rules": "node --test firebase/firestore_rules.test.js"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4"
+  }
+}

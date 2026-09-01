@@ -3,10 +3,10 @@ rules_version = '2';
 /*
  * Educational Center SaaS - Firestore Security Rules (Phase 2 Auth & Least Privilege)
  * 1. Default Deny: All unmatched paths are strictly denied.
- * 2. Identity Verification: Users can read ONLY their own user profile document.
+ * 2. Identity Verification: Users can read ONLY their own user profile document within their assigned institution tenant.
  * 3. Tenant Isolation: Institution Admins can access profiles strictly within their institution.
  * 4. Super Admin: Global platform read/write access.
- * 5. No Root Wildcard / No Public Access.
+ * 5. No Root Wildcard / No Public Access / No Client Body Role Bypasses.
  */
 
 service cloud.firestore {
@@ -17,28 +17,27 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    function isSelf(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
     function isSuperAdmin() {
       return isAuthenticated() && request.auth.token.role == "superAdmin";
-    }
-
-    function isTenantAdmin(institutionId) {
-      return isAuthenticated() 
-        && request.auth.token.institutionId == institutionId 
-        && request.auth.token.role in ["institutionOwner", "admin"];
     }
 
     function isTenantUser(institutionId) {
       return isAuthenticated() && request.auth.token.institutionId == institutionId;
     }
 
-    // User Profile Rules (Least Privilege)
+    function isSelf(userId, institutionId) {
+      return isAuthenticated() && request.auth.uid == userId && (isTenantUser(institutionId) || isSuperAdmin());
+    }
+
+    function isTenantAdmin(institutionId) {
+      return isTenantUser(institutionId) 
+        && request.auth.token.role in ["institutionOwner", "admin"];
+    }
+
+    // User Profile Rules (Least Privilege & Tenant Boundary)
     match /institutions/{institutionId}/users/{userId} {
-      // User can read ONLY their own document, or tenant admin can read within tenant scope, or super admin globally
-      allow read: if isSelf(userId) || isTenantAdmin(institutionId) || isSuperAdmin();
+      // User can read ONLY their own document within their institution scope, or tenant admin within tenant scope, or super admin globally
+      allow read: if isSelf(userId, institutionId) || isTenantAdmin(institutionId) || isSuperAdmin();
       
       // Writes allowed strictly by tenant admins or super admins
       allow write: if isTenantAdmin(institutionId) || isSuperAdmin();
