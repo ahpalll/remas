@@ -10,3 +10,12 @@
 3. **Group Capacity Concurrency Engine**: Group enrollment uses an atomic counter document (`/groupCounters/{groupId}`) inside `db.runTransaction()`. Ensures `0 <= enrolledCount <= maxCapacity`.
 4. **Primary Guardian Concurrency**: `linkGuardian` transactionally enforces max 1 `isPrimary: true` per student. Phone deduplication returns candidate warnings without silent entity merging.
 5. **Admin-Only Read Access**: Phase 6 enforces Admin-Only Read (`allow read: if isTenantAdmin(institutionId) || isSuperAdmin();`). Student self-read and Parent linked-child read are explicitly DEFERRED to future app phases.
+
+## Phase 7 Decisions
+1. **Deterministic Attendance Record ID (`records/{studentId}`)**: Path `/institutions/{institutionId}/attendanceSessions/{sessionId}/records/{studentId}`. Record ID is strictly `studentId`. Guarantees `Session + Student = 1 Record`.
+2. **Batch Initialization & Session Roster (>500 Students)**: Session creation sets `status: 'INITIALIZING'`, freezes active group roster, and writes default `ABSENT` records using batched writes (`db.batch()`, 400 docs per chunk). Upon batch completion, session transitions to `status: 'OPEN'`. Check-in scans during `INITIALIZING` return `SESSION_INITIALIZING_TRY_AGAIN`.
+3. **O(1) QR & StudentCode Lookups**: QR scans hash raw token (`SHA-256`) and fetch `/uniqueness/student_qr_{qrTokenHash}`. Returns `studentId` in 1 document read. Zero collection scanning.
+4. **Timezone Snapshot**: `AttendanceSession.timezone` stores tenant timezone at creation (e.g. `"Africa/Cairo"`). `lateMinutes` is calculated against absolute UTC conversion of `date + startTime + timezone`.
+5. **Cancellation Semantics**: `SessionStatus = 'CANCELLED'`. Student records are NEVER deleted or status-changed. Cancelled sessions are strictly EXCLUDED from attendance percentage calculations.
+6. **Reopening Audit & Reconcile Engine**: Reopening a `CLOSED` session requires `superAdmin`/`institutionOwner` authority and mandatory `reason: string`. Writes `AttendanceSessionAudit` event and triggers aggregate reconciliation.
+7. **Admin-Only Attendance Authority**: Phase 7 attendance management is Admin / institutionOwner / superAdmin ONLY. Teacher-specific workflows and Student/Parent reads remain explicitly DEFERRED.

@@ -1,17 +1,16 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 6 Students & Student Profiles - Hardened)
+ * Educational Center SaaS - Firestore Security Rules (Phase 7 Attendance System - Hardened)
  * 1. Default Deny: All unmatched paths are strictly denied.
  * 2. Institution Document Rules (Phase 3): Immutable audit keys, tenant admin/superAdmin access.
  * 3. User Profile Rules (Phase 4): Whitelisted fields, zero physical delete, request.time check.
  * 4. Academic Core Rules (Phase 5): Server-only collections write DENIED; Student/Parent broad read DENIED.
- * 5. Student Domain Rules (Phase 6):
- *    - Server-Only Collections (enrollments, guardians, studentGuardians, groupCounters):
+ * 5. Student Domain Rules (Phase 6): Server-only collections write DENIED; Admin-Only Read.
+ * 6. Attendance System Rules (Phase 7):
+ *    - Server-Only Collections (attendanceSessions, records, attendanceCorrections, attendanceAudits, attendanceAggregates):
  *      Client direct create/update/delete DENIED (allow create, update, delete: if false).
- *    - Client-Mutable Collection (students):
- *      Direct create/delete DENIED. Direct update allowed ONLY for tenant admins with whitelisted fields & request.time check.
- *    - Admin-Only Read Access across all Student Core collections (Student self-read & Parent read DEFERRED).
+ *    - Admin-Only Read Access across all Attendance collections (Student/Parent read DEFERRED).
  */
 
 service cloud.firestore {
@@ -146,7 +145,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Phase 6 Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    // Phase 6 Server-Only Collections
     match /institutions/{institutionId}/enrollments/{enrollmentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
@@ -167,7 +166,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Phase 6 Client-Mutable Collection (Direct Create/Delete DENIED, Whitelisted Update, Admin-Only Read)
+    // Phase 6 Client-Mutable Collection
     match /institutions/{institutionId}/students/{studentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, delete: if false;
@@ -175,6 +174,32 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'email', 'dateOfBirth', 'gender', 'updatedAt', 'updatedBy']);
+    }
+
+    // Phase 7 Attendance System Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    match /institutions/{institutionId}/attendanceSessions/{sessionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+
+      match /records/{studentId} {
+        allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /institutions/{institutionId}/attendanceCorrections/{correctionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/attendanceAudits/{auditId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/attendanceAggregates/{aggregateId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
     }
   }
 }

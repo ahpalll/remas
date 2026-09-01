@@ -4,6 +4,7 @@ import { InstitutionProvider, useInstitution } from './context/InstitutionContex
 import { UserManagementProvider } from './context/UserManagementContext';
 import { AcademicProvider } from './context/AcademicContext';
 import { StudentProvider } from './context/StudentContext';
+import { AttendanceProvider } from './context/AttendanceContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
@@ -11,6 +12,7 @@ import { SuperAdminInstitutions } from './components/SuperAdminInstitutions';
 import { UserList } from './components/UserList';
 import { AcademicCoreDashboard } from './components/AcademicCoreDashboard';
 import { StudentsManager } from './components/student/StudentsManager';
+import { AttendanceSessionManager } from './components/attendance/AttendanceSessionManager';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -42,7 +44,7 @@ function DashboardView() {
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم تفعيل مرحلة الطلاب وتسجيلات المجموعات بنجاح (Phase 6 Students & Student Profiles Active)
+          ✅ تم تفعيل نظام الحضور والغياب بنجاح (Phase 7 Attendance System Foundation Active)
         </div>
       </main>
 
@@ -57,6 +59,10 @@ function DashboardView() {
       <StudentProvider>
         <StudentsManager />
       </StudentProvider>
+
+      <AttendanceProvider>
+        <AttendanceSessionManager />
+      </AttendanceProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />

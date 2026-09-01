@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 6 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 7 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,12 +44,12 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5 & Phase 6 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5, 6 & Phase 7 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters)
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters'].includes(colName)) {
+    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters, attendanceSessions, attendanceRecords, attendanceCorrections, attendanceAudits, attendanceAggregates)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates'].includes(colName)) {
       const allowRead = isTenantAdmin(instId) || isSuperAdmin();
       return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
     }
@@ -540,7 +540,7 @@ test('Phase 5 Test 15 (Rule 56): Tenant admin update subject with forged updated
 });
 
 // -------------------------------------------------------------
-// PHASE 6 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 71 TOTAL)
+// PHASE 6 FIRESTORE SECURITY TESTS (15 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 6 Test 1 (Rule 57): Direct client student create -> DENIED (allow create: if false)', () => {
@@ -646,4 +646,100 @@ test('Phase 6 Test 15 (Rule 71): Tenant admin create student with forged created
   const docBody = { fullName: 'John Doe', createdBy: 'fake_uid' };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stu_1' }, docBody, 'create', null, null, 'students');
   assert.equal(res.allowCreate, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 7 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 86 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 7 Test 1 (Rule 72): Direct client attendanceSession create/update/delete -> DENIED (allow create, update, delete: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sess_1' }, {}, 'create', null, null, 'attendanceSessions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 7 Test 2 (Rule 73): Direct client attendance record write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'rec_1' }, {}, 'create', null, null, 'attendanceRecords');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 7 Test 3 (Rule 74): Direct client attendance correction log write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'corr_1' }, {}, 'create', null, null, 'attendanceCorrections');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 7 Test 4 (Rule 75): Direct client attendance audits/aggregates write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const resAud = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'aud_1' }, {}, 'create', null, null, 'attendanceAudits');
+  const resAgg = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'agg_1' }, {}, 'create', null, null, 'attendanceAggregates');
+  assert.equal(resAud.allowCreate, false);
+  assert.equal(resAgg.allowCreate, false);
+});
+
+test('Phase 7 Test 5 (Rule 76): Student attempts broad collection read on attendance sessions/records -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 7 Test 6 (Rule 77): Parent attempts broad collection read on attendance sessions/records -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 7 Test 7 (Rule 78): Tenant admin read own tenant attendance -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 7 Test 8 (Rule 79): Tenant A user reads Tenant B attendance -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 7 Test 9 (Rule 80): Unauthenticated read of attendance sessions -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 7 Test 10 (Rule 81): Tenant admin create session with forged createdBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const docBody = { groupId: 'g_1', createdBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sess_1' }, docBody, 'create', null, null, 'attendanceSessions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 7 Test 11 (Rule 82): Direct client physical delete of attendanceSession -> DENIED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_A', docId: 'sess_1' }, null, 'delete', null, null, 'attendanceSessions');
+  assert.equal(res.allowDelete, false);
+});
+
+test('Phase 7 Test 12 (Rule 83): SuperAdmin global read attendance -> ALLOWED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_B', docId: 'sess_1' }, null, 'read', null, null, 'attendanceSessions');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 7 Test 13 (Rule 84): Tenant admin update attendanceSession directly -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'sess_1' }, { status: 'CLOSED' }, 'update', { status: 'OPEN' }, null, 'attendanceSessions');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 7 Test 14 (Rule 85): Tenant admin update attendanceRecords directly -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'rec_1' }, { status: 'PRESENT' }, 'update', { status: 'ABSENT' }, null, 'attendanceRecords');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 7 Test 15 (Rule 86): Tenant admin update attendanceCorrections directly -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'corr_1' }, { reason: 'modified' }, 'update', { reason: 'original' }, null, 'attendanceCorrections');
+  assert.equal(res.allowWrite, false);
 });

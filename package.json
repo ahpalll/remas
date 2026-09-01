@@ -8,7 +8,8 @@
     "test:backend": "node --test firebase/trusted_backend.test.js",
     "test:academic": "node --test firebase/academic_backend.test.js",
     "test:student": "node --test firebase/student_backend.test.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student"
+    "test:attendance": "node --test firebase/attendance_backend.test.js",
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"
