@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 7 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 8 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,12 +44,12 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5, 6 & Phase 7 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5, 6, 7 & 8 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters, attendanceSessions, attendanceRecords, attendanceCorrections, attendanceAudits, attendanceAggregates)
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates'].includes(colName)) {
+    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters, attendanceSessions, attendanceRecords, attendanceCorrections, attendanceAudits, attendanceAggregates, feeStructures, studentCharges, studentPayments, receipts, financialRefunds, expenses, otherIncome, teacherSettlements, cashboxPeriods, financialLedger, financialCorrections, financialAudits, financialAggregates)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates'].includes(colName)) {
       const allowRead = isTenantAdmin(instId) || isSuperAdmin();
       return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
     }
@@ -649,7 +649,7 @@ test('Phase 6 Test 15 (Rule 71): Tenant admin create student with forged created
 });
 
 // -------------------------------------------------------------
-// PHASE 7 FIRESTORE SECURITY TESTS (15 NEW ASSERTIONS = 86 TOTAL)
+// PHASE 7 FIRESTORE SECURITY TESTS (15 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 7 Test 1 (Rule 72): Direct client attendanceSession create/update/delete -> DENIED (allow create, update, delete: if false)', () => {
@@ -741,5 +741,131 @@ test('Phase 7 Test 14 (Rule 85): Tenant admin update attendanceRecords directly 
 test('Phase 7 Test 15 (Rule 86): Tenant admin update attendanceCorrections directly -> DENIED', () => {
   const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'corr_1' }, { reason: 'modified' }, 'update', { reason: 'original' }, null, 'attendanceCorrections');
+  assert.equal(res.allowWrite, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 8 FIRESTORE SECURITY TESTS (20 NEW ASSERTIONS = 106 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 8 Test 1 (Rule 87): Direct client feeStructure create/update/delete -> DENIED (allow create, update, delete: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'fee_1' }, {}, 'create', null, null, 'feeStructures');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 2 (Rule 88): Direct client studentCharge write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'chg_1' }, {}, 'create', null, null, 'studentCharges');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 3 (Rule 89): Direct client studentPayment write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'pay_1' }, {}, 'create', null, null, 'studentPayments');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 4 (Rule 90): Direct client receipt write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'rec_1' }, {}, 'create', null, null, 'receipts');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 5 (Rule 91): Direct client financialRefund write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'ref_1' }, {}, 'create', null, null, 'financialRefunds');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 6 (Rule 92): Direct client expense write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'exp_1' }, {}, 'create', null, null, 'expenses');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 7 (Rule 93): Direct client otherIncome write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'inc_1' }, {}, 'create', null, null, 'otherIncome');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 8 (Rule 94): Direct client teacherSettlements write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'stl_1' }, {}, 'create', null, null, 'teacherSettlements');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 9 (Rule 95): Direct client cashboxPeriods write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'per_1' }, {}, 'create', null, null, 'cashboxPeriods');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 10 (Rule 96): Direct client financialLedger write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'led_1' }, {}, 'create', null, null, 'financialLedger');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 11 (Rule 97): Direct client financialCorrections write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'corr_1' }, {}, 'create', null, null, 'financialCorrections');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 12 (Rule 98): Direct client financialAudits/aggregates write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const resAud = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'aud_1' }, {}, 'create', null, null, 'financialAudits');
+  const resAgg = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'agg_1' }, {}, 'create', null, null, 'financialAggregates');
+  assert.equal(resAud.allowCreate, false);
+  assert.equal(resAgg.allowCreate, false);
+});
+
+test('Phase 8 Test 13 (Rule 99): Student attempts broad read on financial collections -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 8 Test 14 (Rule 100): Parent attempts broad read on financial collections -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 8 Test 15 (Rule 101): Tenant admin read own tenant financial records -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 8 Test 16 (Rule 102): Tenant A user reads Tenant B financial records -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 8 Test 17 (Rule 103): Unauthenticated read of financial collections -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 8 Test 18 (Rule 104): Tenant admin create feeStructure with forged createdBy -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const docBody = { name: 'Fee 1', createdBy: 'fake_uid' };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'fee_1' }, docBody, 'create', null, null, 'feeStructures');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 8 Test 19 (Rule 105): SuperAdmin global read financial collections -> ALLOWED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_B', docId: 'fee_1' }, null, 'read', null, null, 'feeStructures');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 8 Test 20 (Rule 106): Tenant admin update financialLedger directly -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'led_1' }, { amountMinor: 999 }, 'update', { amountMinor: 100 }, null, 'financialLedger');
   assert.equal(res.allowWrite, false);
 });
