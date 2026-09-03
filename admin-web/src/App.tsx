@@ -9,6 +9,7 @@ import { FinanceProvider } from './context/FinanceContext';
 import { InventoryProvider } from './context/InventoryContext';
 import { ExamProvider } from './context/ExamContext';
 import { ContentProvider } from './context/ContentContext';
+import { MediaProvider } from './context/MediaContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
@@ -21,6 +22,7 @@ import { FinanceDashboard } from './components/finance/FinanceDashboard';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ExamDashboard } from './components/exam/ExamDashboard';
 import { ContentDashboard } from './components/content/ContentDashboard';
+import { MediaManager } from './components/media/MediaManager';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -51,8 +53,8 @@ function DashboardView() {
         <p><strong>معرف السنتر (Tenant ID):</strong> {institutionId || 'غير محدد'}</p>
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
-        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم تفعيل نظام إدارة المحتوى التعليمي بنجاح (Phase 12 Educational Content Management Active)
+        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e0f7fa', borderRadius: '4px', color: '#006064' }}>
+          ✅ تم تفعيل بنية الوسائط المشفرة وتسليم Cloudflare R2 بنجاح (Phase 13 Cloudflare R2 Media Delivery Foundation Active)
         </div>
       </main>
 
@@ -87,6 +89,10 @@ function DashboardView() {
       <ContentProvider>
         <ContentDashboard />
       </ContentProvider>
+
+      <MediaProvider>
+        <MediaManager />
+      </MediaProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />

@@ -1,0 +1,11 @@
+name = "remas-media-worker"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+ENVIRONMENT = "production"
+SIGNED_URL_EXPIRATION_SECONDS = "900" # 15 minutes
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "remas-private-media"

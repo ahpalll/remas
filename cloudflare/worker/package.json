@@ -1,0 +1,9 @@
+{
+  "name": "remas-media-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for Remas Secure Media Delivery & R2 Protection",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test tests/worker.test.js"
+  }
+}

@@ -14,7 +14,9 @@
     "test:exam": "node --test firebase/exam_backend.test.js",
     "test:online_exam": "node --test firebase/online_exam_backend.test.js",
     "test:content": "node --test firebase/content_backend.test.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content"
+    "test:media": "node --test firebase/media_backend.test.js",
+    "test:worker": "node --test cloudflare/worker/tests/worker.test.js",
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"
