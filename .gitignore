@@ -7,7 +7,8 @@ node_modules/
 /.metadata
 /build/
 /.dart_tool/
-/.dart_tool/
+admin-web/dist/
+parent-portal/dist/
 
 # Environment
 .env
@@ -41,6 +42,7 @@ firebase-token.json
 
 # Logs
 /*.log
+*.log
 /logs/
 
 # OS generated

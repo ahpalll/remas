@@ -6,6 +6,7 @@ import { AcademicProvider } from './context/AcademicContext';
 import { StudentProvider } from './context/StudentContext';
 import { AttendanceProvider } from './context/AttendanceContext';
 import { FinanceProvider } from './context/FinanceContext';
+import { InventoryProvider } from './context/InventoryContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
@@ -15,6 +16,7 @@ import { AcademicCoreDashboard } from './components/AcademicCoreDashboard';
 import { StudentsManager } from './components/student/StudentsManager';
 import { AttendanceSessionManager } from './components/attendance/AttendanceSessionManager';
 import { FinanceDashboard } from './components/finance/FinanceDashboard';
+import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -46,7 +48,7 @@ function DashboardView() {
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم تفعيل النظام المالي بنجاح (Phase 8 Finance System Foundation Active)
+          ✅ تم تفعيل نظام الكتب والمخزون بنجاح (Phase 9 Books & Inventory Foundation Active)
         </div>
       </main>
 
@@ -69,6 +71,10 @@ function DashboardView() {
       <FinanceProvider>
         <FinanceDashboard />
       </FinanceProvider>
+
+      <InventoryProvider>
+        <InventoryDashboard />
+      </InventoryProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />

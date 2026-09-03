@@ -1,19 +1,19 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 8 Finance System - Hardened)
+ * Educational Center SaaS - Firestore Security Rules (Phase 9 Books & Inventory - Hardened)
  * 1. Default Deny: All unmatched paths are strictly denied.
  * 2. Institution Document Rules (Phase 3): Immutable audit keys, tenant admin/superAdmin access.
  * 3. User Profile Rules (Phase 4): Whitelisted fields, zero physical delete, request.time check.
  * 4. Academic Core Rules (Phase 5): Server-only collections write DENIED; Student/Parent broad read DENIED.
  * 5. Student Domain Rules (Phase 6): Server-only collections write DENIED; Admin-Only Read.
  * 6. Attendance System Rules (Phase 7): Server-only collections write DENIED; Admin-Only Read.
- * 7. Finance System Rules (Phase 8):
- *    - Server-Only Collections (feeStructures, studentCharges, studentPayments, receipts, financialRefunds,
- *      expenses, otherIncome, teacherSettlements, cashboxPeriods, financialLedger, financialCorrections,
- *      financialAudits, financialAggregates):
+ * 7. Finance System Rules (Phase 8): Server-only collections write DENIED; Admin-Only Read.
+ * 8. Books & Inventory Rules (Phase 9):
+ *    - Server-Only Collections (books, suppliers, purchases, purchaseLines, sales, saleLines,
+ *      studentDeliveries, returns, stockMovements, inventory, inventoryLocks):
  *      Client direct create/update/delete DENIED (allow create, update, delete: if false).
- *    - Admin-Only Read Access across all Financial collections (Student/Parent read DEFERRED).
+ *    - Admin-Only Read Access across all Inventory collections (Student/Parent read DEFERRED).
  */
 
 service cloud.firestore {
@@ -205,7 +205,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Phase 8 Finance System Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    // Phase 8 Finance System Server-Only Collections
     match /institutions/{institutionId}/feeStructures/{feeStructureId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
@@ -267,6 +267,62 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/financialAggregates/{aggregateId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Phase 9 Books & Inventory Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    match /institutions/{institutionId}/books/{bookId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/suppliers/{supplierId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/purchases/{purchaseId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/purchaseLines/{lineId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/sales/{saleId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/saleLines/{lineId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/studentDeliveries/{deliveryId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/returns/{returnId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/stockMovements/{movementId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/inventory/{bookId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/inventoryLocks/{lockId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
     }
