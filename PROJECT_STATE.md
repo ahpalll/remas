@@ -1,6 +1,6 @@
 # Project State - Educational Center SaaS
 
-## Current Accepted Phase: Phase 15 — Student Flutter App Runtime
+## Current Accepted Phase: Phase 16 — Parent Portal Mobile App
 
 - **Phase 0**: Architecture & Repo Setup — COMPLETE
 - **Phase 1**: Core Data Schemas & Multi-Tenant Boundaries — COMPLETE
@@ -18,10 +18,11 @@
 - **Phase 13**: Cloudflare R2 + Secure Media Delivery — COMPLETE
 - **Phase 14**: Subscription Codes & Content Entitlements — COMPLETE
 - **Phase 15**: Student Flutter App Runtime — COMPLETE
+- **Phase 16**: Parent Portal Mobile App — COMPLETE
 
 ## System Statistics & Test Baseline
-- Total Executed Assertions: **585 Assertions** (100% Passing)
-  - 172 Security Rules Assertions
+- Total Executed Assertions: **645 Assertions** (100% Passing)
+  - 182 Security Rules Assertions
   - 30 Identity & Provisioning Backend Assertions
   - 20 Academic Core Backend Assertions
   - 25 Student Domain Backend Assertions
@@ -35,6 +36,9 @@
   - 17 Cloudflare Worker Media Security Assertions
   - 35 Subscription Codes & Content Entitlements Backend Assertions
   - 15 Student Flutter App Unit Assertions
+  - 35 Parent Portal Backend Assertions
+  - 15 Parent Flutter App Unit Assertions
 - Admin Web Build: **PASSing**
-- Parent Portal Build: **PASSing**
+- Parent Portal Web Build: **PASSing**
 - Student Flutter Analyze & Test: **PASSing**
+- Parent Flutter Analyze & Test: **PASSing**

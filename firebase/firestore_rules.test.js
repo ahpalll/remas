@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 15 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 16 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,11 +44,11 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-15 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-16 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (including Phase 15 student security targets)
+    // Server-Only Collections
     if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks', 'examAttempts', 'examAttemptQuestions', 'examAttemptAnswers', 'lessons', 'contents', 'packages', 'subscriptionCodes', 'entitlements'].includes(colName)) {
       let allowRead = isTenantAdmin(instId) || isSuperAdmin();
       if (!allowRead && ['examAttempts', 'entitlements'].includes(colName) && isAuthenticated && isTenantUser(instId)) {
@@ -132,7 +132,7 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
 }
 
 // -------------------------------------------------------------
-// PREVIOUS PHASES FIRESTORE SECURITY TESTS (162 PRESERVED)
+// PREVIOUS PHASES FIRESTORE SECURITY TESTS (172 PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 2 Test 1: Syntax Verification', () => {
@@ -1191,10 +1191,6 @@ test('Phase 14 Test 10 (Rule 162): Unauthenticated read of packages -> DENIED', 
   assert.equal(res.allowRead, false);
 });
 
-// -------------------------------------------------------------
-// PHASE 15 STUDENT APP SECURITY TESTS (10 NEW ASSERTIONS = 172 TOTAL)
-// -------------------------------------------------------------
-
 test('Phase 15 Test 1 (Rule 163): Student cannot create financial ledger entries directly -> DENIED', () => {
   const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
   const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'led_1' }, { amountMinor: 500 }, 'create', null, null, 'financialLedger');
@@ -1256,4 +1252,70 @@ test('Phase 15 Test 10 (Rule 172): Student cannot publish lessons or educational
   const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
   const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'cnt_1' }, { status: 'PUBLISHED' }, 'create', null, null, 'contents');
   assert.equal(res.allowCreate, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 16 PARENT PORTAL SECURITY TESTS (10 NEW ASSERTIONS = 182 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 16 Test 1 (Rule 173): Parent cannot create student charge directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'chg_1' }, { amountMinor: 1000 }, 'create', null, null, 'studentCharges');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 16 Test 2 (Rule 174): Parent cannot modify question banks directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'qb_1' }, { name: 'Hacked' }, 'update', { name: 'Original' }, null, 'questionBanks');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 16 Test 3 (Rule 175): Parent cannot write to exam attempts directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'att_1' }, { status: 'SUBMITTED' }, 'create', null, null, 'examAttempts');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 16 Test 4 (Rule 176): Parent cannot modify subscription packages directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'pkg_1' }, { name: 'Free Package' }, 'create', null, null, 'packages');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 16 Test 7 (Rule 177): Parent cannot modify student attendance sessions directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'sess_1' }, { status: 'CLOSED' }, 'update', { status: 'OPEN' }, null, 'attendanceSessions');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 16 Test 8 (Rule 178): Tenant A Parent cannot read Tenant B student documents -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_B', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 16 Test 9 (Rule 179): Parent cannot read financial ledger documents -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'led_1' }, null, 'read', null, null, 'financialLedger');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 16 Test 10 (Rule 180): Parent cannot write to lessons or educational contents directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'les_1' }, { title: 'Hacked Lesson' }, 'create', null, null, 'lessons');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 16 Test 11 (Rule 181): Parent cannot modify student profile status directly -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const now = '2026-09-04T00:00:00Z';
+  const oldDoc = { fullName: 'Student One', status: 'SUSPENDED', updatedAt: '2026-01-01', updatedBy: 'admin_1' };
+  const newDoc = { fullName: 'Student One', status: 'ACTIVE', updatedAt: now, updatedBy: 'parent_1' };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'stu_1' }, newDoc, 'update', oldDoc, now, 'students');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 16 Test 12 (Rule 182): Unauthenticated request on parent resources -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'read', null, null, 'students');
+  assert.equal(res.allowRead, false);
 });
