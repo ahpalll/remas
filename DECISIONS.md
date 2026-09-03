@@ -1,13 +1,13 @@
 # Architectural Decision Records (ADR)
 
-## ADR-009: Phase 9 Books & Inventory Architecture & Costing Model
+## ADR-010: Phase 10 Exams & Grades Architecture & Score Precision Model
 
 ### Context
-Educational centers manage books, study notes, and materials. Inventory levels must be accurate, traceable, and protected from arbitrary direct client manipulation or negative balances.
+Exams and grade evaluation require structural immutability, correct-answer privacy protection, score precision, and auditability for grade revisions.
 
 ### Decision
-1. **Single-Entry Immutable Stock Ledger (`StockMovement`)**: Stock movements (`STOCK_IN`, `STOCK_OUT`, `SALE`, `STUDENT_DELIVERY`, `RETURN`, `ADJUSTMENT`) are the sole source of truth for stock quantities. Direct client writes are denied (`allow create, update, delete: if false`).
-2. **Non-Negative Stock Invariant**: Available stock MUST NEVER become negative. Atomic checks in trusted backend logic enforce `availableStock >= quantity`.
-3. **Per-Sale Cost Snapshot**: Unit cost snapshot (`unitCostSnapshotMinor`) is captured at posting time for accurate gross profit estimation without floating-point errors.
-4. **Tenant-Scoped Reference Numbers**: Reference numbers (`PUR-inst_A-2026-000001`, `SAL-inst_A-2026-000001`, `DEL-inst_A-2026-000001`, `RET-inst_A-2026-000001`) are institution-scoped.
-5. **Idempotency Locks**: Inventory mutations support SHA-256 idempotency locks to prevent duplicate stock movements upon network retries.
+1. **Exam Question Snapshots (`ExamQuestionSnapshot`)**: Publishing an exam creates immutable question snapshots. Historical exam contents and grades are derived strictly from snapshots, preserving stability even if live question banks are edited later.
+2. **Correct-Answer Privacy Protection**: Correct answer fields (`isCorrect`, `correctAnswer`) are strictly administrative/trusted data. Firestore rules deny student and parent access to correct answers.
+3. **Score Precision Policy (Integer Hundredths)**: All score and percentage fields are represented as non-negative safe integer hundredths ($100 = 1.00$ mark), eliminating floating-point rounding errors.
+4. **Immutable Grade Revisions (`GradeRevision`)**: Grade corrections create append-only audit records storing previous score, new score, reason, actor, and timestamp. Casually overwriting finalized grades is prohibited.
+5. **Deterministic Grade IDs**: Grade records use deterministic document IDs (`grade_{examId}_{studentId}`) to prevent duplicate grade records during concurrent submissions.

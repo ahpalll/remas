@@ -1,7 +1,7 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 9 Books & Inventory - Hardened)
+ * Educational Center SaaS - Firestore Security Rules (Phase 10 Exams & Grades Foundation - Hardened)
  * 1. Default Deny: All unmatched paths are strictly denied.
  * 2. Institution Document Rules (Phase 3): Immutable audit keys, tenant admin/superAdmin access.
  * 3. User Profile Rules (Phase 4): Whitelisted fields, zero physical delete, request.time check.
@@ -9,11 +9,12 @@ rules_version = '2';
  * 5. Student Domain Rules (Phase 6): Server-only collections write DENIED; Admin-Only Read.
  * 6. Attendance System Rules (Phase 7): Server-only collections write DENIED; Admin-Only Read.
  * 7. Finance System Rules (Phase 8): Server-only collections write DENIED; Admin-Only Read.
- * 8. Books & Inventory Rules (Phase 9):
- *    - Server-Only Collections (books, suppliers, purchases, purchaseLines, sales, saleLines,
- *      studentDeliveries, returns, stockMovements, inventory, inventoryLocks):
+ * 8. Books & Inventory Rules (Phase 9): Server-only collections write DENIED; Admin-Only Read.
+ * 9. Exams & Grades Rules (Phase 10):
+ *    - Server-Only Collections (questionBanks, questions, questionOptions, exams, examQuestions,
+ *      grades, gradeRevisions, examLocks):
  *      Client direct create/update/delete DENIED (allow create, update, delete: if false).
- *    - Admin-Only Read Access across all Inventory collections (Student/Parent read DEFERRED).
+ *    - Admin-Only Read Access across all Exam & Grading collections (Correct Answers Privacy Protected).
  */
 
 service cloud.firestore {
@@ -271,7 +272,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Phase 9 Books & Inventory Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    // Phase 9 Books & Inventory Server-Only Collections
     match /institutions/{institutionId}/books/{bookId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
@@ -323,6 +324,47 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/inventoryLocks/{lockId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Phase 10 Exams & Grades Server-Only Collections (Direct Client Writes DENIED, Admin-Only Read)
+    match /institutions/{institutionId}/questionBanks/{bankId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/questions/{questionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/questionOptions/{optionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/exams/{examId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/examQuestions/{examQuestionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/grades/{gradeId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/gradeRevisions/{revisionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /institutions/{institutionId}/examLocks/{lockId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
     }

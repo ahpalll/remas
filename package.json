@@ -11,7 +11,8 @@
     "test:attendance": "node --test firebase/attendance_backend.test.js",
     "test:finance": "node --test firebase/finance_backend.test.js",
     "test:inventory": "node --test firebase/inventory_backend.test.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory"
+    "test:exam": "node --test firebase/exam_backend.test.js",
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"

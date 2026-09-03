@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 9 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 10 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,12 +44,12 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5, 6, 7, 8 & 9 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-10 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters, attendanceSessions, attendanceRecords, attendanceCorrections, attendanceAudits, attendanceAggregates, feeStructures, studentCharges, studentPayments, receipts, financialRefunds, expenses, otherIncome, teacherSettlements, cashboxPeriods, financialLedger, financialCorrections, financialAudits, financialAggregates, books, suppliers, purchases, purchaseLines, sales, saleLines, studentDeliveries, returns, stockMovements, inventory, inventoryLocks)
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks'].includes(colName)) {
+    // Server-Only Collections (schedules, groups, academicYears, terms, uniqueness, scheduleLocks, enrollments, guardians, studentGuardians, groupCounters, attendanceSessions, attendanceRecords, attendanceCorrections, attendanceAudits, attendanceAggregates, feeStructures, studentCharges, studentPayments, receipts, financialRefunds, expenses, otherIncome, teacherSettlements, cashboxPeriods, financialLedger, financialCorrections, financialAudits, financialAggregates, books, suppliers, purchases, purchaseLines, sales, saleLines, studentDeliveries, returns, stockMovements, inventory, inventoryLocks, questionBanks, questions, questionOptions, exams, examQuestions, grades, gradeRevisions, examLocks)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks'].includes(colName)) {
       const allowRead = isTenantAdmin(instId) || isSuperAdmin();
       return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
     }
@@ -871,7 +871,7 @@ test('Phase 8 Test 20 (Rule 106): Tenant admin update financialLedger directly -
 });
 
 // -------------------------------------------------------------
-// PHASE 9 FIRESTORE SECURITY TESTS (12 NEW ASSERTIONS = 118 TOTAL)
+// PHASE 9 FIRESTORE SECURITY TESTS (12 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 9 Test 1 (Rule 107): Direct client books create/update/delete -> DENIED (allow create, update, delete: if false)', () => {
@@ -944,4 +944,80 @@ test('Phase 9 Test 12 (Rule 118): Tenant A user reads Tenant B inventory records
   const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'book_1' }, null, 'read', null, null, 'books');
   assert.equal(res.allowRead, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 10 FIRESTORE SECURITY TESTS (12 NEW ASSERTIONS = 130 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 10 Test 1 (Rule 119): Direct client questionBanks create/update/delete -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'qb_1' }, {}, 'create', null, null, 'questionBanks');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 2 (Rule 120): Direct client questions write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'q_1' }, {}, 'create', null, null, 'questions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 3 (Rule 121): Direct client questionOptions write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'opt_1' }, {}, 'create', null, null, 'questionOptions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 4 (Rule 122): Direct client exams write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'exam_1' }, {}, 'create', null, null, 'exams');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 5 (Rule 123): Direct client examQuestions write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'eq_1' }, {}, 'create', null, null, 'examQuestions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 6 (Rule 124): Direct client grades write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'grd_1' }, {}, 'create', null, null, 'grades');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 7 (Rule 125): Direct client gradeRevisions write -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'rev_1' }, {}, 'create', null, null, 'gradeRevisions');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 10 Test 8 (Rule 126): Student attempts broad read on exams/questions/grades -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'exam_1' }, null, 'read', null, null, 'exams');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 10 Test 9 (Rule 127): Parent attempts broad read on exams/questions/grades -> DENIED', () => {
+  const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
+  const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'exam_1' }, null, 'read', null, null, 'exams');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 10 Test 10 (Rule 128): Tenant admin read own tenant exam/grade records -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'exam_1' }, null, 'read', null, null, 'exams');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 10 Test 11 (Rule 129): Tenant A user reads Tenant B exam/grade records -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_B', docId: 'exam_1' }, null, 'read', null, null, 'exams');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 10 Test 12 (Rule 130): Direct client overwrite of finalized grade -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'grd_1' }, { earnedMarksHundredths: 9000 }, 'update', { earnedMarksHundredths: 5000 }, null, 'grades');
+  assert.equal(res.allowWrite, false);
 });
