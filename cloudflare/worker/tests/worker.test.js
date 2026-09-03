@@ -9,7 +9,7 @@ const {
 } = require('../src/index');
 
 // -------------------------------------------------------------
-// CLOUDFLARE WORKER MEDIA SECURITY TESTS (15 ASSERTIONS)
+// CLOUDFLARE WORKER MEDIA SECURITY TESTS (17 ASSERTIONS)
 // -------------------------------------------------------------
 
 test('Worker Test 1: Valid canonical object key parsing', () => {
@@ -66,7 +66,7 @@ test('Worker Test 9: Invalid token signature -> REJECTED', () => {
 });
 
 test('Worker Test 10: Cross-tenant content authorization -> REJECTED', () => {
-  const userContext = { uid: 'u1', role: 'student', institutionId: 'inst_A' };
+  const userContext = { uid: 'u1', role: 'student', institutionId: 'inst_A', isEntitled: true };
   const objectMeta = { institutionId: 'inst_B', contentId: 'c1' };
   assert.throws(
     () => authorizeEducationalContentAccess(userContext, objectMeta),
@@ -118,4 +118,22 @@ test('Worker Test 15: Worker request handler unauthenticated -> HTTP 401', async
   };
   const res = await handleWorkerRequest(req);
   assert.equal(res.status, 401);
+});
+
+test('Worker Test 16: Phase 14 Student unentitled request -> HTTP 403 (NO_ACTIVE_ENTITLEMENT)', async () => {
+  const req = {
+    url: 'https://worker.local/media?objectKey=institutions/inst_dev_center/contents/cnt_1/v1/obj_1',
+    headers: new Map([['Authorization', 'Bearer valid_token_unentitled']])
+  };
+  const res = await handleWorkerRequest(req);
+  assert.equal(res.status, 403);
+});
+
+test('Worker Test 17: Worker does NOT trust client-supplied query parameter entitled=true', async () => {
+  const req = {
+    url: 'https://worker.local/media?objectKey=institutions/inst_dev_center/contents/cnt_1/v1/obj_1&entitled=true',
+    headers: new Map([['Authorization', 'Bearer valid_token_unentitled']])
+  };
+  const res = await handleWorkerRequest(req);
+  assert.equal(res.status, 403);
 });

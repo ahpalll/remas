@@ -1,6 +1,6 @@
 # Project State - Educational Center SaaS
 
-## Current Accepted Phase: Phase 13 — Cloudflare R2 + Secure Media Delivery
+## Current Accepted Phase: Phase 14 — Subscription Codes & Content Entitlements
 
 - **Phase 0**: Architecture & Repo Setup — COMPLETE
 - **Phase 1**: Core Data Schemas & Multi-Tenant Boundaries — COMPLETE
@@ -16,10 +16,11 @@
 - **Phase 11**: Online Exams Runtime — COMPLETE
 - **Phase 12**: Educational Content Management — COMPLETE
 - **Phase 13**: Cloudflare R2 + Secure Media Delivery — COMPLETE
+- **Phase 14**: Subscription Codes & Content Entitlements — COMPLETE
 
 ## System Statistics & Test Baseline
-- Total Executed Assertions: **513 Assertions** (100% Passing)
-  - 152 Security Rules Assertions
+- Total Executed Assertions: **560 Assertions** (100% Passing)
+  - 162 Security Rules Assertions
   - 30 Identity & Provisioning Backend Assertions
   - 20 Academic Core Backend Assertions
   - 25 Student Domain Backend Assertions
@@ -30,7 +31,8 @@
   - 42 Online Exams Runtime Backend Assertions
   - 32 Educational Content Management Backend Assertions
   - 32 Cloudflare R2 Media Backend Assertions
-  - 15 Cloudflare Worker Media Security Assertions
+  - 17 Cloudflare Worker Media Security Assertions
+  - 35 Subscription Codes & Content Entitlements Backend Assertions
 - Admin Web Build: **PASSing**
 - Parent Portal Build: **PASSing**
 - Student Flutter Analyze & Test: **PASSing**

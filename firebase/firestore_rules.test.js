@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 12 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 14 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,14 +44,14 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-12 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-14 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
-    // Server-Only Collections (including Phase 12 lessons & contents)
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks', 'examAttempts', 'examAttemptQuestions', 'examAttemptAnswers', 'lessons', 'contents'].includes(colName)) {
+    // Server-Only Collections (including Phase 14 packages, subscriptionCodes, entitlements)
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks', 'examAttempts', 'examAttemptQuestions', 'examAttemptAnswers', 'lessons', 'contents', 'packages', 'subscriptionCodes', 'entitlements'].includes(colName)) {
       let allowRead = isTenantAdmin(instId) || isSuperAdmin();
-      if (!allowRead && colName === 'examAttempts' && isAuthenticated && isTenantUser(instId)) {
+      if (!allowRead && ['examAttempts', 'entitlements'].includes(colName) && isAuthenticated && isTenantUser(instId)) {
         if (docBody && docBody.studentId === auth.uid) {
           allowRead = true;
         }
@@ -1107,7 +1107,7 @@ test('Phase 11 Test 12 (Rule 142): Correct answers access in attempt questions -
 });
 
 // -------------------------------------------------------------
-// PHASE 12 FIRESTORE SECURITY TESTS (10 NEW ASSERTIONS = 152 TOTAL)
+// PHASE 12 FIRESTORE SECURITY TESTS (10 ASSERTIONS PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 12 Test 1 (Rule 143): Direct client lessons create/update/delete -> DENIED', () => {
@@ -1167,4 +1167,70 @@ test('Phase 12 Test 10 (Rule 152): Direct client update of content status to PUB
   const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
   const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'cnt_1' }, { status: 'PUBLISHED' }, 'update', { status: 'DRAFT' }, null, 'contents');
   assert.equal(res.allowWrite, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 14 FIRESTORE SECURITY TESTS (10 NEW ASSERTIONS = 162 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 14 Test 1 (Rule 153): Direct client packages create/update/delete -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'pkg_1' }, {}, 'create', null, null, 'packages');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 14 Test 2 (Rule 154): Direct client subscriptionCodes create/update/delete -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'code_1' }, {}, 'create', null, null, 'subscriptionCodes');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 14 Test 3 (Rule 155): Direct client entitlements create/update/delete -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'ent_1' }, {}, 'create', null, null, 'entitlements');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 14 Test 4 (Rule 156): Student read own entitlement -> ALLOWED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const docBody = { studentId: 'student_1' };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'ent_1' }, docBody, 'read', null, null, 'entitlements');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 14 Test 5 (Rule 157): Student read other student entitlement -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const docBody = { studentId: 'student_2' };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'ent_2' }, docBody, 'read', null, null, 'entitlements');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 14 Test 6 (Rule 158): Tenant A student read Tenant B entitlement -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const docBody = { studentId: 'student_1' };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_B', docId: 'ent_1' }, docBody, 'read', null, null, 'entitlements');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 14 Test 7 (Rule 159): Tenant admin read own tenant packages -> ALLOWED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'pkg_1' }, null, 'read', null, null, 'packages');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 14 Test 8 (Rule 160): Student broad read on subscriptionCodes -> DENIED', () => {
+  const studentAuth = { uid: 'student_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'code_1' }, null, 'read', null, null, 'subscriptionCodes');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 14 Test 9 (Rule 161): SuperAdmin global read entitlements -> ALLOWED', () => {
+  const superAuth = { uid: 'super_1', token: { role: 'superAdmin' } };
+  const res = evaluateRuleContext(superAuth, { institutionId: 'inst_B', docId: 'ent_1' }, null, 'read', null, null, 'entitlements');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 14 Test 10 (Rule 162): Unauthenticated read of packages -> DENIED', () => {
+  const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'pkg_1' }, null, 'read', null, null, 'packages');
+  assert.equal(res.allowRead, false);
 });

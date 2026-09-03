@@ -1,14 +1,13 @@
 # Architectural Decision Records (ADR)
 
-## ADR-013: Phase 13 Cloudflare R2 & Media Delivery Architecture
+## ADR-014: Phase 14 Subscription Codes & Content Entitlements Architecture
 
 ### Context
-Educational binary media assets (Videos, PDFs, Audio, Images, Documents) require private Cloudflare R2 object storage, canonical key formatting, short-lived presigned access (~15 minutes), path traversal protection, zero secret leakage, and clean boundary separation from Phase 14 subscription codes.
+Educational content access control requires subscription packages, high-entropy subscription codes, SHA-256 code hashing, atomic transactional redemption, request idempotency, server-owned duration calculations, scope evaluation, zero plaintext code persistence in Firestore, and integration with Phase 13 Cloudflare Worker.
 
 ### Decision
-1. **Private R2 Bucket & Canonical Key Format**: All R2 keys follow `institutions/{institutionId}/contents/{contentId}/v{version}/{objectId}`. Direct public R2 access is strictly DENIED.
-2. **Cloudflare Worker Layer**: Worker (`cloudflare/worker/src/index.js`) authenticates requests, enforces path traversal security (`../`), validates tenant isolation, and issues short-lived presigned URLs (900 seconds).
-3. **Zero Credentials Exposure**: R2 access keys and secrets reside strictly in environment secrets and are NEVER stored in Firestore or client bundles.
-4. **Media Lifecycle**: `UPLOAD_PENDING` $\rightarrow$ `UPLOADED` $\rightarrow$ `PROCESSING` $\rightarrow$ `READY` $\rightarrow$ `FAILED` $\rightarrow$ `ARCHIVED`. Playback requests require `READY` status.
-5. **Phase Boundary Preservation**: Subscription codes, package entitlements, and entitlement gates are deferred to Phase 14.
-6. **Forensic Reconciliation**: Absolute test assertion baseline reconciled to **513 Assertions** (100% Passing).
+1. **100% Trusted Backend Authority**: Direct client writes to `/packages`, `/subscriptionCodes`, and `/entitlements` are strictly DENIED in Firestore security rules (`allow create, update, delete: if false`). All mutations run via `firebase/subscription_service.js`.
+2. **SHA-256 Code Hashing**: Plaintext codes are generated server-side with high entropy and returned ONLY ONCE at creation time. Only `codeHash` is saved in Firestore.
+3. **Atomic Code Redemption**: Code redemption is transactional, checks idempotency via `requestId`, sets code status `REDEEMED`, and creates an `Entitlement` document atomically.
+4. **Scope Evaluation**: Content access is authorized if ANY active, unexpired entitlement covers the target scope (`SUBJECT`, `GROUP`, `LESSON`, `CONTENT`, `MULTI_SCOPE`).
+5. **Worker Integration**: Cloudflare Worker verifies caller identity and entitlement scope before issuing short-lived R2 presigned URLs (~15 min expiry).

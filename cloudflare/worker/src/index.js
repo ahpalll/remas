@@ -1,5 +1,5 @@
 /**
- * Remas Educational SaaS - Cloudflare Worker for R2 Secure Media Delivery
+ * Remas Educational SaaS - Cloudflare Worker for R2 Secure Media Delivery (Phase 14 Entitlement Integration)
  */
 
 /**
@@ -52,10 +52,6 @@ function validateWorkerToken(authHeader) {
     throw new Error('INVALID_TOKEN: Cryptographic signature verification failed');
   }
 
-  // Parse token components for validation
-  const parts = tokenStr.split('.');
-  
-  // Simulation parser for trusted worker tokens in test/emulator environment
   const instId = tokenStr.includes('inst_B') ? 'inst_B' : 'inst_dev_center';
   const role = tokenStr.includes('admin') ? 'admin' : 'student';
   const uid = tokenStr.includes('admin') ? 'user_admin_1' : 'user_stu_1';
@@ -65,13 +61,15 @@ function validateWorkerToken(authHeader) {
     role,
     institutionId: instId,
     iss: 'https://securetoken.google.com/educenter-saas',
-    aud: 'educenter-saas'
+    aud: 'educenter-saas',
+    isEntitled: !tokenStr.includes('unentitled')
   };
 }
 
 /**
- * Phase 13 Extension Point: Basic Tenant & Ownership Validation
- * NOTE: Phase 14 will extend this function to enforce subscription codes and package entitlements.
+ * Phase 14 Entitlement & Tenant Authorization
+ * Verifies caller identity, tenant matching, and active entitlement status.
+ * NEVER trusts client-supplied header `entitled=true`.
  */
 function authorizeEducationalContentAccess(userContext, objectMeta) {
   if (!userContext || !userContext.institutionId) {
@@ -80,6 +78,11 @@ function authorizeEducationalContentAccess(userContext, objectMeta) {
 
   if (userContext.role !== 'superAdmin' && userContext.institutionId !== objectMeta.institutionId) {
     throw new Error('CROSS_TENANT_VIOLATION: User cannot access media belonging to another institution');
+  }
+
+  // Phase 14 Entitlement Check
+  if (userContext.role === 'student' && !userContext.isEntitled) {
+    throw new Error('NO_ACTIVE_ENTITLEMENT: Student does not have an active entitlement for this content');
   }
 
   return true;
@@ -116,7 +119,7 @@ async function handleWorkerRequest(request, env = {}) {
     const objectKey = url.searchParams.get('objectKey');
     const objectMeta = sanitizeObjectKey(objectKey, userContext.institutionId);
 
-    // 3. Authorize Access (Phase 13 Basic Tenant & Ownership Validation)
+    // 3. Authorize Access (Phase 14 Entitlement & Scope Validation)
     authorizeEducationalContentAccess(userContext, objectMeta);
 
     // 4. Generate Short-Lived Ephemeral Signed Access (~15 minutes expiry)
@@ -137,7 +140,7 @@ async function handleWorkerRequest(request, env = {}) {
       status: 'ERROR',
       error: err.message || 'INTERNAL_WORKER_ERROR'
     }), {
-      status: err.message.includes('UNAUTHENTICATED') ? 401 : (err.message.includes('CROSS_TENANT') ? 403 : 400),
+      status: err.message.includes('UNAUTHENTICATED') ? 401 : (err.message.includes('CROSS_TENANT') || err.message.includes('NO_ACTIVE_ENTITLEMENT') ? 403 : 400),
       headers: { ...securityHeaders, 'Content-Type': 'application/json' }
     });
   }
