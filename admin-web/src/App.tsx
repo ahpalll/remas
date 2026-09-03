@@ -8,6 +8,7 @@ import { AttendanceProvider } from './context/AttendanceContext';
 import { FinanceProvider } from './context/FinanceContext';
 import { InventoryProvider } from './context/InventoryContext';
 import { ExamProvider } from './context/ExamContext';
+import { ContentProvider } from './context/ContentContext';
 import { LoginForm } from './components/LoginForm';
 import { PasswordResetForm } from './components/PasswordResetForm';
 import { InstitutionSettings } from './components/InstitutionSettings';
@@ -19,6 +20,7 @@ import { AttendanceSessionManager } from './components/attendance/AttendanceSess
 import { FinanceDashboard } from './components/finance/FinanceDashboard';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ExamDashboard } from './components/exam/ExamDashboard';
+import { ContentDashboard } from './components/content/ContentDashboard';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -50,7 +52,7 @@ function DashboardView() {
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#2e7d32' }}>
-          ✅ تم تفعيل نظام الامتحانات والدرجات بنجاح (Phase 10 Exams & Grades Foundation Active)
+          ✅ تم تفعيل نظام إدارة المحتوى التعليمي بنجاح (Phase 12 Educational Content Management Active)
         </div>
       </main>
 
@@ -81,6 +83,10 @@ function DashboardView() {
       <ExamProvider>
         <ExamDashboard />
       </ExamProvider>
+
+      <ContentProvider>
+        <ContentDashboard />
+      </ContentProvider>
 
       <InstitutionSettings />
       <SuperAdminInstitutions />
