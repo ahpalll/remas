@@ -1,6 +1,6 @@
 import '../models/educational_content.dart';
 
-class EducationalContentStudentService {
+class ContentService {
   Future<List<LessonDTO>> fetchLessons(String subjectId) async {
     return [
       LessonDTO(
@@ -16,19 +16,33 @@ class EducationalContentStudentService {
     ];
   }
 
-  Future<List<EducationalContentDTO>> fetchContents(String lessonId) async {
+  Future<List<EducationalContentDTO>> fetchPublishedContents(String subjectId) async {
     return [
       EducationalContentDTO(
         id: 'cnt_math_101',
         institutionId: 'inst_dev_center',
-        lessonId: lessonId,
-        subjectId: 'subj_math',
-        title: 'ملخص درس الجبر والمصفوفات',
-        contentType: 'PDF',
+        lessonId: 'les_math_1',
+        subjectId: subjectId,
+        title: 'فيديو شرح المصفوفات والتفاضل',
+        contentType: 'VIDEO',
         status: 'PUBLISHED',
         sortOrder: 1,
+        durationSeconds: 1800,
+        fileSizeBytes: 15478900,
+      ),
+      EducationalContentDTO(
+        id: 'cnt_math_102',
+        institutionId: 'inst_dev_center',
+        lessonId: 'les_math_1',
+        subjectId: subjectId,
+        title: 'ملف تمارين محلولة (PDF)',
+        contentType: 'PDF',
+        status: 'PUBLISHED',
+        sortOrder: 2,
         fileSizeBytes: 2097152,
-      )
+      ),
     ];
   }
 }
+
+typedef EducationalContentStudentService = ContentService;

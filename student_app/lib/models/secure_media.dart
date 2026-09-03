@@ -20,3 +20,23 @@ class EphemeralMediaAccessDTO {
     );
   }
 }
+
+class SecurePlaybackSessionDTO {
+  final bool authorized;
+  final String signedUrl;
+  final int expiresInSeconds;
+
+  SecurePlaybackSessionDTO({
+    required this.authorized,
+    required this.signedUrl,
+    required this.expiresInSeconds,
+  });
+
+  factory SecurePlaybackSessionDTO.fromJson(Map<String, dynamic> json) {
+    return SecurePlaybackSessionDTO(
+      authorized: json['authorized'] ?? false,
+      signedUrl: json['signedUrl'] ?? '',
+      expiresInSeconds: json['expiresInSeconds'] ?? 900,
+    );
+  }
+}

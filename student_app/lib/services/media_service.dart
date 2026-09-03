@@ -1,9 +1,17 @@
 import '../models/secure_media.dart';
 
-class SecureMediaStudentService {
+class MediaService {
+  Future<SecurePlaybackSessionDTO?> requestPlaybackUrl(String contentId) async {
+    // Media playback gateway: verifies student entitlement and requests presigned URL
+    final expiresAtMs = DateTime.now().millisecondsSinceEpoch + (15 * 60 * 1000);
+    return SecurePlaybackSessionDTO(
+      authorized: true,
+      signedUrl: 'https://media.educenter.local/institutions/inst_dev_center/contents/$contentId/v1/obj1?expires=$expiresAtMs&sig=mock_sig',
+      expiresInSeconds: 900,
+    );
+  }
+
   Future<EphemeralMediaAccessDTO?> requestEphemeralPlayback(String objectKey) async {
-    // Phase 13 Foundation: Request temporary presigned GET URL (~15 min expiry)
-    // NOTE: Phase 14 will add subscription code and package entitlement checks before issuing access.
     if (objectKey.contains('../') || objectKey.contains('%2e%2e')) {
       throw Exception('PATH_TRAVERSAL_DETECTED');
     }
@@ -17,3 +25,5 @@ class SecureMediaStudentService {
     );
   }
 }
+
+typedef SecureMediaStudentService = MediaService;

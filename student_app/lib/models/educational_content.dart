@@ -53,6 +53,8 @@ class EducationalContentDTO {
   final int? durationSeconds;
   final int? fileSizeBytes;
 
+  String get type => contentType;
+
   EducationalContentDTO({
     required this.id,
     required this.institutionId,
@@ -77,7 +79,7 @@ class EducationalContentDTO {
       stageId: json['stageId'],
       title: json['title'] ?? '',
       description: json['description'],
-      contentType: json['contentType'] ?? 'DOCUMENT',
+      contentType: json['contentType'] ?? json['type'] ?? 'DOCUMENT',
       status: json['status'] ?? 'DRAFT',
       sortOrder: json['sortOrder'] ?? 1,
       durationSeconds: json['durationSeconds'],
