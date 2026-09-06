@@ -71,3 +71,15 @@ Phase 22 implements live health verification and read/write/read-back validation
 2. **App Environment Pointer Audit**: Verified that `admin-web`, `parent-portal`, `student_app`, and `parent_app` production configurations target `educenter-saas` without embedding `127.0.0.1` or `localhost` in production definitions.
 3. **Data Boundary Safety**: Enforced strict safety rules ensuring 0 user records, 0 fake students, 0 fake parents, 0 usable subscription codes, and 0 mock financial transactions are created during live verification.
 4. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.22` with 744/744 passing assertions (100% PASS). Marked Phase 23 as `NOT STARTED`.
+
+## ADR-023: Phase 23 Production Data Model & Tenant Bootstrap Architecture
+
+### Context
+Phase 23 defines the production data model taxonomy for REMAS Educational Center SaaS (22 standard Firestore collections), provisions the single primary tenant safely and idempotently, exposes a non-PII metrics service, and enforces strict tenant isolation and role hierarchy without creating synthetic user records or fake financial data.
+
+### Decision
+1. **22-Collection SaaS Taxonomy**: Documented full production Firestore collection schema in `docs/PRODUCTION_DATA_BOOTSTRAP.md` covering Identity, Institutions/Tenants, Profiles, Students, Guardians, Teachers, Subjects, Groups, Sessions, Attendance, Assignments, Grades, Exams, Online Exams, Educational Content, Subscriptions, Entitlements, Transactions, Notifications, Media Metadata, Audit Logs, and System Metadata.
+2. **Single Primary Tenant Provisioning Engine (`firebase/production_data_bootstrap.js`)**: Implemented idempotent `bootstrapTenant` service and CLI (`--dry-run` flag support). Creates single primary tenant (`institutions/inst_bootstrap_001`) safely when production credentials are valid; halts safely with `BLOCKED — MISSING PRODUCTION CREDENTIALS` when keys are omitted.
+3. **Non-PII Metrics Service (`getProductionDataCounts`)**: Added non-PII metrics query service exposing collection document counts without revealing personal identifiable information.
+4. **Data Boundary & Zero Synthetic Data Safeguard**: Guaranteed zero fake user accounts, zero fake passwords, zero usable subscription codes, and zero mock financial transactions are written.
+5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.23` with 751/751 passing assertions (100% PASS). Marked Phase 24 as `NOT STARTED`.

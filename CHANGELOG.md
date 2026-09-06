@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.23] - 2026-09-07 (Phase 23: Production Data Model & Tenant Bootstrap)
+
+### Added
+- **Production Data Model Specification (`docs/PRODUCTION_DATA_BOOTSTRAP.md`)**: Full architectural specification of 22 standard SaaS Firestore collection domains, RBAC matrix, and non-PII metrics documentation.
+- **Single Tenant Bootstrap Engine (`firebase/production_data_bootstrap.js`)**: Idempotent provisioning service (`bootstrapTenant` & `getProductionDataCounts`) with `--dry-run` flag support and production safety guards.
+- **Tenant Bootstrap Unit Test Suite (`firebase/production_data_bootstrap.test.js`)**: 7 automated tests verifying tenant isolation, idempotency, dry-run mode, and zero-PII data boundaries.
+- **CLI Commands**: Added `tenant:bootstrap`, `production:counts`, and `test:tenant_bootstrap` scripts to `package.json`.
+
+---
+
 ## [1.0.0-release.21] - 2026-09-06 (Phase 21: Production Data Bootstrap & Live Connectivity)
 
 ### Added
