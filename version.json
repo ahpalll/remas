@@ -1,12 +1,13 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.19",
-  "backendVersion": "1.19.0",
-  "rulesVersion": "1.19.0",
-  "workerVersion": "1.19.0",
-  "releaseTag": "v1.0.0-release.19",
-  "phase": "19",
-  "phaseTitle": "Production Deployment & Release Engineering",
-  "gitBaseline": "58004280857a0394941b111dd987aae6edf0e387",
-  "status": "RELEASE_CANDIDATE_READY"
+  "appVersion": "1.0.0-release.20",
+  "backendVersion": "1.20.0",
+  "rulesVersion": "1.20.0",
+  "workerVersion": "1.20.0",
+  "releaseTag": "v1.0.0-release.20",
+  "phase": "20",
+  "phaseTitle": "Production Cloud Deployment & Go-Live Verification",
+  "gitBaseline": "cd10db331f6b5d9968b0814a6aab05c624678675",
+  "status": "PASS_WITH_NON_BLOCKING_LIMITATIONS",
+  "deploymentStatus": "PRODUCTION DEPLOYMENT: BLOCKED — MISSING PRODUCTION CREDENTIALS"
 }

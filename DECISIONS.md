@@ -36,3 +36,15 @@ Moving from production-ready foundation to complete release engineering requires
 3. **Monorepo Semantic Versioning**: Established `1.0.0-release.19` semantic version in `version.json` and documented release history in `CHANGELOG.md`.
 4. **Database Migration Safety**: Enforced rules-first deployment sequence (Snapshot -> Indexes -> Security Rules -> Additive Schema Migration -> Backend -> Frontends) in `docs/DATABASE_RELEASE_SAFETY.md`.
 5. **Component Rollback & Post-Deployment Smoke Test Specifications**: Created `docs/POST_DEPLOYMENT_SMOKE_TESTS.md` and `docs/ROLLBACK_RUNBOOK.md` covering Worker edge, Firebase rules, Web, R2, and Mobile app rollback protocols.
+
+## ADR-020: Phase 20 Production Cloud Deployment & Go-Live Verification Architecture
+
+### Context
+Finalizing Phase 20 requires complete pre-flight verification across Firebase, Cloudflare Worker, Cloudflare R2, FCM Gateway, Web application builds, and Flutter Mobile apps, validating post-deployment synthetic smoke test contracts, performing secret audits, and accurately stating deployment status without committing secrets or inventing live cloud deployments.
+
+### Decision
+1. **Pre-Flight Verification Matrix**: Established machine-readable production configuration inventory and executed full pre-flight audit (`FIREBASE_PREFLIGHT`, `CLOUDFLARE_WORKER_PREFLIGHT`) achieving 100% pass across local/emulator verification levels.
+2. **Build Artifact & Repository Credential Audit**: Confirmed zero secrets, private keys, or API tokens exist in Git tracking or minified web bundles (`admin-web/dist`, `parent-portal/dist`).
+3. **Honest Operational Status**: Overall phase status marked `PASS WITH NON-BLOCKING LIMITATIONS` and deployment status marked `PRODUCTION DEPLOYMENT: BLOCKED — MISSING PRODUCTION CREDENTIALS` until live cloud keys are injected by the system operator.
+4. **Post-Deployment Smoke Test Contract Validation**: Verified synthetic user smoke test specifications across Auth, Multi-Tenancy, Student, Parent, Subscriptions, Media signed URLs, and Notifications.
+5. **Strict Boundary Control**: Preserved complete historical commit trajectory (728 assertions 100% PASS). Marked Phase 21 as `NOT STARTED`.

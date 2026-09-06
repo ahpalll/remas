@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.20] - 2026-09-06 (Phase 20: Production Cloud Deployment & Go-Live Verification)
+
+### Added
+- **Production Pre-Flight & Go-Live Audit Matrix (`docs/PHASE_20_REPORT.md`)**: Full pre-flight verification across Firebase, Cloudflare Edge Worker, Cloudflare R2 Storage, FCM Push Gateway, Web App builds, and Flutter Mobile Apps.
+- **Machine-Readable Production Configuration Inventory**: Category audit covering Auth, Firestore, Worker, R2, FCM, Web, and Mobile configurations.
+- **Production Credential & Secret Leak Scan**: Verified 0 hardcoded secrets, private keys, or API tokens exist in Git tracking or minified production web bundles (`admin-web/dist`, `parent-portal/dist`).
+- **Pre-Flight Deployment Safety Check**: Executed `deploy_runner.js` verifying safe halting (`PRODUCTION_DEPLOYMENT_BLOCKED`) when cloud keys are omitted.
+
+---
+
 ## [1.0.0-release.19] - 2026-09-06 (Phase 19: Production Deployment & Release Engineering)
 
 ### Added
