@@ -19,7 +19,8 @@
     "test:subscription": "node --test firebase/subscription_backend.test.js",
     "test:parent": "node --test firebase/parent_backend.test.js",
     "test:notification": "node --test firebase/notification_backend.test.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification"
+    "test:readiness": "node --test firebase/production_readiness_backend.test.js",
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification && npm run test:readiness"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"

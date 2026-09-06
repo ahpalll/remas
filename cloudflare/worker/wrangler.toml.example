@@ -1,0 +1,13 @@
+# REMAS Cloudflare Worker Configuration Example
+name = "remas-media-worker"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+ENVIRONMENT = "production"
+SIGNED_URL_EXPIRATION_SECONDS = "900"
+FIREBASE_PROJECT_ID = "FIREBASE_PROJECT_ID_PLACEHOLDER"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "R2_BUCKET_NAME_PLACEHOLDER"

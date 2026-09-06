@@ -11,9 +11,14 @@ node_modules/
 admin-web/dist/
 parent-portal/dist/
 
-# Environment
+# Environment & Secrets
 .env
+.env.*
 !.env.example
+*.pem
+*.key
+service-account*.json
+firebase-adminsdk*.json
 
 # Flutter Gen
 generated/

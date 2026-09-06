@@ -1,0 +1,93 @@
+name: REMAS CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main, 'release/**' ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  backend-and-web-tests:
+    name: Backend & Web Build Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run Backend & Rules Test Suite
+        run: npm run test:all
+
+      - name: Build Admin Web Portal
+        run: |
+          cd admin-web
+          npm ci
+          npm run build
+
+      - name: Build Parent Web Portal
+        run: |
+          cd parent-portal
+          npm ci
+          npm run build
+
+      - name: Test Cloudflare Worker
+        run: |
+          cd cloudflare/worker
+          npm test
+
+  flutter-apps-check:
+    name: Flutter Mobile Apps Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Analyze & Test Student Flutter App
+        run: |
+          cd student_app
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Analyze & Test Parent Flutter App
+        run: |
+          cd parent_app
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  security-secret-scan:
+    name: Security & Secret Leak Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Secret Leak Scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
