@@ -60,3 +60,14 @@ Phase 21 establishes a production infrastructure connectivity layer targeting Fi
 3. **Safe System Data Bootstrap Module (`firebase/production_bootstrap.js`)**: Idempotent system bootstrap creating ONLY system metadata (`systemMetadata/appConfig`, `systemRoles`, `subscriptionScopes`). Includes `--dry-run` flag support and production safety guards. Zero student/parent/finance documents created.
 4. **Health Check & System Metadata Security Rules**: Hardened `firebase/firestore.rules` denying direct client writes (`allow write: if false`) for `systemHealth` and `systemMetadata` collections.
 5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.21` with 739/739 passing assertions (100% PASS). Marked Phase 22 as `NOT STARTED`.
+
+## ADR-022: Phase 22 Live Firebase Integration & Safe Production Bootstrap Architecture
+
+### Context
+Phase 22 implements live health verification and read/write/read-back validation targeting Firebase Production Project `educenter-saas` in an isolated health-check namespace, audits multi-tier application environment pointers, and enforces data boundary protections without creating fake user records or leaking secrets.
+
+### Decision
+1. **Live Firebase Verification Engine (`firebase/live_verification_service.js`)**: Implemented live verification targeting `educenter-saas`. Executes controlled write -> read-back verification against `systemHealth/phase22` when credentials are supplied; safely returns `BLOCKED — MISSING PRODUCTION CREDENTIALS` when cloud keys are omitted.
+2. **App Environment Pointer Audit**: Verified that `admin-web`, `parent-portal`, `student_app`, and `parent_app` production configurations target `educenter-saas` without embedding `127.0.0.1` or `localhost` in production definitions.
+3. **Data Boundary Safety**: Enforced strict safety rules ensuring 0 user records, 0 fake students, 0 fake parents, 0 usable subscription codes, and 0 mock financial transactions are created during live verification.
+4. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.22` with 744/744 passing assertions (100% PASS). Marked Phase 23 as `NOT STARTED`.
