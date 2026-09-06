@@ -1,13 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.20",
-  "backendVersion": "1.20.0",
-  "rulesVersion": "1.20.0",
-  "workerVersion": "1.20.0",
-  "releaseTag": "v1.0.0-release.20",
-  "phase": "20",
-  "phaseTitle": "Production Cloud Deployment & Go-Live Verification",
-  "gitBaseline": "cd10db331f6b5d9968b0814a6aab05c624678675",
+  "appVersion": "1.0.0-release.21",
+  "backendVersion": "1.21.0",
+  "rulesVersion": "1.21.0",
+  "workerVersion": "1.21.0",
+  "releaseTag": "v1.0.0-release.21",
+  "phase": "21",
+  "phaseTitle": "Production Data Bootstrap & Live Connectivity",
+  "gitBaseline": "dbbad62ac00758eb4092cf5d482daa5b7ae88d0c",
   "status": "PASS_WITH_NON_BLOCKING_LIMITATIONS",
-  "deploymentStatus": "PRODUCTION DEPLOYMENT: BLOCKED — MISSING PRODUCTION CREDENTIALS"
+  "deploymentStatus": "BLOCKED — MISSING PRODUCTION CREDENTIALS",
+  "targetFirebaseProject": "educenter-saas"
 }

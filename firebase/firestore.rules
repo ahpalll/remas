@@ -418,5 +418,16 @@ service cloud.firestore {
         || (isTenantUser(institutionId) && request.auth.uid == resource.data.studentId);
       allow create, update, delete: if false;
     }
+
+    // Phase 21 System Health & System Metadata Collections (Direct Client Writes DENIED)
+    match /systemHealth/{checkId} {
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /systemMetadata/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
+    }
   }
 }

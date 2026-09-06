@@ -48,3 +48,15 @@ Finalizing Phase 20 requires complete pre-flight verification across Firebase, C
 3. **Honest Operational Status**: Overall phase status marked `PASS WITH NON-BLOCKING LIMITATIONS` and deployment status marked `PRODUCTION DEPLOYMENT: BLOCKED — MISSING PRODUCTION CREDENTIALS` until live cloud keys are injected by the system operator.
 4. **Post-Deployment Smoke Test Contract Validation**: Verified synthetic user smoke test specifications across Auth, Multi-Tenancy, Student, Parent, Subscriptions, Media signed URLs, and Notifications.
 5. **Strict Boundary Control**: Preserved complete historical commit trajectory (728 assertions 100% PASS). Marked Phase 21 as `NOT STARTED`.
+
+## ADR-021: Phase 21 Production Data Bootstrap & Live Connectivity Architecture
+
+### Context
+Phase 21 establishes a production infrastructure connectivity layer targeting Firebase Production Project `educenter-saas` and an idempotent system data bootstrap module with dry-run support, production guards, and zero secret leakage.
+
+### Decision
+1. **Target Firebase Project Alignment**: Configured `.firebaserc`, `firebase.json`, and `.env.example` mapping primary production project alias to `educenter-saas`.
+2. **Production Connectivity Layer (`firebase/production_connectivity_service.js`)**: Structured infrastructure health checking across Firebase Project `educenter-saas`, Firestore, Auth, Functions, Cloudflare Worker, R2, and FCM. Performs live verification when credentials exist using isolated `systemHealth/{checkId}` collection; safely halts with `BLOCKED — MISSING PRODUCTION CREDENTIALS` when keys are omitted.
+3. **Safe System Data Bootstrap Module (`firebase/production_bootstrap.js`)**: Idempotent system bootstrap creating ONLY system metadata (`systemMetadata/appConfig`, `systemRoles`, `subscriptionScopes`). Includes `--dry-run` flag support and production safety guards. Zero student/parent/finance documents created.
+4. **Health Check & System Metadata Security Rules**: Hardened `firebase/firestore.rules` denying direct client writes (`allow write: if false`) for `systemHealth` and `systemMetadata` collections.
+5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.21` with 739/739 passing assertions (100% PASS). Marked Phase 22 as `NOT STARTED`.

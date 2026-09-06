@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.21] - 2026-09-06 (Phase 21: Production Data Bootstrap & Live Connectivity)
+
+### Added
+- **Production Connectivity Layer (`firebase/production_connectivity_service.js`)**: Structured infrastructure health verification across Firebase Project `educenter-saas`, Firestore, Auth, Functions, Worker, R2, and FCM with zero secret exposure.
+- **Safe System Data Bootstrap Module (`firebase/production_bootstrap.js`)**: Idempotent bootstrap creating ONLY system metadata (`systemMetadata/appConfig`, `systemMetadata/systemRoles`, `systemMetadata/subscriptionScopes`) with CLI `--dry-run` support and production safety guards.
+- **Health Check & Metadata Security Rules (`firebase/firestore.rules`)**: Direct client writes DENIED (`allow write: if false`) for `systemHealth` and `systemMetadata` collections.
+- **CLI Connectivity & Bootstrap Scripts**: Added `production:check`, `production:bootstrap`, `production:verify`, `test:connectivity`, `test:bootstrap` scripts to `package.json`.
+- **Target Firebase Project Target**: Linked project alias mapping to `educenter-saas`.
+
+---
+
 ## [1.0.0-release.20] - 2026-09-06 (Phase 20: Production Cloud Deployment & Go-Live Verification)
 
 ### Added
