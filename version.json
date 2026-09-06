@@ -1,0 +1,12 @@
+{
+  "name": "remas-monorepo",
+  "appVersion": "1.0.0-release.19",
+  "backendVersion": "1.19.0",
+  "rulesVersion": "1.19.0",
+  "workerVersion": "1.19.0",
+  "releaseTag": "v1.0.0-release.19",
+  "phase": "19",
+  "phaseTitle": "Production Deployment & Release Engineering",
+  "gitBaseline": "58004280857a0394941b111dd987aae6edf0e387",
+  "status": "RELEASE_CANDIDATE_READY"
+}
