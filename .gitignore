@@ -7,6 +7,7 @@ node_modules/
 /.metadata
 /build/
 /.dart_tool/
+**/.dart_tool/
 admin-web/dist/
 parent-portal/dist/
 
@@ -30,6 +31,7 @@ firebase-token.json
 /pdfs/
 /images/
 /audio/
+/media/
 
 # Android build artifacts
 /*/build/

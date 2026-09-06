@@ -7,7 +7,7 @@ const path = require('node:path');
 const rulesPath = path.join(__dirname, 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
-// Rules Parser & Logic Verification Engine for Phase 16 Firestore Security Rules
+// Rules Parser & Logic Verification Engine for Phase 17 Firestore Security Rules
 function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocBody = null, requestTime = null, colName = 'users') {
   const isAuthenticated = auth !== null && auth !== undefined;
   
@@ -44,23 +44,32 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
     return { allowRead, allowWrite, allowCreate, allowDelete };
   }
 
-  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-16 Collections)
+  // Path 2: /institutions/{institutionId}/{collection}/{docId} (Phase 5-17 Collections)
   if (pathParams.institutionId && pathParams.docId && colName) {
     const instId = pathParams.institutionId;
 
     // Server-Only Collections
-    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks', 'examAttempts', 'examAttemptQuestions', 'examAttemptAnswers', 'lessons', 'contents', 'packages', 'subscriptionCodes', 'entitlements'].includes(colName)) {
+    if (['schedules', 'groups', 'academicYears', 'terms', 'uniqueness', 'scheduleLocks', 'enrollments', 'guardians', 'studentGuardians', 'groupCounters', 'attendanceSessions', 'attendanceRecords', 'attendanceCorrections', 'attendanceAudits', 'attendanceAggregates', 'feeStructures', 'studentCharges', 'studentPayments', 'receipts', 'financialRefunds', 'expenses', 'otherIncome', 'teacherSettlements', 'cashboxPeriods', 'financialLedger', 'financialCorrections', 'financialAudits', 'financialAggregates', 'books', 'suppliers', 'purchases', 'purchaseLines', 'sales', 'saleLines', 'studentDeliveries', 'returns', 'stockMovements', 'inventory', 'inventoryLocks', 'questionBanks', 'questions', 'questionOptions', 'exams', 'examQuestions', 'grades', 'gradeRevisions', 'examLocks', 'examAttempts', 'examAttemptQuestions', 'examAttemptAnswers', 'lessons', 'contents', 'packages', 'subscriptionCodes', 'entitlements', 'notifications', 'notificationDeliveries'].includes(colName)) {
       let allowRead = isTenantAdmin(instId) || isSuperAdmin();
-      if (!allowRead && ['examAttempts', 'entitlements'].includes(colName) && isAuthenticated && isTenantUser(instId)) {
-        if (docBody && docBody.studentId === auth.uid) {
+      if (!allowRead && ['examAttempts', 'entitlements', 'notifications'].includes(colName) && isAuthenticated && isTenantUser(instId)) {
+        if (docBody && (docBody.studentId === auth.uid || docBody.userId === auth.uid)) {
           allowRead = true;
         }
       }
       return { allowRead, allowWrite: false, allowCreate: false, allowDelete: false };
     }
 
-    // Client-Mutable Collections (subjects, stages, rooms, teachers, students)
-    if (['subjects', 'stages', 'rooms', 'teachers', 'students'].includes(colName)) {
+    // Client-Mutable Collections (subjects, stages, rooms, teachers, students, devices, notificationPreferences)
+    if (['subjects', 'stages', 'rooms', 'teachers', 'students', 'devices', 'notificationPreferences'].includes(colName)) {
+      if (['devices', 'notificationPreferences'].includes(colName)) {
+        const isOwner = isAuthenticated && docBody && docBody.userId === auth.uid;
+        const allowRead = isOwner || isTenantAdmin(instId) || isSuperAdmin();
+        const allowCreate = isOwner;
+        const allowUpdate = isOwner;
+        const allowDelete = isOwner;
+        return { allowRead, allowWrite: action === 'create' ? allowCreate : (action === 'delete' ? allowDelete : allowUpdate), allowCreate, allowDelete };
+      }
+
       const allowRead = isTenantAdmin(instId) || isSuperAdmin();
       let allowCreate = colName === 'students' ? false : ((isTenantAdmin(instId) || isSuperAdmin()) && docBody && docBody.createdBy === (auth ? auth.uid : null));
       const allowDelete = false;
@@ -132,7 +141,7 @@ function evaluateRuleContext(auth, pathParams, docBody, action = 'read', oldDocB
 }
 
 // -------------------------------------------------------------
-// PREVIOUS PHASES FIRESTORE SECURITY TESTS (172 PRESERVED)
+// PREVIOUS PHASES FIRESTORE SECURITY TESTS (182 PRESERVED)
 // -------------------------------------------------------------
 
 test('Phase 2 Test 1: Syntax Verification', () => {
@@ -1254,10 +1263,6 @@ test('Phase 15 Test 10 (Rule 172): Student cannot publish lessons or educational
   assert.equal(res.allowCreate, false);
 });
 
-// -------------------------------------------------------------
-// PHASE 16 PARENT PORTAL SECURITY TESTS (10 NEW ASSERTIONS = 182 TOTAL)
-// -------------------------------------------------------------
-
 test('Phase 16 Test 1 (Rule 173): Parent cannot create student charge directly -> DENIED', () => {
   const parentAuth = { uid: 'parent_1', token: { institutionId: 'inst_A', role: 'parent' } };
   const res = evaluateRuleContext(parentAuth, { institutionId: 'inst_A', docId: 'chg_1' }, { amountMinor: 1000 }, 'create', null, null, 'studentCharges');
@@ -1318,4 +1323,69 @@ test('Phase 16 Test 11 (Rule 181): Parent cannot modify student profile status d
 test('Phase 16 Test 12 (Rule 182): Unauthenticated request on parent resources -> DENIED', () => {
   const res = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'stu_1' }, null, 'read', null, null, 'students');
   assert.equal(res.allowRead, false);
+});
+
+// -------------------------------------------------------------
+// PHASE 17 NOTIFICATION SYSTEM SECURITY TESTS (10 NEW ASSERTIONS = 192 TOTAL)
+// -------------------------------------------------------------
+
+test('Phase 17 Test 1 (Rule 183): Direct client create notification document -> DENIED (allow create: if false)', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'notif_1' }, { title: 'Spam' }, 'create', null, null, 'notifications');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 17 Test 2 (Rule 184): Direct client create notificationDelivery record -> DENIED', () => {
+  const adminAuth = { uid: 'admin_1', token: { institutionId: 'inst_A', role: 'admin' } };
+  const res = evaluateRuleContext(adminAuth, { institutionId: 'inst_A', docId: 'del_1' }, {}, 'create', null, null, 'notificationDeliveries');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 17 Test 3 (Rule 185): User read own notification document -> ALLOWED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'notif_1' }, { userId: 'stu_1' }, 'read', null, null, 'notifications');
+  assert.equal(res.allowRead, true);
+});
+
+test('Phase 17 Test 4 (Rule 186): User read other user notification document -> DENIED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'notif_2' }, { userId: 'stu_2' }, 'read', null, null, 'notifications');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 17 Test 5 (Rule 187): Tenant A user read Tenant B notification document -> DENIED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_B', docId: 'notif_1' }, { userId: 'stu_1' }, 'read', null, null, 'notifications');
+  assert.equal(res.allowRead, false);
+});
+
+test('Phase 17 Test 6 (Rule 188): Device registration create by device owner -> ALLOWED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'dev_1' }, { userId: 'stu_1' }, 'create', null, null, 'devices');
+  assert.equal(res.allowCreate, true);
+});
+
+test('Phase 17 Test 7 (Rule 189): Device registration create for another user -> DENIED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'dev_2' }, { userId: 'stu_2' }, 'create', null, null, 'devices');
+  assert.equal(res.allowCreate, false);
+});
+
+test('Phase 17 Test 8 (Rule 190): Notification preferences update by owner -> ALLOWED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'pref_1' }, { userId: 'stu_1' }, 'update', { userId: 'stu_1' }, null, 'notificationPreferences');
+  assert.equal(res.allowWrite, true);
+});
+
+test('Phase 17 Test 9 (Rule 191): Notification preferences update for another user -> DENIED', () => {
+  const studentAuth = { uid: 'stu_1', token: { institutionId: 'inst_A', role: 'student' } };
+  const res = evaluateRuleContext(studentAuth, { institutionId: 'inst_A', docId: 'pref_2' }, { userId: 'stu_2' }, 'update', { userId: 'stu_2' }, null, 'notificationPreferences');
+  assert.equal(res.allowWrite, false);
+});
+
+test('Phase 17 Test 10 (Rule 192): Unauthenticated request on devices/notifications -> DENIED', () => {
+  const resDev = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'dev_1' }, null, 'read', null, null, 'devices');
+  const resNot = evaluateRuleContext(null, { institutionId: 'inst_A', docId: 'notif_1' }, null, 'read', null, null, 'notifications');
+  assert.equal(resDev.allowRead, false);
+  assert.equal(resNot.allowRead, false);
 });

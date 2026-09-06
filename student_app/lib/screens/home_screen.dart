@@ -9,6 +9,7 @@ import 'grades_screen.dart';
 import 'online_exams_list_screen.dart';
 import 'educational_content_screen.dart';
 import 'subscription_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -20,8 +21,18 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('بوابة الطالب - Remas Student App'),
+        title: const Text('منصة الطالب'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'الإشعارات',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const StudentNotificationsScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {

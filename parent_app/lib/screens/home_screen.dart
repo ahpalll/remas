@@ -8,6 +8,7 @@ import 'child_schedule_screen.dart';
 import 'child_attendance_screen.dart';
 import 'child_grades_screen.dart';
 import 'child_content_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ParentAuthService authService;
@@ -49,6 +50,16 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'الإشعارات',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ParentNotificationsScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => widget.authService.logout(),

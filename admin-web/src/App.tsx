@@ -25,6 +25,7 @@ import { ExamDashboard } from './components/exam/ExamDashboard';
 import { ContentDashboard } from './components/content/ContentDashboard';
 import { MediaManager } from './components/media/MediaManager';
 import { SubscriptionDashboard } from './components/subscription/SubscriptionDashboard';
+import { NotificationDashboard } from './components/notifications/NotificationDashboard';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -99,6 +100,8 @@ function DashboardView() {
       <SubscriptionProvider>
         <SubscriptionDashboard />
       </SubscriptionProvider>
+
+      <NotificationDashboard />
 
       <InstitutionSettings />
       <SuperAdminInstitutions />
