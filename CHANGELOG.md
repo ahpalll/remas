@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.24] - 2026-09-07 (Phase 24: Real Admin Onboarding & First Tenant)
+
+### Added
+- **Institution Management Backend Service (`firebase/institution_service.js`)**: SuperAdmin institution lifecycle API (`createInstitution`, `getInstitution`, `updateInstitution`, `listInstitutions`, `setInstitutionStatus`, `assignInitialAdmin`) enforcing tenant claims, role hierarchy, and immutable audit keys.
+- **Institution Onboarding Unit Test Suite (`firebase/institution_backend.test.js`)**: 10 automated test cases asserting SuperAdmin authorization, tenant isolation, IDOR protection, status lifecycle, and audit logging.
+- **Admin Web Console Extensions (`admin-web/src/components/SuperAdminInstitutions.tsx`)**: Responsive, RTL-compliant institution management console with creation forms, status badges, and confirmation dialogs.
+- **Institution Onboarding Specification (`docs/INSTITUTION_ONBOARDING.md`)**: Comprehensive architectural guide for tenant provisioning and Initial Admin onboarding workflows.
+
+---
+
 ## [1.0.0-release.23] - 2026-09-07 (Phase 23: Production Data Model & Tenant Bootstrap)
 
 ### Added

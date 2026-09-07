@@ -83,3 +83,16 @@ Phase 23 defines the production data model taxonomy for REMAS Educational Center
 3. **Non-PII Metrics Service (`getProductionDataCounts`)**: Added non-PII metrics query service exposing collection document counts without revealing personal identifiable information.
 4. **Data Boundary & Zero Synthetic Data Safeguard**: Guaranteed zero fake user accounts, zero fake passwords, zero usable subscription codes, and zero mock financial transactions are written.
 5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.23` with 751/751 passing assertions (100% PASS). Marked Phase 24 as `NOT STARTED`.
+
+## ADR-024: Phase 24 Real Admin Onboarding & First Tenant Architecture
+
+### Context
+Phase 24 establishes full operational institution management and initial Admin onboarding capabilities (`createInstitution`, `getInstitution`, `updateInstitution`, `listInstitutions`, `setInstitutionStatus`, `assignInitialAdmin`), supporting status lifecycles (`PENDING`, `ACTIVE`, `SUSPENDED`, `ARCHIVED`), strict SuperAdmin/Tenant Admin authorization, immutable audit keys, RTL admin web extensions, and audit event recording.
+
+### Decision
+1. **Institution Management Backend (`firebase/institution_service.js`)**: Developed trusted backend API for tenant provisioning and status transitions. Direct client Firestore creation is strictly DENIED in security rules.
+2. **SuperAdmin & Tenant Admin Privilege Boundaries**: SuperAdmin possesses global institution lifecycle management authority; Tenant Admins (`institutionOwner`, `admin`) can view and update ONLY their own tenant profile. Unprivileged roles (`teacher`, `student`, `parent`) are strictly DENIED.
+3. **Status Lifecycle Policy**: Defined formal status lifecycle (`PENDING`, `ACTIVE`, `SUSPENDED`, `ARCHIVED`). Status transitions to `SUSPENDED` disable protected business operations while preserving database immutability.
+4. **Admin Web Extensions (`admin-web/src/components/SuperAdminInstitutions.tsx`)**: Created responsive, Arabic RTL console with creation forms, status toggles, and confirmation modal dialogs for sensitive operational actions.
+5. **Auditable System Events**: Implemented structured audit logger emitting `INSTITUTION_CREATED`, `INSTITUTION_UPDATED`, `INSTITUTION_ACTIVATED`, `INSTITUTION_SUSPENDED`, and `ADMIN_ASSIGNED` without logging secrets or credentials.
+6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.24` with 761/761 passing assertions (100% PASS). Marked Phase 25 as `NOT STARTED`.
