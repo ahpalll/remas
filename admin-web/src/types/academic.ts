@@ -1,4 +1,4 @@
-export type EntityStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'SUSPENDED' | 'MAINTENANCE' | 'COMPLETED' | 'CANCELLED';
+export type EntityStatus = 'ACTIVE' | 'INACTIVE' | 'DISABLED' | 'ARCHIVED' | 'SUSPENDED' | 'MAINTENANCE' | 'COMPLETED' | 'CANCELLED';
 
 export interface AcademicYear {
   id: string;
@@ -31,10 +31,11 @@ export interface Term {
 export interface Subject {
   id: string;
   institutionId: string;
+  stageId?: string;
   name: string;
   code: string;
   description?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  status: 'ACTIVE' | 'INACTIVE' | 'DISABLED' | 'ARCHIVED';
   createdAt?: any;
   createdBy?: string;
   updatedAt?: any;
@@ -50,7 +51,8 @@ export interface Teacher {
   email?: string;
   specialization?: string;
   subjectIds: string[];
-  status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  levelIds?: string[];
+  status: 'ACTIVE' | 'INACTIVE' | 'DISABLED' | 'SUSPENDED' | 'ARCHIVED';
   createdAt?: any;
   createdBy?: string;
   updatedAt?: any;
@@ -63,7 +65,7 @@ export interface Stage {
   name: string;
   code: string;
   order: number;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'DISABLED';
   createdAt?: any;
   createdBy?: string;
   updatedAt?: any;

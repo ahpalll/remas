@@ -96,3 +96,15 @@ Phase 24 establishes full operational institution management and initial Admin o
 4. **Admin Web Extensions (`admin-web/src/components/SuperAdminInstitutions.tsx`)**: Created responsive, Arabic RTL console with creation forms, status toggles, and confirmation modal dialogs for sensitive operational actions.
 5. **Auditable System Events**: Implemented structured audit logger emitting `INSTITUTION_CREATED`, `INSTITUTION_UPDATED`, `INSTITUTION_ACTIVATED`, `INSTITUTION_SUSPENDED`, and `ADMIN_ASSIGNED` without logging secrets or credentials.
 6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.24` with 761/761 passing assertions (100% PASS). Marked Phase 25 as `NOT STARTED`.
+
+## ADR-025: Phase 25 Academic Structure & Institution Operations Architecture
+
+### Context
+Phase 25 establishes operational academic level/grade hierarchies, subjects catalog management, teacher profile management, and subject/level assignment engines (`firebase/academic_structure_service.js`), with strict multi-tenant isolation, role authorization, RTL admin web extensions, and audit event recording.
+
+### Decision
+1. **Academic Structure & Teachers Service (`firebase/academic_structure_service.js`)**: Implemented trusted backend API for academic levels (`createAcademicLevel`, `updateAcademicLevel`, `setAcademicLevelStatus`), subjects catalog (`createSubject`, `updateSubject`, `setSubjectStatus`), and teacher profiles (`createTeacherProfile`, `updateTeacherProfile`, `assignTeacherSubjectsAndLevels`).
+2. **Multi-Tenant Privilege Boundaries**: SuperAdmin maintains cross-tenant management authority; Tenant Admins (`institutionOwner`, `admin`) are strictly isolated to their assigned `institutionId` claim. Teachers, students, and parents are strictly DENIED administrative operations (`UNAUTHORIZED_CALLER_ROLE`).
+3. **Admin Web Extensions (`admin-web/src/components/AcademicCoreDashboard.tsx`)**: Extended responsive, Arabic RTL console with creation forms, status badges, level ordering, and subject/level assignment controls.
+4. **Auditable System Events**: Structured audit logger records `ACADEMIC_LEVEL_CREATED`, `ACADEMIC_LEVEL_UPDATED`, `ACADEMIC_LEVEL_STATUS_CHANGED`, `SUBJECT_CREATED`, `SUBJECT_UPDATED`, `SUBJECT_STATUS_CHANGED`, `TEACHER_CREATED`, `TEACHER_UPDATED`, `TEACHER_STATUS_CHANGED`, and `TEACHER_ASSIGNMENT_CHANGED` without logging secrets.
+5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.25` with 774/774 passing assertions (100% PASS). Marked Phase 26 as `NOT STARTED`.

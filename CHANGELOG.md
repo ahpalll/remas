@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.25] - 2026-09-08 (Phase 25: Academic Structure & Institution Operations)
+
+### Added
+- **Academic Structure & Teachers Service (`firebase/academic_structure_service.js`)**: Trusted backend API for Academic Levels/Grades, Subjects catalog, Teacher Profiles, and Subject/Level assignments with strict tenant isolation and role authorization.
+- **Academic Structure Unit Test Suite (`firebase/academic_structure_backend.test.js`)**: 13 automated test scenarios verifying level/subject creation, duplicate prevention, status transitions, teacher assignments, cross-tenant rejection, and audit logging.
+- **Admin Web Console Extensions (`admin-web/src/components/AcademicCoreDashboard.tsx`)**: Responsive, RTL-compliant console for Academic Levels/Grades, Subjects catalog, and Teacher profile management with status toggles and assignment selectors.
+- **Academic Structure Specification (`docs/ACADEMIC_STRUCTURE.md`)**: Complete architectural specification for academic hierarchy and teacher operations.
+
+---
+
 ## [1.0.0-release.24] - 2026-09-07 (Phase 24: Real Admin Onboarding & First Tenant)
 
 ### Added

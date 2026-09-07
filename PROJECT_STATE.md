@@ -1,6 +1,6 @@
 # Project State - Educational Center SaaS
 
-## Current Accepted Phase: Phase 24 — Real Admin Onboarding & First Tenant
+## Current Accepted Phase: Phase 25 — Academic Structure & Institution Operations
 
 - **Phase 0**: Architecture & Repo Setup — COMPLETE
 - **Phase 1**: Core Data Schemas & Multi-Tenant Boundaries — COMPLETE
@@ -27,10 +27,11 @@
 - **Phase 22**: Live Firebase Integration & Safe Production Bootstrap — COMPLETE
 - **Phase 23**: Production Data Model & Tenant Bootstrap — COMPLETE
 - **Phase 24**: Real Admin Onboarding & First Tenant — COMPLETE
-- **Phase 25**: NOT STARTED
+- **Phase 25**: Academic Structure & Institution Operations — COMPLETE
+- **Phase 26**: NOT STARTED
 
 ## System Statistics & Test Baseline
-- Total Executed Assertions: **761 Assertions** (100% Passing)
+- Total Executed Assertions: **774 Assertions** (100% Passing)
   - 162 Security Rules Assertions
   - 30 Identity & Provisioning Backend Assertions
   - 20 Academic Core Backend Assertions
@@ -53,13 +54,14 @@
   - 5 Live Firebase Integration Assertions
   - 7 Tenant Bootstrap & Data Model Assertions
   - 10 Institution Management & Onboarding Assertions
+  - 13 Academic Structure & Teacher Operations Assertions
   - 16 Student Flutter App Unit & Smoke Assertions
   - 15 Parent Flutter App Unit Assertions
 - Admin Web Build: **PASSing**
 - Parent Portal Web Build: **PASSing**
 - Student Flutter Analyze & Test: **PASSing**
 - Parent Flutter Analyze & Test: **PASSing**
-- Monorepo Version: **1.0.0-release.24**
+- Monorepo Version: **1.0.0-release.25**
 - Target Firebase Project: **educenter-saas**
 - Operational Status: **PASS WITH NON-BLOCKING LIMITATIONS**
 - Deployment Status: **PRODUCTION DEPLOYMENT: BLOCKED — MISSING PRODUCTION CREDENTIALS**
