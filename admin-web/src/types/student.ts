@@ -10,7 +10,11 @@ export interface Student {
   qrTokenHash: string;
   fullName: string;
   phone?: string;
+  parentPhone?: string;
   email?: string;
+  stageId?: string;
+  gradeId?: string;
+  notes?: string;
   dateOfBirth?: string;
   gender?: 'MALE' | 'FEMALE';
   status: StudentStatus;

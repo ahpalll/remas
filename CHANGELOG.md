@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.26] - 2026-09-08 (Phase 26: Student Enrollment & Group Operations)
+
+### Added
+- **Student Enrollment & Group Operations Service (`firebase/student_enrollment_service.js`)**: Trusted backend API for Student Profiles, Group management, Capacity tracking (`maxCapacity`), Group enrollments/withdrawals, and Guardian profile linking with strict tenant isolation and role authorization.
+- **Student Enrollment Unit Test Suite (`firebase/student_enrollment_backend.test.js`)**: 15 automated test scenarios asserting student creation, capacity limits (`GROUP_CAPACITY_EXCEEDED`), status transitions, duplicate prevention (`DUPLICATE_ENROLLMENT`), guardian linking, cross-tenant rejection (`CROSS_TENANT_VIOLATION`), and audit logging.
+- **Admin Web Console Extensions (`admin-web/src/components/student/StudentsManager.tsx`)**: Responsive, Arabic RTL console for Student registration, Group definition, Group enrollment, Guardian linking, and status badge indicators.
+- **Student Enrollment Specification (`docs/STUDENT_ENROLLMENT.md`)**: Architectural guide for student enrollment, group capacity management, and guardian linking workflows.
+
+---
+
 ## [1.0.0-release.25] - 2026-09-08 (Phase 25: Academic Structure & Institution Operations)
 
 ### Added

@@ -27,6 +27,7 @@
     "test:tenant_bootstrap": "node --test firebase/production_data_bootstrap.test.js",
     "test:institution": "node --test firebase/institution_backend.test.js",
     "test:academic_structure": "node --test firebase/academic_structure_backend.test.js",
+    "test:student_enrollment": "node --test firebase/student_enrollment_backend.test.js",
     "verify:release": "node firebase/deploy_runner.js verify-release",
     "verify:production": "node firebase/deploy_runner.js verify-prod",
     "deploy:staging": "node firebase/deploy_runner.js deploy-staging",
@@ -37,7 +38,7 @@
     "tenant:bootstrap": "node firebase/production_data_bootstrap.js bootstrap",
     "production:counts": "node firebase/production_data_bootstrap.js counts",
     "live:verify": "node firebase/live_verification_service.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification && npm run test:readiness && npm run test:release && npm run test:connectivity && npm run test:bootstrap && npm run test:live && npm run test:tenant_bootstrap && npm run test:institution && npm run test:academic_structure"
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification && npm run test:readiness && npm run test:release && npm run test:connectivity && npm run test:bootstrap && npm run test:live && npm run test:tenant_bootstrap && npm run test:institution && npm run test:academic_structure && npm run test:student_enrollment"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"

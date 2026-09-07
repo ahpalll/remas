@@ -108,3 +108,16 @@ Phase 25 establishes operational academic level/grade hierarchies, subjects cata
 3. **Admin Web Extensions (`admin-web/src/components/AcademicCoreDashboard.tsx`)**: Extended responsive, Arabic RTL console with creation forms, status badges, level ordering, and subject/level assignment controls.
 4. **Auditable System Events**: Structured audit logger records `ACADEMIC_LEVEL_CREATED`, `ACADEMIC_LEVEL_UPDATED`, `ACADEMIC_LEVEL_STATUS_CHANGED`, `SUBJECT_CREATED`, `SUBJECT_UPDATED`, `SUBJECT_STATUS_CHANGED`, `TEACHER_CREATED`, `TEACHER_UPDATED`, `TEACHER_STATUS_CHANGED`, and `TEACHER_ASSIGNMENT_CHANGED` without logging secrets.
 5. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.25` with 774/774 passing assertions (100% PASS). Marked Phase 26 as `NOT STARTED`.
+
+## ADR-026: Phase 26 Student Enrollment & Group Operations Architecture
+
+### Context
+Phase 26 establishes complete operational student enrollment, class group management with capacity limit enforcement (`maxCapacity`), active/withdrawn enrollment tracking, and guardian profile linking (`firebase/student_enrollment_service.js`), with multi-tenant isolation, role authorization, RTL admin web extensions, and audit logging.
+
+### Decision
+1. **Student Enrollment & Group Service (`firebase/student_enrollment_service.js`)**: Developed trusted backend API for student profiles (`createStudent`, `getStudent`, `updateStudentProfile`, `changeStudentStatus`, `regenerateStudentQR`), class groups (`createGroup`, `getGroup`, `updateGroup`, `setGroupStatus`, `listGroups`), enrollments (`enrollStudentInGroup`, `withdrawStudentFromGroup`), and guardian linking (`linkGuardianToStudent`, `listGuardians`).
+2. **Group Capacity Enforcement**: Group enrollments automatically check `enrolledCount < maxCapacity`. Attempting to enroll beyond capacity rejects with `GROUP_CAPACITY_EXCEEDED`. Active enrollments increment counter; withdrawals decrement counter.
+3. **Multi-Tenant & Role Isolation**: SuperAdmin possesses cross-tenant authority specifying `targetInstitutionId`. Tenant Admins (`institutionOwner`, `admin`) are strictly isolated to `callerToken.institutionId`. Unprivileged roles (`teacher`, `student`, `parent`) are strictly DENIED (`UNAUTHORIZED_CALLER_ROLE`).
+4. **Admin Web Extensions (`admin-web/src/components/student/StudentsManager.tsx`)**: Upgraded Arabic RTL console with creation forms for students, groups, enrollments, guardian linking, and real-time status badges.
+5. **Auditable System Events**: Emits `STUDENT_ENROLLED`, `STUDENT_UPDATED`, `STUDENT_STATUS_CHANGED`, `STUDENT_QR_REGENERATED`, `GROUP_CREATED`, `GROUP_UPDATED`, `GROUP_STATUS_CHANGED`, `STUDENT_GROUP_ASSIGNED`, `STUDENT_GROUP_WITHDRAWN`, and `STUDENT_GUARDIAN_LINKED`.
+6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.26` with 789/789 passing assertions (100% PASS). Marked Phase 27 as `NOT STARTED`.
