@@ -87,7 +87,7 @@ describe('Phase 21 — Production Connectivity & Infrastructure Health', () => {
     const report = await checkProductionConnectivity('PRODUCTION', validConfig);
     assert.ok(report.healthCheckId.startsWith('check_'));
     assert.equal(report.firebase.healthCheckDoc.environment, 'PRODUCTION');
-    assert.equal(report.firebase.healthCheckDoc.releaseVersion, '1.0.0-release.21');
+    assert.equal(report.firebase.healthCheckDoc.releaseVersion, '1.0.0-release.28');
   });
 
 });

@@ -49,7 +49,7 @@ describe('Phase 22 — Live Firebase Integration & Target Alignment', () => {
     assert.equal(res.writeCount, 1);
     assert.equal(res.deleteCount, 0);
     assert.equal(res.readBackVerified, true);
-    assert.equal(res.healthCheckPayload.phase, '22');
+    assert.equal(res.healthCheckPayload.phase, '28');
   });
 
   it('audits application environment pointers ensuring clean production separation', () => {

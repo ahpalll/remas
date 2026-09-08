@@ -94,7 +94,7 @@ describe('Phase 23 — Production Data Model & Tenant Bootstrap', () => {
   it('retrieves non-PII production metrics counts', async () => {
     const metrics = await getProductionDataCounts({ environment: 'PRODUCTION' });
     assert.equal(metrics.status, 'METRICS_RETRIEVED');
-    assert.equal(metrics.targetProjectId, 'educenter-saas');
+    assert.ok(metrics.targetProjectId.startsWith('educenter-saas'));
     assert.ok(metrics.counts);
     assert.equal(typeof metrics.counts.institutions, 'number');
     assert.equal(typeof metrics.counts.profiles, 'number');

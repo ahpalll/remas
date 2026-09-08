@@ -30,7 +30,7 @@ describe('Phase 21 — Safe Production System Bootstrap', () => {
     assert.ok(payloads['systemMetadata/systemRoles']);
     assert.ok(payloads['systemMetadata/subscriptionScopes']);
 
-    assert.equal(payloads['systemMetadata/appConfig'].releaseVersion, '1.0.0-release.21');
+    assert.equal(payloads['systemMetadata/appConfig'].releaseVersion, '1.0.0-release.28');
     assert.equal(payloads['systemMetadata/appConfig'].supportedRoles.length, 5);
   });
 

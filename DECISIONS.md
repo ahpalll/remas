@@ -1,5 +1,20 @@
 # Architectural Decision Records (ADR)
 
+## ADR-028: Phase 28 Real Firebase Production Connection Architecture
+
+### Context
+Phase 28 establishes a verified, live connection between the REMAS trusted backend layer and the Firebase Production project `educenter-saas` (underlying GCP Project ID `educenter-saas-860c5`) via Service Account credentials (`F:\firebase-secrets\educenter-saas-860c5-firebase-adminsdk-fbsvc-843025940d.json`).
+
+### Decision
+1. **Secure Secret Runtime Resolution**: Service account credentials are stored strictly outside the repository workspace at `F:\firebase-secrets\...` or passed via environment variable `FIREBASE_SERVICE_ACCOUNT_JSON`. No private key or credential content is stored in git or printed in logs.
+2. **Empirical Live Write -> Read -> Read-Back Verification**: Performed live write -> read -> read-back verification against `systemHealth/phase28_live_verify` in `educenter-saas` Firestore with `readBackVerified: true`.
+3. **Live Auth Admin SDK Verification**: Validated Firebase Auth Admin SDK connection (`AUTH_ADMIN_API: PASS`).
+4. **Idempotent System & Tenant Bootstrap**: Written `systemMetadata` (`appConfig`, `systemRoles`, `subscriptionScopes`) and `institutions/inst_bootstrap_001` idempotently using read-before-write logic.
+5. **Zero Synthetic Business Data Safeguard**: Enforced 0 fake user accounts, 0 fake students, 0 fake teachers, 0 fake parents, 0 fake subscription codes, and 0 mock financial transactions in production Firestore.
+6. **Production Deployment Status**: System deployment status elevated to `CONNECTED — LIVE PRODUCTION FIREBASE`.
+
+---
+
 ## ADR-014: Phase 14 Subscription Codes & Content Entitlements Architecture
 
 ### Context

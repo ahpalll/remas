@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.28] - 2026-09-08 (Phase 28: Real Firebase Production Connection)
+
+### Added / Verified
+- **Real Production Connection (`firebase/live_verification_service.js`)**: Verified live Firebase Production connection to project `educenter-saas` (`educenter-saas-860c5`) using secure Service Account credentials (`F:\firebase-secrets\educenter-saas-860c5-firebase-adminsdk-fbsvc-843025940d.json`).
+- **Live Write -> Read -> Read-Back Verification**: Executed live verification against `systemHealth/phase28_live_verify` in `educenter-saas` Firestore (Write PASS, Read PASS, Read-back PASS, HealthDoc PASS).
+- **Firebase Auth Admin SDK Verification**: Verified live Authentication Admin SDK connection (`AUTH_ADMIN_API: PASS`, 0 synthetic users created).
+- **Idempotent Production Metadata Bootstrap (`firebase/production_bootstrap.js`)**: Written `systemMetadata/appConfig`, `systemMetadata/systemRoles`, and `systemMetadata/subscriptionScopes` idempotently to live production Firestore.
+- **Idempotent Primary Tenant Bootstrap (`firebase/production_data_bootstrap.js`)**: Provisioned `institutions/inst_bootstrap_001` idempotently to live production Firestore with 0 fake user accounts, 0 fake students, 0 fake teachers, 0 fake financial transactions.
+- **Phase 28 Architecture Documents**: Created `docs/PHASE_28_PLAN.md` and `docs/PHASE_28_REPORT.md` documenting live verification empirical proof, ADR-028 decision records, and security audit results.
+
 ---
 
 ## [1.0.0-release.27] - 2026-09-08 (Phase 27: Academic Operations & Teaching Workflow)
