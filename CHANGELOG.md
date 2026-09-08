@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.29] - 2026-09-08 (Phase 29: Production Center Operations & Real Data Workflow)
+
+### Added / Verified
+- **Center Operations Workflow Service (`firebase/center_operations_service.js`)**: Orchestration and readiness service for verifying end-to-end educational center operations (Institution ➔ Academic Levels ➔ Subjects ➔ Teachers ➔ Groups ➔ Student Enrollments ➔ Teacher Qualification Assignments ➔ Teaching Sessions ➔ Session Roster Attendance).
+- **Center Operations Unit Test Suite (`firebase/center_operations_backend.test.js`)**: 15 automated test scenarios asserting the complete operational lifecycle, capacity tracking, teacher qualification checks, schedule conflict prevention (`SESSION_SCHEDULE_CONFLICT`), session lifecycle, attendance recording, cross-tenant isolation, unprivileged role denial, and audit event logs.
+- **Admin Web Center Operations Console (`admin-web/src/components/CenterOperationsConsole.tsx`)**: Responsive, Arabic RTL console providing Tenant Admins a unified operational journey across all 7 stages of center operations with live status cards (`PRODUCTION CONNECTED`, `PRODUCTION READY`, `APPLICATION OPERATIONAL`).
+- **Phase 29 Architecture & Specification Documents**: Created `docs/PHASE_29_PLAN.md`, `docs/PHASE_29_REPORT.md`, `docs/PRODUCTION_CENTER_OPERATIONS.md`, and ADR-029 decision record in `DECISIONS.md`.
+
+---
+
 ## [1.0.0-release.28] - 2026-09-08 (Phase 28: Real Firebase Production Connection)
 
 ### Added / Verified

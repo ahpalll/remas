@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.28",
-  "backendVersion": "1.28.0",
-  "rulesVersion": "1.28.0",
-  "workerVersion": "1.28.0",
-  "releaseTag": "v1.0.0-release.28",
-  "phase": "28",
-  "phaseTitle": "Real Firebase Production Connection",
-  "gitBaseline": "954c9541cbebce4ec2349a64be511f996fc6b897",
+  "appVersion": "1.0.0-release.29",
+  "backendVersion": "1.29.0",
+  "rulesVersion": "1.29.0",
+  "workerVersion": "1.29.0",
+  "releaseTag": "v1.0.0-release.29",
+  "phase": "29",
+  "phaseTitle": "Production Center Operations & Real Data Workflow",
+  "gitBaseline": "bbf03c562f426d328b3ba810660b322de3ceb65e",
   "status": "PASS",
-  "deploymentStatus": "CONNECTED — LIVE PRODUCTION FIREBASE",
+  "deploymentStatus": "APPLICATION_OPERATIONAL — LIVE PRODUCTION WORKFLOW",
   "targetFirebaseProject": "educenter-saas"
 }

@@ -26,6 +26,7 @@ import { ContentDashboard } from './components/content/ContentDashboard';
 import { MediaManager } from './components/media/MediaManager';
 import { SubscriptionDashboard } from './components/subscription/SubscriptionDashboard';
 import { NotificationDashboard } from './components/notifications/NotificationDashboard';
+import { CenterOperationsConsole } from './components/CenterOperationsConsole';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -56,10 +57,16 @@ function DashboardView() {
         <p><strong>معرف السنتر (Tenant ID):</strong> {institutionId || 'غير محدد'}</p>
         <p><strong>حالة المؤسسة الحالية:</strong> {institution?.status || 'ACTIVE'}</p>
 
-        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#ede7f6', borderRadius: '4px', color: '#4a148c' }}>
-          ✅ تم تفعيل نظام باقات واكواد الاشتراكات والصلاحيات بنجاح (Phase 14 Subscription Codes & Content Entitlements Active)
+        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f5e9', borderRadius: '4px', color: '#1b5e20', fontWeight: 'bold' }}>
+          ✅ المرحلة 29: تشغيل دورة السنتر الحقيقية مفعّلة ومتصلة بـ Firebase Production (Phase 29 Center Operations Workflow Active)
         </div>
       </main>
+
+      <AcademicProvider>
+        <StudentProvider>
+          <CenterOperationsConsole />
+        </StudentProvider>
+      </AcademicProvider>
 
       <UserManagementProvider>
         <UserList />

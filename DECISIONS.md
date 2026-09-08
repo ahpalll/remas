@@ -1,5 +1,19 @@
 # Architectural Decision Records (ADR)
 
+## ADR-029: Phase 29 Production Center Operations & Real Data Workflow Architecture
+
+### Context
+Phase 29 binds all domain modules (Institutions, Academic Levels, Subjects, Teachers, Groups, Students, Teacher Assignments, Teaching Sessions, and Attendance Records) into a unified, end-to-end operational cycle for Tenant Admins on live Firebase Production (`educenter-saas` / `educenter-saas-860c5`).
+
+### Decision
+1. **End-to-End Operational Workflow Service (`firebase/center_operations_service.js`)**: Created an orchestration and audit service that verifies tenant data readiness, metrics counts, and workflow execution across all 7 stages of center operations.
+2. **Unified Admin Web Console (`admin-web/src/components/CenterOperationsConsole.tsx`)**: Delivered an Arabic RTL operational console in `admin-web` weaving together the full Tenant Admin journey with live operational readiness cards (`PRODUCTION CONNECTED`, `PRODUCTION READY`, `APPLICATION OPERATIONAL`).
+3. **Multi-Level Security & Boundary Guards**: Enforced strict multi-tenant isolation (`institutionId`), active teacher qualification checks before group assignment, schedule conflict prevention (`SESSION_SCHEDULE_CONFLICT`), max capacity enforcement on class groups (`maxCapacity`), teacher session scope restrictions (`TEACHER_NOT_ASSIGNED_TO_GROUP`), and unprivileged role denials (`UNAUTHORIZED_CALLER_ROLE`).
+4. **Zero Synthetic Business Data Safeguard**: Enforced 0 fake user accounts, 0 fake students, 0 fake teachers, 0 fake parents, 0 fake subscription codes, and 0 mock financial transactions in production Firestore.
+5. **System Deployment Status**: System deployment status elevated to `APPLICATION_OPERATIONAL — LIVE PRODUCTION WORKFLOW`.
+
+---
+
 ## ADR-028: Phase 28 Real Firebase Production Connection Architecture
 
 ### Context
