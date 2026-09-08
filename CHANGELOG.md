@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-release.27] - 2026-09-08 (Phase 27: Academic Operations & Teaching Workflow)
+
+### Added
+- **Academic Operations & Teaching Workflow Service (`firebase/academic_operations_service.js`)**: Trusted backend API for qualified teacher-group assignments (`assignTeacherToGroup`), session lifecycle management (`createSession`, `getSession`, `updateSession`, `setSessionStatus`, `listSessions`), and session attendance recording (`recordSessionAttendance`, `listSessionAttendance`).
+- **Academic Operations Unit Test Suite (`firebase/academic_operations_backend.test.js`)**: 14 automated test scenarios asserting qualified teacher assignment, schedule conflict prevention (`SESSION_SCHEDULE_CONFLICT`), session status transitions, session attendance recording, teacher role isolation (`TEACHER_NOT_ASSIGNED_TO_GROUP`), cross-tenant rejection (`CROSS_TENANT_VIOLATION`), and audit logging.
+- **Admin Web Console Extensions (`admin-web/src/components/academic/TeachingOperationsManager.tsx`)**: Responsive, Arabic RTL console for session scheduling, teacher-group qualification checking, and session attendance recording.
+- **Academic Operations Specification (`docs/TEACHING_OPERATIONS.md`)**: Architectural guide for teaching session scheduling, schedule conflict checks, and session attendance recording workflows.
+
+---
+
 ## [1.0.0-release.26] - 2026-09-08 (Phase 26: Student Enrollment & Group Operations)
 
 ### Added

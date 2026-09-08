@@ -121,3 +121,17 @@ Phase 26 establishes complete operational student enrollment, class group manage
 4. **Admin Web Extensions (`admin-web/src/components/student/StudentsManager.tsx`)**: Upgraded Arabic RTL console with creation forms for students, groups, enrollments, guardian linking, and real-time status badges.
 5. **Auditable System Events**: Emits `STUDENT_ENROLLED`, `STUDENT_UPDATED`, `STUDENT_STATUS_CHANGED`, `STUDENT_QR_REGENERATED`, `GROUP_CREATED`, `GROUP_UPDATED`, `GROUP_STATUS_CHANGED`, `STUDENT_GROUP_ASSIGNED`, `STUDENT_GROUP_WITHDRAWN`, and `STUDENT_GUARDIAN_LINKED`.
 6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.26` with 789/789 passing assertions (100% PASS). Marked Phase 27 as `NOT STARTED`.
+
+## ADR-027: Phase 27 Academic Operations & Teaching Workflow Architecture
+
+### Context
+Phase 27 connects Academic Structure, Teachers, Subjects, Groups, Students, and Guardians into an integrated teaching workflow (`firebase/academic_operations_service.js`), supporting qualified teacher-group assignments, class session scheduling, room & teacher schedule conflict prevention (`SESSION_SCHEDULE_CONFLICT`), session attendance recording, strict teacher role isolation, and audit logging.
+
+### Decision
+1. **Academic Operations Service (`firebase/academic_operations_service.js`)**: Implemented trusted backend API for teacher group assignment (`assignTeacherToGroup`), session lifecycle management (`createSession`, `getSession`, `updateSession`, `setSessionStatus`, `listSessions`), and session attendance (`recordSessionAttendance`, `listSessionAttendance`).
+2. **Teacher Qualification Verification**: `assignTeacherToGroup` validates that the assigned teacher possesses matching subject (`assignedSubjects`) and stage/level (`assignedLevels`) qualifications and is in `ACTIVE` status before linking to a group (`TEACHER_NOT_QUALIFIED`, `INACTIVE_TEACHER`).
+3. **Schedule Conflict Engine**: `createSession` checks overlapping time windows for the same room or teacher on a session date, throwing `SESSION_SCHEDULE_CONFLICT`.
+4. **Teacher Role Isolation & Boundaries**: Teachers can view and record attendance ONLY for sessions and groups assigned directly to them (`TEACHER_NOT_ASSIGNED_TO_GROUP`). Cross-tenant operations reject with `CROSS_TENANT_VIOLATION`.
+5. **Admin Web Extensions (`admin-web/src/components/academic/TeachingOperationsManager.tsx`)**: Responsive, Arabic RTL console for session scheduling, teacher-group qualification checking, and session attendance recording.
+6. **Auditable System Events**: Emits `TEACHING_ASSIGNMENT_CHANGED`, `SESSION_CREATED`, `SESSION_UPDATED`, `SESSION_STATUS_CHANGED`, and `SESSION_ATTENDANCE_RECORDED`.
+7. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.27` with 803/803 passing assertions (100% PASS). Marked Phase 28 as `NOT STARTED`.

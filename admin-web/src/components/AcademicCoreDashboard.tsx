@@ -3,6 +3,7 @@ import { useAcademic } from '../context/AcademicContext';
 import { useAuth } from '../context/AuthContext';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { TeachingOperationsManager } from './academic/TeachingOperationsManager';
 
 export function AcademicCoreDashboard() {
   const { currentUser, institutionId, role } = useAuth();
@@ -15,7 +16,7 @@ export function AcademicCoreDashboard() {
     refreshAcademicCore,
   } = useAcademic();
 
-  const [activeTab, setActiveTab] = useState<'stages' | 'subjects' | 'teachers'>('stages');
+  const [activeTab, setActiveTab] = useState<'stages' | 'subjects' | 'teachers' | 'operations'>('stages');
   const [formError, setFormError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -228,6 +229,12 @@ export function AcademicCoreDashboard() {
           style={{ padding: '0.5rem 1rem', background: activeTab === 'teachers' ? '#1565c0' : '#f5f5f5', color: activeTab === 'teachers' ? '#fff' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
         >
           المعلمون والمواد ({teachers.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('operations')}
+          style={{ padding: '0.5rem 1rem', background: activeTab === 'operations' ? '#1565c0' : '#f5f5f5', color: activeTab === 'operations' ? '#fff' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          عمليات التدريس والجلسات
         </button>
       </div>
 
@@ -547,6 +554,9 @@ export function AcademicCoreDashboard() {
               )}
             </div>
           )}
+
+          {/* TEACHING OPERATIONS TAB */}
+          {activeTab === 'operations' && <TeachingOperationsManager />}
         </div>
       )}
     </div>
