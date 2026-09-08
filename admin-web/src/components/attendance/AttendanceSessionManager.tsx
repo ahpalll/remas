@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAttendance } from '../../context/AttendanceContext';
+import { ReceptionKioskQRScanner } from './ReceptionKioskQRScanner';
 
 export function AttendanceSessionManager() {
   const { sessions, corrections, loading, error } = useAttendance();
-  const [activeTab, setActiveTab] = useState<'sessions' | 'corrections' | 'reports'>('sessions');
+  const [activeTab, setActiveTab] = useState<'sessions' | 'kiosk' | 'corrections' | 'reports'>('sessions');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const triggerBlockedAction = (actionName: string) => {
@@ -24,6 +25,12 @@ export function AttendanceSessionManager() {
             style={{ padding: '0.5rem 1rem', background: activeTab === 'sessions' ? '#1976d2' : '#f5f5f5', color: activeTab === 'sessions' ? '#fff' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
           >
             جلسات الحضور ({sessions.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab('kiosk'); setActionMessage(null); }}
+            style={{ padding: '0.5rem 1rem', background: activeTab === 'kiosk' ? '#0284c7' : '#f5f5f5', color: activeTab === 'kiosk' ? '#fff' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            ⚡ كشك مسح QR الاستقبال (Kiosk)
           </button>
           <button
             onClick={() => { setActiveTab('corrections'); setActionMessage(null); }}
@@ -104,6 +111,10 @@ export function AttendanceSessionManager() {
                 </table>
               )}
             </div>
+          )}
+
+          {activeTab === 'kiosk' && (
+            <ReceptionKioskQRScanner />
           )}
 
           {activeTab === 'corrections' && (

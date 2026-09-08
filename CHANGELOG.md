@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.30] - 2026-09-08 (Phase 30: Real Production Go-Live Readiness & End-to-End Customer Acceptance)
+
+### Added / Verified
+- **Automated Backup & Disaster Recovery Engine (`firebase/backup_disaster_recovery_service.js`)**: Backup verification service for Firestore Point-in-Time Recovery (PITR) & GCS scheduled export verification with non-destructive production safeguards and RPO (< 1 hr) / RTO (< 4 hrs) runbook generation.
+- **Backup & Recovery Backend Test Suite (`firebase/backup_recovery_backend.test.js`)**: 5 automated test scenarios asserting target project alignment (`educenter-saas`), backup parameters, prohibited destructive production restore guard, missing credentials handling, and runbook generation.
+- **End-to-End Load & Concurrency Benchmark Engine (`firebase/load_concurrency_benchmarks.js`)**: Isolated mock stress engine simulating 200 concurrent roster attendance writes, same-student duplicate write race conditions, group capacity limits (`maxCapacity`), and cross-tenant isolation protections.
+- **Load & Concurrency Backend Test Suite (`firebase/load_concurrency_backend.test.js`)**: 6 automated test scenarios asserting 100% pass rate under concurrent pressure with bottleneck analysis (`DEFEATED`).
+- **Fast Reception Kiosk QR Attendance Scanner (`admin-web/src/components/attendance/ReceptionKioskQRScanner.tsx`)**: Reception kiosk mode in `admin-web` for instant barcode scanner stream input, student token verification, active session check, duplicate prevention, tenant isolation verification, and high-contrast visual badges (`SUCCESS`, `ALREADY_RECORDED`, `INVALID_QR`, `STUDENT_NOT_FOUND`, `SESSION_NOT_FOUND`, `UNAUTHORIZED`).
+- **22-Point End-to-End Customer Acceptance Checklist (`docs/CUSTOMER_ACCEPTANCE.md`)**: Comprehensive operational journey sign-off covering all 22 domain pillars.
+- **Product Delivery Architecture Review (`docs/CUSTOMER_ACCEPTANCE.md`)**: Detailed gap analysis reviewing SuperAdmin platform, Center Windows desktop app, Student Android app, Parent Android app, and Windows device hardware binding.
+- **Phase 30 Architecture & Documentation**: Created `docs/PHASE_30_PLAN.md`, `docs/PHASE_30_REPORT.md`, `docs/BACKUP_DISASTER_RECOVERY.md`, `docs/LOAD_CONCURRENCY_TESTING.md`, `docs/RECEPTION_KIOSK_QR.md`, `docs/CUSTOMER_ACCEPTANCE.md`, and ADR-030 decision record in `DECISIONS.md`.
+
+---
+
 ## [1.0.0-release.29] - 2026-09-08 (Phase 29: Production Center Operations & Real Data Workflow)
 
 ### Added / Verified
