@@ -6,8 +6,8 @@
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { generateHardwareFingerprint, getSystemMetadata } = require('../firebase/device_fingerprint');
-const { validateDeviceBinding, requestDeviceActivation, heartbeatDevice } = require('../firebase/device_binding_service');
+const { generateHardwareFingerprint, getSystemMetadata } = require('./src/device_fingerprint');
+const { validateDeviceBinding, requestDeviceActivation, heartbeatDevice } = require('./src/device_binding_service');
 
 let mainWindow = null;
 let currentDeviceStatus = {
