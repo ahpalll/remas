@@ -10,6 +10,7 @@ node_modules/
 **/.dart_tool/
 admin-web/dist/
 parent-portal/dist/
+center-desktop/dist/
 
 # Environment & Secrets
 .env

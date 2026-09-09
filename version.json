@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.31",
-  "backendVersion": "1.31.0",
-  "rulesVersion": "1.31.0",
-  "workerVersion": "1.31.0",
-  "releaseTag": "v1.0.0-release.31",
-  "phase": "31",
-  "phaseTitle": "Windows Desktop & Single Device Licensing",
-  "gitBaseline": "9696311537204ddef2dc38169f46e18cbca982e4",
+  "appVersion": "1.0.0-release.32",
+  "backendVersion": "1.32.0",
+  "rulesVersion": "1.32.0",
+  "workerVersion": "1.32.0",
+  "releaseTag": "v1.0.0-release.32",
+  "phase": "32",
+  "phaseTitle": "Final Delivery, Acceptance & Production Release",
+  "gitBaseline": "6bdc8089aa7842f8c4f545801b486ac37306bfb2",
   "status": "PASS",
-  "deploymentStatus": "WINDOWS_DESKTOP_READY — SINGLE DEVICE LICENSING OPERATIONAL",
+  "deploymentStatus": "FINAL_DELIVERY_RELEASE",
   "targetFirebaseProject": "educenter-saas"
 }

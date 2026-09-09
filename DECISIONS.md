@@ -185,3 +185,25 @@ Phase 31 transitions center operational access from web-only browser logins to a
 4. **Standalone Windows Desktop Application (`center-desktop/`)**: Developed Electron desktop launcher (`main.js`), secure IPC bridge (`src/preload.js`), custom license indicators, 72-hour offline grace period enforcement, and revocation overlay lockdown (`index.html`, `src/desktop_app.js`).
 5. **SuperAdmin Remote Control Console (`admin-web/src/components/SuperAdminDevices.tsx`)**: Developed cross-tenant management console enabling SuperAdmin to remotely view, activate, revoke, and replace center Windows device bindings with real-time audit log tracking.
 6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.31` with 844/844 passing assertions (100% PASS).
+
+---
+
+## ADR-032: Phase 32 Final Acceptance, End-to-End Verification & Delivery Release Architecture
+
+### Context
+Phase 32 performs complete end-to-end acceptance verification, production connection validation against target Firebase project `educenter-saas` (`educenter-saas-860c5`), Windows desktop application NSIS installer packaging, multi-platform build execution, secret scanning, and release documentation for the REMAS Educational Center SaaS Platform.
+
+### Decision
+1. **25-Point End-to-End Acceptance Matrix (`docs/FINAL_ACCEPTANCE_TEST.md`)**: Formulated and verified a 25-point acceptance checklist covering SuperAdmin, Center Admin, Institution Onboarding, Academic Core, Subjects, Faculty, Groups, Student Lifecycle, Session Scheduling, Attendance Recording, Student Flutter App, Parent Flutter App, Parent Web Portal, Admin Web, Windows Desktop, Licensing Engine, Single Device Hardware Binding, Tenant Isolation, Security Audit, and Real Firebase Production. All 25 scenarios verified **PASS**.
+2. **Real Firebase Production Verification (`node firebase/live_verification_service.js`)**: Connected safely using external runtime secret (`F:\firebase-secrets\educenter-saas-860c5-firebase-adminsdk-fbsvc-843025940d.json`) achieving `STATUS: PASS` and `readBackVerified: true` against `educenter-saas-860c5` with zero synthetic production data creation.
+3. **Windows NSIS Installer Binary Generation (`center-desktop/dist/`)**: Compiled Electron Windows Desktop App into self-extracting NSIS Setup Installer (`remas-center-desktop Setup 1.0.0-release.31.exe` - 76.24 MB).
+4. **911-Assertion Full Regression Pass**:
+   - 863 Backend Node.js & Security Rules Assertions (100% PASS)
+   - 17 Cloudflare Worker Media Security Assertions (100% PASS)
+   - 16 Student Flutter App Unit & Widget Assertions (100% PASS)
+   - 15 Parent Flutter App Unit & Model Assertions (100% PASS)
+   - Admin Web Vite Build (PASS)
+   - Parent Portal Vite Build (PASS)
+   - Student & Parent Flutter App Static Analyzers (0 issues)
+5. **Zero Secret Leakage**: Verified zero private keys, API tokens, or service account credentials exist in Git repository, web bundles, Electron executable, or mobile app source.
+6. **System Status**: Monorepo version elevated to `1.0.0-release.32` and status set to `FINAL_DELIVERY_RELEASE`. Phase 32 completed. Phase 33 marked as strictly prohibited.

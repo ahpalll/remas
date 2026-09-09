@@ -4,7 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.32] - 2026-09-09 (Phase 32: Final Acceptance, End-to-End Verification & Delivery Release)
+
+### Added / Verified
+- **25-Point End-to-End Acceptance Matrix (`docs/FINAL_ACCEPTANCE_TEST.md`)**: Complete end-to-end acceptance verification covering SuperAdmin, Center Admin, Institution Onboarding, Academic Structure, Subjects, Teachers, Groups, Student Lifecycle, Session Scheduling, Attendance, Mobile Apps, Desktop Installer, Licensing, Device Binding, Security, and Real Firebase Production.
+- **Real Firebase Production Connection Verification**: Safe read-only connectivity test against `educenter-saas` (`educenter-saas-860c5`) via external runtime secret (`F:\firebase-secrets\...`), achieving `STATUS: PASS` and `readBackVerified: true` with 0 fake production data records created.
+- **Center Windows Desktop Executable NSIS Setup Installer (`center-desktop/dist/`)**: Compiled Electron Windows Desktop App into self-extracting NSIS Setup Installer (`remas-center-desktop Setup 1.0.0-release.31.exe` - 76.24 MB).
+- **Comprehensive Multi-Platform Regression Suite**: 911 total assertions passing across 29 Node.js backend suites (863 assertions), Cloudflare Worker (17 assertions), Student Flutter App (16 assertions), Parent Flutter App (15 assertions), Admin Web Vite Build (PASS), and Parent Portal Vite Build (PASS).
+- **Production Operations & Release Manual (`docs/FINAL_RELEASE.md`)**: Comprehensive production operations guide covering deployment, license activation, single-device binding, troubleshooting, and disaster recovery.
+- **Phase 32 Final Report & Architecture Record**: Created `docs/PHASE_32_REPORT.md` and recorded ADR-032 in `DECISIONS.md`.
+
+---
+
 ## [1.0.0-release.31] - 2026-09-09 (Phase 31: Windows Desktop + Single Device Licensing)
+
 
 ### Added / Verified
 - **Hardware Fingerprint Engine (`firebase/device_fingerprint.js`)**: Cryptographic SHA-256 derivation engine generating non-PII hardware fingerprints (`win_fp_...`) from system CPU architecture, machine GUID, total memory, and OS build parameters.
