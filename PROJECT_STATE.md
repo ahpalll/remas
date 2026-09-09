@@ -1,6 +1,6 @@
 # Project State - Educational Center SaaS
 
-## Current Accepted Phase: Phase 30 — Real Production Go-Live Readiness & End-to-End Customer Acceptance
+## Current Accepted Phase: Phase 31 — Windows Desktop + Single Device Licensing
 
 - **Phase 0**: Architecture & Repo Setup — COMPLETE
 - **Phase 1**: Core Data Schemas & Multi-Tenant Boundaries — COMPLETE
@@ -33,9 +33,14 @@
 - **Phase 28**: Real Firebase Production Connection — COMPLETE
 - **Phase 29**: Production Center Operations & Real Data Workflow — COMPLETE
 - **Phase 30**: Real Production Go-Live Readiness & End-to-End Customer Acceptance — COMPLETE
+- **Phase 31**: Windows Desktop + Single Device Licensing — COMPLETE
 
 ## System Statistics & Test Baseline
-- Total Executed Assertions: **829 Assertions** (100% Passing)
+- Total Executed Assertions: **844 Assertions** (100% Passing)
+  - 15 Device Binding & Licensing Backend Assertions
+  - Standalone Windows Desktop App Runtime (`center-desktop/`)
+  - Hardware Fingerprint Derivation Engine (`win_fp_...`)
+  - SuperAdmin Remote Device Control Console (`SuperAdminDevices.tsx`)
   - 5 Automated Backup & Disaster Recovery Backend Assertions
   - 6 Load & Concurrency Benchmark Backend Assertions
   - Fast Reception Kiosk QR Attendance Scanner Component (`ReceptionKioskQRScanner.tsx`)
@@ -74,7 +79,7 @@
 - Parent Portal Web Build: **PASSing**
 - Student Flutter Analyze & Test: **PASSing**
 - Parent Flutter Analyze & Test: **PASSing**
-- Monorepo Version: **1.0.0-release.30**
+- Monorepo Version: **1.0.0-release.31**
 - Target Firebase Project: **educenter-saas** (`educenter-saas-860c5`)
-- Operational Status: **PASS_WITH_NON_BLOCKING_LIMITATIONS**
-- Deployment Status: **GO_LIVE_READY — PASS WITH NON-BLOCKING LIMITATIONS**
+- Operational Status: **PASS**
+- Deployment Status: **WINDOWS_DESKTOP_READY — SINGLE DEVICE LICENSING OPERATIONAL**

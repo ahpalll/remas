@@ -27,6 +27,7 @@ import { MediaManager } from './components/media/MediaManager';
 import { SubscriptionDashboard } from './components/subscription/SubscriptionDashboard';
 import { NotificationDashboard } from './components/notifications/NotificationDashboard';
 import { CenterOperationsConsole } from './components/CenterOperationsConsole';
+import { SuperAdminDevices } from './components/SuperAdminDevices';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -112,6 +113,7 @@ function DashboardView() {
 
       <InstitutionSettings />
       <SuperAdminInstitutions />
+      <SuperAdminDevices />
     </div>
   );
 }

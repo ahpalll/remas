@@ -173,16 +173,15 @@ Phase 29 verifies full operational readiness of center management workflows (`fi
 3. **Admin Web Extensions (`admin-web/src/components/CenterOperationsConsole.tsx`)**: Unified Arabic RTL dashboard for center administrators.
 4. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.29` with 818/818 passing assertions (100% PASS). Marked Phase 30 as `NOT STARTED`.
 
-## ADR-030: Phase 30 Real Production Go-Live Readiness & End-to-End Customer Acceptance Architecture
+## ADR-031: Phase 31 Windows Desktop & Single Device Licensing Architecture
 
 ### Context
-Phase 30 executes final Go-Live readiness verification covering Automated Backup & Disaster Recovery, End-to-End Load & Concurrency Benchmarks, Fast Reception Kiosk QR Attendance Scanner mode, 22-point End-to-End Customer Acceptance checklist, and product delivery architecture review.
+Phase 31 transitions center operational access from web-only browser logins to a standalone **Center Windows Desktop Application** (`center-desktop`) paired with a server-authoritative **Single Device Hardware Binding & Remote Licensing Subsystem** (`firebase/device_binding_service.js`), enforcing a strict 1-device limit per institution with SuperAdmin remote management capabilities (`admin-web/src/components/SuperAdminDevices.tsx`).
 
 ### Decision
-1. **Automated Backup & Disaster Recovery (`firebase/backup_disaster_recovery_service.js`)**: Implemented Firestore Point-in-Time Recovery (PITR) & GCS export readiness verification, non-destructive production restore safeguards (`PROHIBITED`), and RPO (< 1 hr) / RTO (< 4 hrs) runbook generation.
-2. **End-to-End Load & Concurrency Benchmarks (`firebase/load_concurrency_benchmarks.js`)**: Evaluated 200 concurrent roster attendance submissions, same-student duplicate write race conditions, group capacity limits under pressure, and cross-tenant isolation under concurrent load. Bottleneck analysis confirmed all potential race conditions and leaks were DEFEATED.
-3. **Fast Reception Kiosk QR Attendance Scanner (`admin-web/src/components/attendance/ReceptionKioskQRScanner.tsx`)**: Developed high-throughput reception kiosk mode with instant barcode scanner stream input, student token verification, active session check, duplicate prevention, tenant isolation verification, and high-contrast Arabic RTL visual badges (`SUCCESS`, `ALREADY_RECORDED`, `INVALID_QR`, `STUDENT_NOT_FOUND`, `SESSION_NOT_FOUND`, `UNAUTHORIZED`).
-4. **22-Point Customer Acceptance Checklist (`docs/CUSTOMER_ACCEPTANCE.md`)**: Verified operational readiness across all 22 domain pillars with recommendation `PASS_WITH_NON_BLOCKING_LIMITATIONS`.
-5. **Product Delivery Architecture Review (`docs/CUSTOMER_ACCEPTANCE.md`)**: Conducted gap analysis confirming SuperAdmin platform, Student Android app, Parent Android app are implemented; Center Windows Desktop single-device hardware binding is recorded as a GAP for subsequent desktop packaging phases.
-6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.30`. Marked Phase 30 as `PASS_WITH_NON_BLOCKING_LIMITATIONS`. No further phases initiated.
-
+1. **Cryptographic Hardware Fingerprinting (`firebase/device_fingerprint.js`)**: Implemented non-PII SHA-256 fingerprint derivation engine generating deterministic device identifiers (`win_fp_...`) from system CPU architecture, machine GUID, total memory, and OS build parameters.
+2. **Server-Authoritative Licensing Engine (`firebase/device_binding_service.js`)**: Implemented trusted device binding API (`requestDeviceActivation`, `validateDeviceBinding`, `revokeDeviceBinding`, `replaceDeviceBinding`, `heartbeatDevice`, `listAllCenterDevices`). Rejects client-side file bypasses.
+3. **1-Device Per Institution Enforcement**: Attempting activation from a secondary machine rejects with `DEVICE_LIMIT_EXCEEDED` ("عذراً، تملك هذه المؤسسة جهازاً فعالاً آخر بالفعل (1 Device Per Center)"). Re-installations or restarts on the identical machine produce matching fingerprints (`ALREADY_ACTIVE_SAME_DEVICE`).
+4. **Standalone Windows Desktop Application (`center-desktop/`)**: Developed Electron desktop launcher (`main.js`), secure IPC bridge (`src/preload.js`), custom license indicators, 72-hour offline grace period enforcement, and revocation overlay lockdown (`index.html`, `src/desktop_app.js`).
+5. **SuperAdmin Remote Control Console (`admin-web/src/components/SuperAdminDevices.tsx`)**: Developed cross-tenant management console enabling SuperAdmin to remotely view, activate, revoke, and replace center Windows device bindings with real-time audit log tracking.
+6. **Strict Boundary Control**: Updated monorepo version to `1.0.0-release.31` with 844/844 passing assertions (100% PASS).

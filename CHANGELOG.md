@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.31] - 2026-09-09 (Phase 31: Windows Desktop + Single Device Licensing)
+
+### Added / Verified
+- **Hardware Fingerprint Engine (`firebase/device_fingerprint.js`)**: Cryptographic SHA-256 derivation engine generating non-PII hardware fingerprints (`win_fp_...`) from system CPU architecture, machine GUID, total memory, and OS build parameters.
+- **Trusted Device Binding Backend Service (`firebase/device_binding_service.js`)**: Server-authoritative device licensing API supporting `requestDeviceActivation`, `validateDeviceBinding`, `revokeDeviceBinding`, `replaceDeviceBinding`, `heartbeatDevice`, and `listAllCenterDevices`.
+- **Device Binding Backend Test Suite (`firebase/device_binding_backend.test.js`)**: 15 automated test scenarios asserting 1-device-per-center limits (`DEVICE_LIMIT_EXCEEDED`), same-device restart/reinstall safety, SuperAdmin revocation lockdown (`REVOKED`), device replacement workflow, cross-tenant isolation, unprivileged role denial, suspended/expired tenant protection, and audit event logs.
+- **Standalone Center Windows Desktop Application (`center-desktop/`)**: Native Windows desktop runtime featuring Electron main process (`main.js`), secure IPC bridge (`src/preload.js`), custom single-device license badge, 72-hour offline grace period enforcement, and revocation overlay lockdown (`index.html`, `src/desktop_app.js`).
+- **SuperAdmin Center Devices Console (`admin-web/src/components/SuperAdminDevices.tsx`)**: Responsive Arabic RTL console providing SuperAdmin full remote control over all center Windows terminals with 🟢 Activate, 🔴 Revoke, 🔄 Replace Device dialogs and audit trail inspection.
+- **Phase 31 Architecture & Specifications**: Created `docs/PHASE_31_PLAN.md`, `docs/WINDOWS_DESKTOP.md`, `docs/DEVICE_BINDING.md`, `docs/DEVICE_ACTIVATION.md`, `docs/PHASE_31_REPORT.md`, and ADR-031 decision record in `DECISIONS.md`.
+
+---
+
 ## [1.0.0-release.30] - 2026-09-08 (Phase 30: Real Production Go-Live Readiness & End-to-End Customer Acceptance)
 
 ### Added / Verified

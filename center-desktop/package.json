@@ -1,0 +1,27 @@
+{
+  "name": "remas-center-desktop",
+  "version": "1.0.0-release.31",
+  "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis"
+  },
+  "keywords": [
+    "remas",
+    "windows",
+    "desktop",
+    "saas",
+    "education-center",
+    "single-device-licensing"
+  ],
+  "author": "REMAS SaaS Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}
