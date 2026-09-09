@@ -1,7 +1,7 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Application Main Process
  * Target Project: educenter-saas
- * Version: 1.0.0-release.31
+ * Version: 1.0.0-release.32
  */
 
 const { app, BrowserWindow, ipcMain } = require('electron');
@@ -126,7 +126,7 @@ ipcMain.handle('send-heartbeat', async (event, { institutionId, callerToken }) =
   const result = await heartbeatDevice({
     institutionId,
     deviceFingerprint: fingerprint,
-    appVersion: '1.0.0-release.31',
+    appVersion: '1.0.0-release.32',
     callerToken
   });
   return result;

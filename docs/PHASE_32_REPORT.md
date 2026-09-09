@@ -35,7 +35,7 @@ DEVICE BINDING:            PASS (15/15 Assertions)
 TENANT ISOLATION:          PASS (192 Rules Assertions)
 SECURITY:                  PASS (0 Secret Exposure)
 REGRESSION:                911/911 total assertions PASS
-WINDOWS ARTIFACT:          remas-center-desktop Setup 1.0.0-release.31.exe (76.24 MB)
+WINDOWS ARTIFACT:          remas-center-desktop Setup 1.0.0-release.32.exe (72.12 MB)
 GIT SHA:                   6bdc8089aa7842f8c4f545801b486ac37306bfb2
 WORKING TREE:              CLEAN
 FINAL DELIVERY:            READY
@@ -126,7 +126,7 @@ FINAL DELIVERY:            READY
 
 ### 4.7 Windows Center Desktop (`center-desktop`)
 - Packaging Tool: `npx electron-builder --win nsis`
-- Executable Binary: `center-desktop/dist/remas-center-desktop Setup 1.0.0-release.31.exe`
+- Executable Binary: `center-desktop/dist/remas-center-desktop Setup 1.0.0-release.32.exe`
 - Installer Size: **76.24 MB**
 - Architecture: x64 Windows Setup NSIS Installer
 - Packaging Result: **PASS**
@@ -164,7 +164,7 @@ All 25 End-to-End Acceptance Scenarios documented in `docs/FINAL_ACCEPTANCE_TEST
 - `DECISIONS.md` (Recorded ADR-032)
 - `CHANGELOG.md` (Recorded Phase 32 release)
 - `.gitignore` (Added `center-desktop/dist/`)
-- `center-desktop/dist/remas-center-desktop Setup 1.0.0-release.31.exe`
+- `center-desktop/dist/remas-center-desktop Setup 1.0.0-release.32.exe`
 
 ---
 

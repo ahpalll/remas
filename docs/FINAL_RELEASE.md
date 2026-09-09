@@ -56,14 +56,14 @@ REMAS SaaS is a production-grade multi-tenant educational management platform co
 1. **Center Registration**: SuperAdmin creates institution record via `admin-web` (`createInstitution`).
 2. **License Issuance**: SuperAdmin issues an activation code (`createCenterLicense`) bound to `institutionId`.
 3. **Admin Credential Provisioning**: SuperAdmin provisions initial `center_admin` credentials.
-4. **Binary Delivery**: SuperAdmin provides the standalone Windows setup installer (`remas-center-desktop Setup 1.0.0-release.31.exe`).
+4. **Binary Delivery**: SuperAdmin provides the standalone Windows setup installer (`remas-center-desktop Setup 1.0.0-release.32.exe`).
 
 ---
 
 ## 4. Center Windows Desktop App Deployment
 
 ### 4.1 Installer Specifications
-- **Installer Binary**: `remas-center-desktop Setup 1.0.0-release.31.exe`
+- **Installer Binary**: `remas-center-desktop Setup 1.0.0-release.32.exe`
 - **Installer Package**: NSIS x64 Self-Extracting Installer (76.24 MB)
 - **Runtime Target**: Windows 10 / Windows 11 (64-bit)
 

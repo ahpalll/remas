@@ -27,7 +27,7 @@
 | **AT-14** | Parent App | Flutter Runtime, Linked Children & Read-Only Grades | **PASS** | `parent_app` analyzer (0 issues), unit tests (15/15 PASS) |
 | **AT-15** | Parent Portal | Web Application Bundle Build & Scoping | **PASS** | `parent-portal` Vite build PASS (10.63s) |
 | **AT-16** | Admin Web | Multi-Tenant Control Dashboard Bundle | **PASS** | `admin-web` Vite build PASS (15.35s) |
-| **AT-17** | Windows Desktop | Standalone Packaging & NSIS Setup Installer | **PASS** | Electron builder packaging (`remas-center-desktop Setup 1.0.0-release.31.exe` - 76.24 MB) |
+| **AT-17** | Windows Desktop | Standalone Packaging & NSIS Setup Installer | **PASS** | Electron builder packaging (`remas-center-desktop Setup 1.0.0-release.32.exe` - 72.12 MB) |
 | **AT-18** | Licensing | License Generation & Activation Code Engine | **PASS** | `license_backend.test.js` (19/19 PASS) |
 | **AT-19** | Device Binding | Hardware Fingerprint Binding (`win_fp_...`) | **PASS** | `device_binding_backend.test.js` (15/15 PASS) |
 | **AT-20** | Device Binding | Same Device Reactivation & 2nd Machine Rejection | **PASS** | `license_backend.test.js` (Test 4, 5) |
