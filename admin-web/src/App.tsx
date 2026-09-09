@@ -28,6 +28,7 @@ import { SubscriptionDashboard } from './components/subscription/SubscriptionDas
 import { NotificationDashboard } from './components/notifications/NotificationDashboard';
 import { CenterOperationsConsole } from './components/CenterOperationsConsole';
 import { SuperAdminDevices } from './components/SuperAdminDevices';
+import { SuperAdminLicenses } from './components/SuperAdminLicenses';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -114,6 +115,7 @@ function DashboardView() {
       <InstitutionSettings />
       <SuperAdminInstitutions />
       <SuperAdminDevices />
+      <SuperAdminLicenses />
     </div>
   );
 }
