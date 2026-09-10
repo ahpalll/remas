@@ -2,14 +2,19 @@
  * SuperAdmin AI Management & Center AI Controls Service
  * REMAS Educational Center SaaS Monorepo
  * Target Project: educenter-saas
+ * Supports: Google Gemini & OpenRouter Multi-Provider Architecture
  */
 
 const {
   getAISettingsMetadata,
   testGeminiKeyConnection,
+  testOpenRouterKeyConnection,
   rotateGeminiKey,
-  disableGeminiAI,
-  enableGeminiAI
+  rotateOpenRouterKey,
+  disableAI: disableAISecret,
+  enableAI: enableAISecret,
+  setProviderRouting,
+  setProviderModel
 } = require('./ai_secret_provider');
 
 // In-Memory & Firestore Center AI Preferences Store
@@ -17,6 +22,9 @@ const CENTER_AI_CONFIG_STORE = new Map();
 
 // In-Memory Audit Event Log Store for AI Admin operations
 const AI_ADMIN_AUDIT_LOGS = [];
+
+// In-Memory Usage Tracker Store
+const AI_USAGE_STATS_STORE = [];
 
 function recordAIAuditEvent({ eventType, actorId, institutionId = 'GLOBAL', result, details = {} }) {
   const logEntry = {
@@ -46,7 +54,7 @@ function assertSuperAdminRole(callerToken) {
 }
 
 /**
- * Retrieves SuperAdmin Global AI Settings
+ * Retrieves SuperAdmin Global Multi-Provider AI Settings
  * SuperAdmin Only
  */
 async function getSuperAdminAISettings(callerToken) {
@@ -54,30 +62,38 @@ async function getSuperAdminAISettings(callerToken) {
   const metadata = getAISettingsMetadata();
   return {
     success: true,
+    primaryProvider: metadata.primaryProvider,
+    fallbackProvider: metadata.fallbackProvider,
     status: metadata.status,
     provider: metadata.provider,
     model: metadata.model,
     keyMasked: metadata.keyMasked,
     hasActiveKey: metadata.hasActiveKey,
-    lastTestedAt: metadata.lastTestedAt,
-    lastRotatedAt: metadata.lastRotatedAt
+    gemini: metadata.gemini,
+    openrouter: metadata.openrouter
   };
 }
 
 /**
- * Tests live connection to Google Gemini API (Active key or Candidate new key)
+ * Tests live connection to Google Gemini or OpenRouter API
  * SuperAdmin Only
  */
-async function testAIConnection(callerToken, { candidateKey = null } = {}) {
+async function testAIConnection(callerToken, { provider = 'gemini', candidateKey = null, model = null } = {}) {
   assertSuperAdminRole(callerToken);
 
-  const testRes = await testGeminiKeyConnection(candidateKey);
+  let testRes;
+  if (provider === 'openrouter') {
+    testRes = await testOpenRouterKeyConnection(candidateKey, model);
+  } else {
+    testRes = await testGeminiKeyConnection(candidateKey, model);
+  }
 
   recordAIAuditEvent({
     eventType: 'AI_KEY_TESTED',
     actorId: callerToken.uid,
     result: testRes.success ? 'SUCCESS' : 'FAILED',
     details: {
+      provider,
       status: testRes.status,
       message: testRes.message,
       isCandidateKey: !!candidateKey
@@ -88,19 +104,25 @@ async function testAIConnection(callerToken, { candidateKey = null } = {}) {
 }
 
 /**
- * Executes Safe Zero-Downtime Key Rotation
+ * Executes Safe Zero-Downtime Key Rotation for Gemini or OpenRouter
  * SuperAdmin Only
  */
-async function rotateAIKey(callerToken, { candidateKey }) {
+async function rotateAIKey(callerToken, { provider = 'gemini', candidateKey, model = null } = {}) {
   assertSuperAdminRole(callerToken);
 
-  const rotationRes = await rotateGeminiKey(candidateKey, callerToken.uid);
+  let rotationRes;
+  if (provider === 'openrouter') {
+    rotationRes = await rotateOpenRouterKey(candidateKey, model, callerToken.uid);
+  } else {
+    rotationRes = await rotateGeminiKey(candidateKey, callerToken.uid);
+  }
 
   recordAIAuditEvent({
     eventType: rotationRes.success ? 'AI_KEY_REPLACED' : 'AI_KEY_ROTATION_FAILED',
     actorId: callerToken.uid,
     result: rotationRes.success ? 'SUCCESS' : 'FAILED',
     details: {
+      provider,
       status: rotationRes.status,
       message: rotationRes.message,
       keyMasked: rotationRes.keyMasked || 'N/A',
@@ -112,38 +134,76 @@ async function rotateAIKey(callerToken, { candidateKey }) {
 }
 
 /**
- * Disables AI Provider System Globally
+ * Updates Primary and Fallback Provider Routing
  * SuperAdmin Only
  */
-async function disableAI(callerToken) {
+async function updateAIRouting(callerToken, { primaryProvider, fallbackProvider }) {
   assertSuperAdminRole(callerToken);
 
-  const res = disableGeminiAI(callerToken.uid);
+  const res = setProviderRouting({ primaryProvider, fallbackProvider }, callerToken.uid);
 
   recordAIAuditEvent({
-    eventType: 'AI_KEY_DISABLED',
+    eventType: 'AI_PROVIDER_CHANGED',
     actorId: callerToken.uid,
     result: 'SUCCESS',
-    details: { status: res.status, message: res.message }
+    details: { primaryProvider, fallbackProvider }
   });
 
   return res;
 }
 
 /**
- * Enables AI Provider System Globally
+ * Updates Model for specific Provider
  * SuperAdmin Only
  */
-async function enableAI(callerToken) {
+async function updateProviderModelConfig(callerToken, { provider, model }) {
   assertSuperAdminRole(callerToken);
 
-  const res = enableGeminiAI(callerToken.uid);
+  const res = setProviderModel(provider, model, callerToken.uid);
+
+  recordAIAuditEvent({
+    eventType: 'AI_MODEL_CHANGED',
+    actorId: callerToken.uid,
+    result: 'SUCCESS',
+    details: { provider, model }
+  });
+
+  return res;
+}
+
+/**
+ * Disables AI Provider System Globally (or per provider)
+ * SuperAdmin Only
+ */
+async function disableAI(callerToken, { provider = 'all' } = {}) {
+  assertSuperAdminRole(callerToken);
+
+  const res = disableAISecret(provider, callerToken.uid);
+
+  recordAIAuditEvent({
+    eventType: 'AI_KEY_DISABLED',
+    actorId: callerToken.uid,
+    result: 'SUCCESS',
+    details: { provider, status: res.status, message: res.message }
+  });
+
+  return res;
+}
+
+/**
+ * Enables AI Provider System Globally (or per provider)
+ * SuperAdmin Only
+ */
+async function enableAI(callerToken, { provider = 'all' } = {}) {
+  assertSuperAdminRole(callerToken);
+
+  const res = enableAISecret(provider, callerToken.uid);
 
   recordAIAuditEvent({
     eventType: 'AI_PROVIDER_ENABLED',
     actorId: callerToken.uid,
     result: res.success ? 'SUCCESS' : 'FAILED',
-    details: { status: res.status, message: res.message }
+    details: { provider, status: res.status, message: res.message }
   });
 
   return res;
@@ -183,7 +243,7 @@ async function getCenterAISettings(callerToken, targetInstitutionId) {
 
 /**
  * Updates Center-Specific AI Controls (Toggle Center AI, set daily limits)
- * NOTE: Center Admin CANNOT view or edit Gemini API key!
+ * NOTE: Center Admin CANNOT view or edit Gemini/OpenRouter API key!
  */
 async function updateCenterAISettings(callerToken, { targetInstitutionId, aiEnabled, dailyLimitPerStudent }) {
   if (!callerToken || !callerToken.uid || !callerToken.role) {
@@ -234,6 +294,47 @@ async function updateCenterAISettings(callerToken, { targetInstitutionId, aiEnab
   };
 }
 
+/**
+ * Record and retrieve AI usage statistics per provider, model, institution
+ */
+function recordAIUsageStat({ provider, model, institutionId, success, tokens = 0, latencyMs = 0 }) {
+  AI_USAGE_STATS_STORE.push({
+    id: `usg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    provider,
+    model,
+    institutionId,
+    success,
+    tokens,
+    latencyMs,
+    date: new Date().toISOString().split('T')[0],
+    timestamp: new Date().toISOString()
+  });
+}
+
+async function getAIUsageStats(callerToken, { provider, model, institutionId, date } = {}) {
+  assertSuperAdminRole(callerToken);
+
+  let filtered = [...AI_USAGE_STATS_STORE];
+  if (provider) filtered = filtered.filter(s => s.provider === provider);
+  if (model) filtered = filtered.filter(s => s.model === model);
+  if (institutionId) filtered = filtered.filter(s => s.institutionId === institutionId);
+  if (date) filtered = filtered.filter(s => s.date === date);
+
+  const totalRequests = filtered.length;
+  const successfulRequests = filtered.filter(s => s.success).length;
+  const failedRequests = totalRequests - successfulRequests;
+  const totalTokens = filtered.reduce((acc, curr) => acc + (curr.tokens || 0), 0);
+
+  return {
+    success: true,
+    totalRequests,
+    successfulRequests,
+    failedRequests,
+    totalTokens,
+    records: filtered.slice(0, 100)
+  };
+}
+
 function getAIAuditLogs() {
   return [...AI_ADMIN_AUDIT_LOGS];
 }
@@ -243,10 +344,14 @@ module.exports = {
   getSuperAdminAISettings,
   testAIConnection,
   rotateAIKey,
+  updateAIRouting,
+  updateProviderModelConfig,
   disableAI,
   enableAI,
   getCenterAISettings,
   updateCenterAISettings,
+  recordAIUsageStat,
+  getAIUsageStats,
   getAIAuditLogs,
   AI_ADMIN_AUDIT_LOGS
 };

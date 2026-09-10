@@ -4,7 +4,7 @@
  * Target Project: educenter-saas
  */
 
-const { resolveAIProvider } = require('./ai_provider_interface');
+const { resolveAIProvider, executeMultiProviderRequest } = require('./ai_provider_interface');
 const { retrieveAuthorizedChunks, buildGroundedPrompt } = require('./rag_retrieval_service');
 const { checkRateLimit, logAIUsage } = require('./ai_usage_service');
 
@@ -77,12 +77,11 @@ async function askQuestion(callerToken, payload = {}, providerOverride = null) {
     userPrompt: payload.userPrompt
   });
 
-  const provider = resolveAIProvider(providerOverride);
-  const result = await provider.generateResponse({
+  const result = await executeMultiProviderRequest('generateResponse', {
     systemPrompt: groundedPrompt.systemPrompt,
     contextChunks: authorizedChunks,
     userPrompt: groundedPrompt.sanitizedUserPrompt
-  });
+  }, providerOverride);
 
   // Log usage
   logAIUsage({

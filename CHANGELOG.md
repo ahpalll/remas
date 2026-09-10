@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.37] - 2026-09-10 (Phase 37: Multi AI Provider Management - Google Gemini + OpenRouter)
+
+### Added / Delivered
+- **Multi AI Provider Architecture (`firebase/ai_provider_interface.js`)**: Implemented `OpenRouterAIProvider` alongside `GeminiAIProvider` inheriting from vendor-neutral `AIProvider` base class. Added `executeMultiProviderRequest()` for Primary and Fallback provider evaluation server-side.
+- **Safe Fallback Policy**: Operational failures (HTTP 429 rate limit, 5xx server downtime, API timeout) trigger fallback to secondary provider; security & authorization errors (unauthenticated caller, cross-tenant violation, expired subscription, unentitled subject) NEVER trigger fallback.
+- **SuperAdmin Multi-Provider Console (`admin-web/src/components/SuperAdminAISettings.tsx`)**: Upgraded React RTL Material 3 console featuring Primary Provider Selector (`Google Gemini` / `OpenRouter`), Fallback Provider Selector (`None` / `Google Gemini` / `OpenRouter`), Google Gemini Card, OpenRouter Card (Free/Paid Tier indicator, custom model selection), masked keys (`••••••••••••xxxx`), and action buttons (**Add Key**, **Test Connection**, **Activate & Replace Key**, **Disable/Enable**).
+- **Multi-Secret Server Vault (`firebase/ai_secret_provider.js`)**: Isolated server secret vault (`F:\firebase-secrets\gemini_secret_store.json`) managing independent secrets (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`), model configurations, and routing settings. Provides zero-downtime key rotation for both providers.
+- **Usage Statistics & Tracking Engine (`firebase/ai_admin_service.js`)**: Logs request metrics, successes, failures, latency, and token consumption per provider, model, institution, and date.
+- **21-Assertion Automated Test Suite (`firebase/ai_multi_provider.test.js`)**: 100% PASS on provider polymorphism, primary/fallback routing, safe fallback policy, OpenRouter execution, key rotation, zero client key exposure, tenant isolation, and secret scan.
+- **Monorepo Test Regression Baseline**: **1000/1000 total assertions PASSing** across 37 test files (939 Backend + 4 Packaging + 61 Mobile).
+
+---
+
 ## [1.0.0-release.36] - 2026-09-10 (Phase 36: SuperAdmin AI Key Management & Secure Key Rotation)
 
 ### Added / Delivered

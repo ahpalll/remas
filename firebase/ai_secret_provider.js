@@ -1,7 +1,8 @@
 /**
- * Server-Side AI Secret Provider & Zero-Downtime Key Rotation Engine
+ * Server-Side AI Secret Provider & Zero-Downtime Multi-Provider Key Rotation Engine
  * REMAS Educational Center SaaS Monorepo
  * Target Project: educenter-saas
+ * Supports: Google Gemini & OpenRouter
  */
 
 const fs = require('node:fs');
@@ -10,10 +11,11 @@ const path = require('node:path');
 const SECRETS_DIR = 'F:\\firebase-secrets';
 const SECRET_STORE_PATH = path.join(SECRETS_DIR, 'gemini_secret_store.json');
 const TXT_KEY_PATH = path.join(SECRETS_DIR, 'gemini_api_key.txt');
+const OPENROUTER_TXT_KEY_PATH = path.join(SECRETS_DIR, 'openrouter_api_key.txt');
 
 /**
  * Creates masked representation of API key showing only last 4 characters
- * Example: "AQ.Ab8RN...HOg" -> "••••••••••••HOg"
+ * Example: "sk-or-v1-abc...1234" -> "••••••••••••1234"
  */
 function maskApiKey(key) {
   if (!key || typeof key !== 'string' || key.trim() === '') {
@@ -28,34 +30,143 @@ function maskApiKey(key) {
 }
 
 /**
- * Ensures secrets directory and initial store file exist
+ * Normalizes and returns current secret store data with migration to multi-provider format
+ */
+function getSecretStoreData() {
+  ensureSecretStore();
+  let store = {};
+  if (fs.existsSync(SECRET_STORE_PATH)) {
+    try {
+      store = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
+    } catch (e) {}
+  }
+
+  // Migrate legacy single-provider schema if needed
+  let changed = false;
+  if (!store.primaryProvider) {
+    store.primaryProvider = 'gemini';
+    changed = true;
+  }
+  if (!store.fallbackProvider) {
+    store.fallbackProvider = 'none';
+    changed = true;
+  }
+
+  if (!store.gemini) {
+    const legacyKey = store.activeKey || '';
+    store.gemini = {
+      activeKey: legacyKey,
+      previousKey: store.previousKey || '',
+      status: store.status === 'DISABLED' ? 'DISABLED' : (legacyKey ? 'ENABLED' : 'DISABLED'),
+      model: store.model || 'gemini-2.5-flash',
+      keyMasked: maskApiKey(legacyKey),
+      lastTestedAt: store.lastTestedAt || null,
+      lastRotatedAt: store.lastRotatedAt || null
+    };
+    changed = true;
+  }
+
+  if (!store.openrouter) {
+    let openrouterKey = '';
+    if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '') {
+      openrouterKey = process.env.OPENROUTER_API_KEY.trim();
+    } else if (fs.existsSync(OPENROUTER_TXT_KEY_PATH)) {
+      try { openrouterKey = fs.readFileSync(OPENROUTER_TXT_KEY_PATH, 'utf8').trim(); } catch (e) {}
+    }
+
+    store.openrouter = {
+      activeKey: openrouterKey,
+      previousKey: '',
+      status: openrouterKey ? 'ENABLED' : 'DISABLED',
+      model: 'google/gemini-2.5-flash:free',
+      keyMasked: maskApiKey(openrouterKey),
+      tier: 'Free / Paid',
+      lastTestedAt: openrouterKey ? new Date().toISOString() : null,
+      lastRotatedAt: openrouterKey ? new Date().toISOString() : null
+    };
+    changed = true;
+  }
+
+  if (changed) {
+    saveSecretStoreData(store);
+  }
+
+  return store;
+}
+
+/**
+ * Saves store data while preserving legacy root fields for backwards compatibility
+ */
+function saveSecretStoreData(storeData) {
+  if (!fs.existsSync(SECRETS_DIR)) {
+    try { fs.mkdirSync(SECRETS_DIR, { recursive: true }); } catch (err) {}
+  }
+
+  // Maintain legacy top-level attributes for backwards compatibility
+  const geminiKey = storeData.gemini?.activeKey || '';
+  storeData.activeKey = geminiKey;
+  storeData.previousKey = storeData.gemini?.previousKey || '';
+  storeData.status = storeData.gemini?.status || 'DISABLED';
+  storeData.provider = 'Google Gemini';
+  storeData.model = storeData.gemini?.model || 'gemini-2.5-flash';
+  storeData.keyMasked = maskApiKey(geminiKey);
+
+  try {
+    fs.writeFileSync(SECRET_STORE_PATH, JSON.stringify(storeData, null, 2), 'utf8');
+    if (geminiKey) {
+      fs.writeFileSync(TXT_KEY_PATH, geminiKey, 'utf8');
+    }
+    if (storeData.openrouter?.activeKey) {
+      fs.writeFileSync(OPENROUTER_TXT_KEY_PATH, storeData.openrouter.activeKey, 'utf8');
+    }
+  } catch (e) {}
+}
+
+/**
+ * Ensures secrets directory and store file exist
  */
 function ensureSecretStore() {
   if (!fs.existsSync(SECRETS_DIR)) {
-    try {
-      fs.mkdirSync(SECRETS_DIR, { recursive: true });
-    } catch (err) {
-      // Ignore
-    }
+    try { fs.mkdirSync(SECRETS_DIR, { recursive: true }); } catch (err) {}
   }
 
   if (!fs.existsSync(SECRET_STORE_PATH)) {
-    let initialKey = '';
+    let initialGeminiKey = '';
     if (fs.existsSync(TXT_KEY_PATH)) {
-      try {
-        initialKey = fs.readFileSync(TXT_KEY_PATH, 'utf8').trim();
-      } catch (e) {}
+      try { initialGeminiKey = fs.readFileSync(TXT_KEY_PATH, 'utf8').trim(); } catch (e) {}
+    }
+    let initialOpenRouterKey = '';
+    if (fs.existsSync(OPENROUTER_TXT_KEY_PATH)) {
+      try { initialOpenRouterKey = fs.readFileSync(OPENROUTER_TXT_KEY_PATH, 'utf8').trim(); } catch (e) {}
     }
 
     const initialStore = {
-      activeKey: initialKey,
-      previousKey: '',
-      status: initialKey ? 'ENABLED' : 'DISABLED',
+      primaryProvider: 'gemini',
+      fallbackProvider: 'none',
+      activeKey: initialGeminiKey,
+      status: initialGeminiKey ? 'ENABLED' : 'DISABLED',
       provider: 'Google Gemini',
       model: 'gemini-2.5-flash',
-      lastTestedAt: initialKey ? new Date().toISOString() : null,
-      lastRotatedAt: initialKey ? new Date().toISOString() : null,
-      keyMasked: maskApiKey(initialKey)
+      keyMasked: maskApiKey(initialGeminiKey),
+      gemini: {
+        activeKey: initialGeminiKey,
+        previousKey: '',
+        status: initialGeminiKey ? 'ENABLED' : 'DISABLED',
+        model: 'gemini-2.5-flash',
+        keyMasked: maskApiKey(initialGeminiKey),
+        lastTestedAt: initialGeminiKey ? new Date().toISOString() : null,
+        lastRotatedAt: initialGeminiKey ? new Date().toISOString() : null
+      },
+      openrouter: {
+        activeKey: initialOpenRouterKey,
+        previousKey: '',
+        status: initialOpenRouterKey ? 'ENABLED' : 'DISABLED',
+        model: 'google/gemini-2.5-flash:free',
+        keyMasked: maskApiKey(initialOpenRouterKey),
+        tier: 'Free / Paid',
+        lastTestedAt: initialOpenRouterKey ? new Date().toISOString() : null,
+        lastRotatedAt: initialOpenRouterKey ? new Date().toISOString() : null
+      }
     };
 
     try {
@@ -65,55 +176,101 @@ function ensureSecretStore() {
 }
 
 /**
- * Retrieves the current active Gemini API Key from server secret store
+ * Retrieves current active Gemini API Key
  */
 function getActiveGeminiKey() {
-  ensureSecretStore();
-
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-      if (data.status === 'DISABLED') {
-        return null;
-      }
-      if (data.activeKey) {
-        return data.activeKey.trim();
-      }
-    } catch (e) {}
+  const store = getSecretStoreData();
+  if (store.gemini && store.gemini.status !== 'DISABLED' && store.gemini.activeKey) {
+    return store.gemini.activeKey.trim();
   }
-
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
     return process.env.GEMINI_API_KEY.trim();
   }
-
   if (fs.existsSync(TXT_KEY_PATH)) {
     try {
       const key = fs.readFileSync(TXT_KEY_PATH, 'utf8').trim();
       if (key) return key;
     } catch (e) {}
   }
-
   return null;
 }
 
 /**
- * Tests live connection to Google Gemini API using candidate key without modifying active key
+ * Retrieves current active OpenRouter API Key
  */
-async function testGeminiKeyConnection(candidateKey) {
-  const keyToTest = candidateKey || getActiveGeminiKey();
+function getActiveOpenRouterKey() {
+  const store = getSecretStoreData();
+  if (store.openrouter && store.openrouter.status !== 'DISABLED' && store.openrouter.activeKey) {
+    return store.openrouter.activeKey.trim();
+  }
+  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '') {
+    return process.env.OPENROUTER_API_KEY.trim();
+  }
+  if (fs.existsSync(OPENROUTER_TXT_KEY_PATH)) {
+    try {
+      const key = fs.readFileSync(OPENROUTER_TXT_KEY_PATH, 'utf8').trim();
+      if (key) return key;
+    } catch (e) {}
+  }
+  return null;
+}
 
+/**
+ * Returns Primary Provider ('gemini' | 'openrouter')
+ */
+function getPrimaryProvider() {
+  const store = getSecretStoreData();
+  return store.primaryProvider || 'gemini';
+}
+
+/**
+ * Returns Fallback Provider ('none' | 'gemini' | 'openrouter')
+ */
+function getFallbackProvider() {
+  const store = getSecretStoreData();
+  return store.fallbackProvider || 'none';
+}
+
+/**
+ * Updates Primary and Fallback Provider settings
+ */
+function setProviderRouting({ primaryProvider, fallbackProvider }, actorId = 'superadmin') {
+  const store = getSecretStoreData();
+  if (primaryProvider && ['gemini', 'openrouter'].includes(primaryProvider)) {
+    store.primaryProvider = primaryProvider;
+  }
+  if (fallbackProvider && ['none', 'gemini', 'openrouter'].includes(fallbackProvider)) {
+    store.fallbackProvider = fallbackProvider;
+  }
+  store.lastRoutingChangedAt = new Date().toISOString();
+  store.routingChangedBy = actorId;
+  saveSecretStoreData(store);
+  return {
+    success: true,
+    primaryProvider: store.primaryProvider,
+    fallbackProvider: store.fallbackProvider,
+    message: 'تم تحديث مزود الذكاء الاصطناعي الرئيسي والمزود الاحتياطي بنجاح'
+  };
+}
+
+/**
+ * Tests live connection to Google Gemini API
+ */
+async function testGeminiKeyConnection(candidateKey, modelOverride = null) {
+  const keyToTest = candidateKey || getActiveGeminiKey();
   if (!keyToTest || typeof keyToTest !== 'string' || keyToTest.trim() === '') {
     return {
       success: false,
       status: 'FAILED',
       reason: 'MISSING_API_KEY',
-      message: 'لم يتم تزويد مفتاح API صريح للاختبار'
+      message: 'لم يتم تزويد مفتاح Google Gemini API للاختبار'
     };
   }
 
   try {
     const fetch = globalThis.fetch || require('node-fetch');
-    const modelName = 'gemini-2.5-flash';
+    const store = getSecretStoreData();
+    const modelName = modelOverride || store.gemini?.model || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToTest.trim()}`;
 
     const payload = {
@@ -130,7 +287,7 @@ async function testGeminiKeyConnection(candidateKey) {
     if (res.ok || res.status === 429) {
       return {
         success: true,
-        status: 'SUCCESS',
+        status: 'CONNECTED',
         model: modelName,
         provider: 'Google Gemini',
         rateLimited: res.status === 429,
@@ -146,7 +303,7 @@ async function testGeminiKeyConnection(candidateKey) {
       success: false,
       status: 'FAILED',
       reason: `HTTP_${res.status}`,
-      message: `فشل تفعيل المفتاح: HTTP ${res.status} - ${safeErr.substring(0, 100)}`
+      message: `فشل الاتصال بـ Gemini: HTTP ${res.status} - ${safeErr.substring(0, 100)}`
     };
   } catch (err) {
     const safeMsg = (err.message || '').replace(/key=[A-Za-z0-9_-]+/g, 'key=[REDACTED]');
@@ -160,13 +317,78 @@ async function testGeminiKeyConnection(candidateKey) {
 }
 
 /**
- * Performs Zero-Downtime Safe Key Rotation
- * If new key passes test -> Activates new key.
- * If new key fails test -> Keeps current valid active key untouched.
+ * Tests live connection to OpenRouter API
+ */
+async function testOpenRouterKeyConnection(candidateKey, modelOverride = null) {
+  const keyToTest = candidateKey || getActiveOpenRouterKey();
+  if (!keyToTest || typeof keyToTest !== 'string' || keyToTest.trim() === '') {
+    return {
+      success: false,
+      status: 'FAILED',
+      reason: 'MISSING_API_KEY',
+      message: 'لم يتم تزويد مفتاح OpenRouter API للاختبار'
+    };
+  }
+
+  try {
+    const fetch = globalThis.fetch || require('node-fetch');
+    const store = getSecretStoreData();
+    const modelName = modelOverride || store.openrouter?.model || 'google/gemini-2.5-flash:free';
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+
+    const payload = {
+      model: modelName,
+      messages: [{ role: 'user', content: 'اختبار الاتصال بـ OpenRouter.' }],
+      max_tokens: 20
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${keyToTest.trim()}`,
+        'HTTP-Referer': 'https://remas-saas.edu',
+        'X-Title': 'Remas Educational SaaS'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok || res.status === 429) {
+      return {
+        success: true,
+        status: 'CONNECTED',
+        model: modelName,
+        provider: 'OpenRouter',
+        rateLimited: res.status === 429,
+        message: res.status === 429
+          ? 'تم التحقق من صحة مفتاح OpenRouter API بنجاح (المفتاح مقبول وساري)'
+          : `تم الاتصال بنجاح بمزود OpenRouter (${modelName})`
+      };
+    }
+
+    const rawErr = await res.text();
+    const safeErr = rawErr.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]');
+    return {
+      success: false,
+      status: 'FAILED',
+      reason: `HTTP_${res.status}`,
+      message: `فشل الاتصال بـ OpenRouter: HTTP ${res.status} - ${safeErr.substring(0, 100)}`
+    };
+  } catch (err) {
+    const safeMsg = (err.message || '').replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]');
+    return {
+      success: false,
+      status: 'FAILED',
+      reason: 'NETWORK_ERROR',
+      message: `خطأ في الاتصال بالشبكة مع OpenRouter: ${safeMsg}`
+    };
+  }
+}
+
+/**
+ * Safe Zero-Downtime Key Rotation for Google Gemini
  */
 async function rotateGeminiKey(newCandidateKey, actorId = 'superadmin') {
-  ensureSecretStore();
-
   if (!newCandidateKey || typeof newCandidateKey !== 'string' || newCandidateKey.trim() === '') {
     return {
       success: false,
@@ -177,8 +399,6 @@ async function rotateGeminiKey(newCandidateKey, actorId = 'superadmin') {
   }
 
   const trimmedKey = newCandidateKey.trim();
-
-  // Step 1: Test connection with candidate key FIRST
   const testRes = await testGeminiKeyConnection(trimmedKey);
   if (!testRes.success) {
     return {
@@ -190,126 +410,215 @@ async function rotateGeminiKey(newCandidateKey, actorId = 'superadmin') {
     };
   }
 
-  // Step 2: Test passed -> Save and activate new key
-  let store = {};
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      store = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-    } catch (e) {}
-  }
-
-  const oldKey = store.activeKey || '';
+  const store = getSecretStoreData();
+  const oldKey = store.gemini.activeKey || '';
   const nowISO = new Date().toISOString();
 
-  store.previousKey = oldKey;
-  store.activeKey = trimmedKey;
-  store.status = 'ENABLED';
-  store.provider = 'Google Gemini';
-  store.model = 'gemini-2.5-flash';
-  store.lastTestedAt = nowISO;
-  store.lastRotatedAt = nowISO;
-  store.keyMasked = maskApiKey(trimmedKey);
-  store.lastRotatedBy = actorId;
+  store.gemini.previousKey = oldKey;
+  store.gemini.activeKey = trimmedKey;
+  store.gemini.status = 'ENABLED';
+  store.gemini.lastTestedAt = nowISO;
+  store.gemini.lastRotatedAt = nowISO;
+  store.gemini.keyMasked = maskApiKey(trimmedKey);
+  store.gemini.lastRotatedBy = actorId;
 
-  try {
-    fs.writeFileSync(SECRET_STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
-    fs.writeFileSync(TXT_KEY_PATH, trimmedKey, 'utf8');
-  } catch (e) {}
+  saveSecretStoreData(store);
 
   return {
     success: true,
     status: 'ROTATION_SUCCESSFUL',
-    message: 'تم تفعيل واستبدال مفتاح Gemini API بنجاح وتح تحديث بيانات الاعتماد الآمنة بالسيرفر.',
-    keyMasked: store.keyMasked,
+    message: 'تم تفعيل واستبدال مفتاح Gemini API بنجاح.',
+    keyMasked: store.gemini.keyMasked,
     activeKeyPreserved: false
   };
 }
 
 /**
- * Disables AI Provider System globally
+ * Safe Zero-Downtime Key Rotation for OpenRouter
  */
-function disableGeminiAI(actorId = 'superadmin') {
-  ensureSecretStore();
-  let store = {};
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      store = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-    } catch (e) {}
-  }
-
-  store.status = 'DISABLED';
-  store.lastDisabledAt = new Date().toISOString();
-  store.disabledBy = actorId;
-
-  try {
-    fs.writeFileSync(SECRET_STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
-  } catch (e) {}
-
-  return {
-    success: true,
-    status: 'AI_DISABLED',
-    message: 'تم تعطيل نظام الذكاء الاصطناعي بنجاح'
-  };
-}
-
-/**
- * Enables AI Provider System globally
- */
-function enableGeminiAI(actorId = 'superadmin') {
-  ensureSecretStore();
-  let store = {};
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      store = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-    } catch (e) {}
-  }
-
-  if (!store.activeKey) {
+async function rotateOpenRouterKey(newCandidateKey, model = null, actorId = 'superadmin') {
+  if (!newCandidateKey || typeof newCandidateKey !== 'string' || newCandidateKey.trim() === '') {
     return {
       success: false,
-      status: 'NO_KEY_CONFIGURED',
-      message: 'تعذر التفعيل: لا يوجد مفتاح فعال مخزن في السيرفر.'
+      status: 'INVALID_INPUT',
+      message: 'الرجاء تزويد نص مفتاح OpenRouter الجديد المراد اختباره وتفعيله.',
+      activeKeyPreserved: true
     };
   }
 
-  store.status = 'ENABLED';
-  store.lastEnabledAt = new Date().toISOString();
-  store.enabledBy = actorId;
+  const trimmedKey = newCandidateKey.trim();
+  const testRes = await testOpenRouterKeyConnection(trimmedKey, model);
+  if (!testRes.success) {
+    return {
+      success: false,
+      status: 'ROTATION_FAILED_INVALID_KEY',
+      testError: testRes.message,
+      message: 'فشل اختبار مفتاح OpenRouter الجديد. تم الإبقاء على المفتاح الحالي الفعال بدون أي انقطاع.',
+      activeKeyPreserved: true
+    };
+  }
 
-  try {
-    fs.writeFileSync(SECRET_STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
-  } catch (e) {}
+  const store = getSecretStoreData();
+  const oldKey = store.openrouter.activeKey || '';
+  const nowISO = new Date().toISOString();
+
+  store.openrouter.previousKey = oldKey;
+  store.openrouter.activeKey = trimmedKey;
+  store.openrouter.status = 'ENABLED';
+  if (model) store.openrouter.model = model;
+  store.openrouter.lastTestedAt = nowISO;
+  store.openrouter.lastRotatedAt = nowISO;
+  store.openrouter.keyMasked = maskApiKey(trimmedKey);
+  store.openrouter.lastRotatedBy = actorId;
+
+  saveSecretStoreData(store);
 
   return {
     success: true,
-    status: 'AI_ENABLED',
-    message: 'تم تفعيل نظام الذكاء الاصطناعي بنجاح'
+    status: 'ROTATION_SUCCESSFUL',
+    message: 'تم تفعيل واستبدال مفتاح OpenRouter API بنجاح.',
+    keyMasked: store.openrouter.keyMasked,
+    activeKeyPreserved: false
   };
 }
 
 /**
- * Retrieves safe metadata representation for UI console (NO raw API keys returned!)
+ * Disables AI Provider (Gemini, OpenRouter, or All)
  */
-function getAISettingsMetadata() {
-  ensureSecretStore();
-  let store = {};
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      store = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-    } catch (e) {}
+function disableAI(provider = 'all', actorId = 'superadmin') {
+  const store = getSecretStoreData();
+  const nowISO = new Date().toISOString();
+
+  if (provider === 'gemini' || provider === 'all') {
+    store.gemini.status = 'DISABLED';
+    store.gemini.lastDisabledAt = nowISO;
+  }
+  if (provider === 'openrouter' || provider === 'all') {
+    store.openrouter.status = 'DISABLED';
+    store.openrouter.lastDisabledAt = nowISO;
   }
 
-  const activeKey = getActiveGeminiKey();
-  const status = store.status === 'DISABLED' ? 'DISABLED' : (activeKey ? 'ENABLED' : 'ERROR');
+  saveSecretStoreData(store);
+  return {
+    success: true,
+    status: 'AI_DISABLED',
+    message: `تم تعطيل مزود الذكاء الاصطناعي (${provider}) بنجاح`
+  };
+}
+
+function disableGeminiAI(actorId = 'superadmin') {
+  return disableAI('gemini', actorId);
+}
+
+function disableOpenRouterAI(actorId = 'superadmin') {
+  return disableAI('openrouter', actorId);
+}
+
+/**
+ * Enables AI Provider (Gemini, OpenRouter, or All)
+ */
+function enableAI(provider = 'all', actorId = 'superadmin') {
+  const store = getSecretStoreData();
+  const nowISO = new Date().toISOString();
+
+  let enabledAny = false;
+  if (provider === 'gemini' || provider === 'all') {
+    if (store.gemini.activeKey) {
+      store.gemini.status = 'ENABLED';
+      store.gemini.lastEnabledAt = nowISO;
+      enabledAny = true;
+    }
+  }
+  if (provider === 'openrouter' || provider === 'all') {
+    if (store.openrouter.activeKey) {
+      store.openrouter.status = 'ENABLED';
+      store.openrouter.lastEnabledAt = nowISO;
+      enabledAny = true;
+    }
+  }
+
+  if (!enabledAny) {
+    return {
+      success: false,
+      status: 'NO_KEY_CONFIGURED',
+      message: 'تعذر التفعيل: لا يوجد مفتاح فعال مخزن للمزود المحدد.'
+    };
+  }
+
+  saveSecretStoreData(store);
+  return {
+    success: true,
+    status: 'AI_ENABLED',
+    message: `تم تفعيل مزود الذكاء الاصطناعي (${provider}) بنجاح`
+  };
+}
+
+function enableGeminiAI(actorId = 'superadmin') {
+  return enableAI('gemini', actorId);
+}
+
+function enableOpenRouterAI(actorId = 'superadmin') {
+  return enableAI('openrouter', actorId);
+}
+
+/**
+ * Updates Provider Model
+ */
+function setProviderModel(provider, model, actorId = 'superadmin') {
+  const store = getSecretStoreData();
+  if (provider === 'gemini') {
+    store.gemini.model = model || 'gemini-2.5-flash';
+  } else if (provider === 'openrouter') {
+    store.openrouter.model = model || 'google/gemini-2.5-flash:free';
+  }
+  saveSecretStoreData(store);
+  return {
+    success: true,
+    provider,
+    model: provider === 'gemini' ? store.gemini.model : store.openrouter.model,
+    message: `تم تحديث نموذج ${provider} بنجاح`
+  };
+}
+
+/**
+ * Returns safe metadata representation for Multi-Provider UI Console (NO raw secrets!)
+ */
+function getAISettingsMetadata() {
+  const store = getSecretStoreData();
+
+  const geminiActiveKey = getActiveGeminiKey();
+  const geminiStatus = store.gemini.status === 'DISABLED' ? 'DISABLED' : (geminiActiveKey ? 'ENABLED' : 'ERROR');
+
+  const openrouterActiveKey = getActiveOpenRouterKey();
+  const openrouterStatus = store.openrouter.status === 'DISABLED' ? 'DISABLED' : (openrouterActiveKey ? 'ENABLED' : 'ERROR');
 
   return {
-    status,
-    provider: 'Google Gemini',
-    model: 'gemini-2.5-flash',
-    keyMasked: maskApiKey(activeKey),
-    hasActiveKey: !!activeKey,
-    lastTestedAt: store.lastTestedAt || null,
-    lastRotatedAt: store.lastRotatedAt || null
+    primaryProvider: store.primaryProvider || 'gemini',
+    fallbackProvider: store.fallbackProvider || 'none',
+    status: store.status === 'DISABLED' ? 'DISABLED' : (geminiStatus === 'ENABLED' || openrouterStatus === 'ENABLED' ? 'ENABLED' : 'ERROR'),
+    provider: 'Google Gemini', // Legacy field
+    model: store.gemini.model || 'gemini-2.5-flash', // Legacy field
+    keyMasked: maskApiKey(geminiActiveKey), // Legacy field
+    hasActiveKey: !!(geminiActiveKey || openrouterActiveKey),
+    gemini: {
+      status: geminiStatus,
+      provider: 'Google Gemini',
+      model: store.gemini.model || 'gemini-2.5-flash',
+      keyMasked: maskApiKey(geminiActiveKey),
+      hasActiveKey: !!geminiActiveKey,
+      lastTestedAt: store.gemini.lastTestedAt || null,
+      lastRotatedAt: store.gemini.lastRotatedAt || null
+    },
+    openrouter: {
+      status: openrouterStatus,
+      provider: 'OpenRouter',
+      model: store.openrouter.model || 'google/gemini-2.5-flash:free',
+      keyMasked: maskApiKey(openrouterActiveKey),
+      hasActiveKey: !!openrouterActiveKey,
+      tier: openrouterActiveKey ? (store.openrouter.model.includes(':free') ? 'Free Tier' : 'Paid Tier') : 'Not Configured',
+      lastTestedAt: store.openrouter.lastTestedAt || null,
+      lastRotatedAt: store.openrouter.lastRotatedAt || null
+    }
   };
 }
 
@@ -317,23 +626,31 @@ function getAISettingsMetadata() {
  * Checks whether AI system is globally disabled by SuperAdmin
  */
 function isAIDisabledGlobally() {
-  ensureSecretStore();
-  if (fs.existsSync(SECRET_STORE_PATH)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(SECRET_STORE_PATH, 'utf8'));
-      if (data.status === 'DISABLED') return true;
-    } catch (e) {}
-  }
-  return false;
+  const store = getSecretStoreData();
+  const geminiActive = store.gemini.status === 'ENABLED' && getActiveGeminiKey();
+  const openrouterActive = store.openrouter.status === 'ENABLED' && getActiveOpenRouterKey();
+  return !geminiActive && !openrouterActive;
 }
 
 module.exports = {
   maskApiKey,
   getActiveGeminiKey,
+  getActiveOpenRouterKey,
+  getPrimaryProvider,
+  getFallbackProvider,
+  setProviderRouting,
   isAIDisabledGlobally,
   testGeminiKeyConnection,
+  testOpenRouterKeyConnection,
   rotateGeminiKey,
+  rotateOpenRouterKey,
+  disableAI,
   disableGeminiAI,
+  disableOpenRouterAI,
+  enableAI,
   enableGeminiAI,
-  getAISettingsMetadata
+  enableOpenRouterAI,
+  setProviderModel,
+  getAISettingsMetadata,
+  getSecretStoreData
 };

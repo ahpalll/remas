@@ -1,8 +1,8 @@
 # REMAS Educational Center SaaS — Final Product Requirement Audit Matrix
 
-**Phase**: 36 — SuperAdmin AI Key Management & Secure Key Rotation
+**Phase**: 37 — Multi AI Provider Management (Google Gemini + OpenRouter)
 **Target Project**: `educenter-saas` (`educenter-saas-860c5`)
-**Monorepo Version**: `1.0.0-release.36`
+**Monorepo Version**: `1.0.0-release.37`
 **Date**: September 10, 2026
 
 ---
@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | **REQ-01** | SuperAdmin Platform Control & Multi-Center Management | **PASS** | `admin-web/src/components/SuperAdminInstitutions.tsx` & `institution_backend.test.js` | Operator deploys `admin-web/dist` to production domain. |
 | **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` (192 assertions PASS) & `CROSS_TENANT_VIOLATION` guards | Server-authoritative enforcement on all backend operations. |
-| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.36.exe` | Center installs standalone setup EXE on reception PC. |
+| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.37.exe` | Center installs standalone setup EXE on reception PC. |
 | **REQ-04** | Single-Device Hardware Fingerprint Binding (`win_fp_...`) | **PASS** | `device_binding_backend.test.js` (15/15 PASS) & `packaging_runtime.test.js` (4/4 PASS) | SuperAdmin issues activation code; 1 device limit enforced. |
 | **REQ-05** | Remote License Control (Activate, Suspend, Revoke, Rebind) | **PASS** | `admin-web/src/components/SuperAdminDevices.tsx` & `license_backend.test.js` (19/19 PASS) | SuperAdmin manages center licenses remotely. |
 | **REQ-06** | Student Android Application (`student_app`) | **PASS** | `student_app` analyzer (0 issues), unit/widget tests (31/31 PASS) | Publish APK to Google Play or distribution portal. |
@@ -30,8 +30,8 @@
 | **REQ-17** | Cloudflare R2 Media Gateway & Ephemeral Presigned URLs | **PASS** | `cloudflare/worker` unit tests (17/17 PASS, 15-min expiry) | Cloudflare Worker deployed to edge. |
 | **REQ-18** | Automated Backup & Disaster Recovery Baseline | **PASS** | `backup_recovery_backend.test.js` (5/5 PASS) & `BACKUP_RECOVERY.md` | Operator enables Firestore PITR & scheduled GCS exports. |
 | **REQ-19** | Zero-Credential Client Exposure & Security Isolation | **PASS** | ASAR scan PASS, `git diff --check` PASS (`SERVICE ACCOUNT INSIDE CLIENT: NO`) | Zero private keys embedded in client binaries or web bundles. |
-| **REQ-20** | Full Automated Test Regression Baseline | **PASS** | 979 total assertions PASS (918 Backend + 4 Packaging + 61 Mobile) | All regression test gates green. |
-| **REQ-21** | Student AI Educational Tutor System & SuperAdmin Key Rotation | **PASS** | SuperAdmin UI (`SuperAdminAISettings.tsx`), Server Secret Vault (`ai_secret_provider.js`), Zero-Downtime Key Rotation, 18/18 `ai_admin_service.test.js` PASS, 24/24 `ai_tutor_service.test.js` PASS | SuperAdmin securely manages, tests, and rotates Gemini API key without client key exposure. |
+| **REQ-20** | Full Automated Test Regression Baseline | **PASS** | 1000 total assertions PASS (939 Backend + 4 Packaging + 61 Mobile) | All regression test gates green. |
+| **REQ-21** | Multi AI Provider System (Google Gemini + OpenRouter) | **PASS** | SuperAdmin UI (`SuperAdminAISettings.tsx`), Multi-Secret Vault (`ai_secret_provider.js`), Primary/Fallback Engine (`ai_provider_interface.js`), 21/21 `ai_multi_provider.test.js` PASS, 18/18 `ai_admin_service.test.js` PASS, 24/24 `ai_tutor_service.test.js` PASS | SuperAdmin dynamically routes & rotates Gemini & OpenRouter keys with safe fallback policy. |
 
 ---
 

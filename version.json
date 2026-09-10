@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.36",
-  "backendVersion": "1.36.0",
-  "rulesVersion": "1.36.0",
-  "workerVersion": "1.36.0",
-  "releaseTag": "v1.0.0-release.36",
-  "phase": "36",
-  "phaseTitle": "SuperAdmin AI Key Management & Secure Key Rotation",
-  "gitBaseline": "5c21f92e4a8412850cf5324ab5e5df612948bc54",
+  "appVersion": "1.0.0-release.37",
+  "backendVersion": "1.37.0",
+  "rulesVersion": "1.37.0",
+  "workerVersion": "1.37.0",
+  "releaseTag": "v1.0.0-release.37",
+  "phase": "37",
+  "phaseTitle": "Multi AI Provider Management (Google Gemini + OpenRouter)",
+  "gitBaseline": "42e8ab961ab9bca2f026512f2d60cd34071605c1",
   "status": "PASS",
-  "deploymentStatus": "PRODUCTION_AI_VERIFIED_SECURE_MANAGEMENT",
+  "deploymentStatus": "PRODUCTION_MULTI_PROVIDER_AI_VERIFIED",
   "targetFirebaseProject": "educenter-saas"
 }

@@ -317,3 +317,18 @@ Phase 36 transitions Gemini API Key management from manual server environment co
 6. **18-Assertion Test Suite (`firebase/ai_admin_service.test.js`)**: 100% PASS on role guards, test connection, zero downtime rotation, secret scan, tenant isolation, and live Gemini E2E query.
 7. **Monorepo Version Baseline**: Version elevated to `1.0.0-release.36` with **979/979 total assertions PASSing**.
 
+---
+
+## ADR-038: Phase 37 Multi AI Provider Management (Google Gemini + OpenRouter) Architecture
+
+### Context
+Phase 37 extends the server-side AI architecture into a dynamic Multi-Provider system supporting both **Google Gemini** (`gemini-2.5-flash`) and **OpenRouter API** (`google/gemini-2.5-flash:free` / `openrouter/free` / custom model strings) with Primary/Fallback routing, Safe Fallback Policy enforcement, zero-downtime multi-secret rotation, and SuperAdmin multi-provider management console.
+
+### Decision
+1. **Multi-Provider Abstraction (`firebase/ai_provider_interface.js`)**: Defined `OpenRouterAIProvider` alongside `GeminiAIProvider` inheriting from `AIProvider`. `executeMultiProviderRequest()` handles Primary and Fallback provider evaluation server-side.
+2. **Safe Fallback Security Policy**: Fallback is triggered ONLY by operational provider failures (HTTP 429 rate limit, 5xx server downtime, API timeout). **Security violations** (unauthenticated caller, cross-tenant access, expired subscription, unentitled subject, rate limit per student) **NEVER** trigger fallback and fail immediately.
+3. **Multi-Secret Server Vault (`firebase/ai_secret_provider.js`)**: Server vault maintains independent secrets (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`), model configurations, and routing settings (`primaryProvider`, `fallbackProvider`). Zero plaintext keys stored in Firestore or exposed to clients.
+4. **SuperAdmin Multi-Provider Console (`admin-web/src/components/SuperAdminAISettings.tsx`)**: Responsive RTL console featuring Primary & Fallback Selectors, Google Gemini Card, OpenRouter Card (Free/Paid Tier indicator), and actions (**Add Key**, **Test Connection**, **Activate & Replace Key**, **Disable/Enable**).
+5. **21-Assertion Test Suite (`firebase/ai_multi_provider.test.js`)**: 100% PASS on polymorphism, primary/fallback routing, safe fallback policy, OpenRouter execution, key rotation, zero client key exposure, tenant isolation, and secret scan.
+6. **Monorepo Version Baseline**: Version elevated to `1.0.0-release.37` with **1000/1000 total assertions PASSing**.
+
