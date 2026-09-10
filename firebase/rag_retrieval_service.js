@@ -12,6 +12,7 @@ const RAG_CHUNK_REPOSITORY = [
     chunkId: 'chk_math_101_01',
     institutionId: 'inst_dev_center',
     subjectId: 'subj_math',
+    status: 'PUBLISHED',
     stageId: 'stg_secondary_3',
     groupId: 'grp_math_sec3',
     lessonId: 'les_math_calculus_01',
@@ -25,6 +26,7 @@ const RAG_CHUNK_REPOSITORY = [
     chunkId: 'chk_phys_101_01',
     institutionId: 'inst_dev_center',
     subjectId: 'subj_phys',
+    status: 'PUBLISHED',
     stageId: 'stg_secondary_3',
     groupId: 'grp_phys_sec3',
     lessonId: 'les_phys_electro_01',
@@ -38,6 +40,7 @@ const RAG_CHUNK_REPOSITORY = [
     chunkId: 'chk_other_tenant_01',
     institutionId: 'inst_other_center_999',
     subjectId: 'subj_chem',
+    status: 'PUBLISHED',
     stageId: 'stg_secondary_3',
     groupId: 'grp_other_999',
     lessonId: 'les_chem_01',
@@ -46,6 +49,20 @@ const RAG_CHUNK_REPOSITORY = [
     title: 'الكيمياء العضوية للمركز المنافس',
     text: 'محتوى كيمياء خاص بمركز آخر غير مسموح برؤيته أو الوصول إليه.',
     vector: [0.99, 0.99, 0.99, 0.99, 0.99]
+  },
+  {
+    chunkId: 'chk_unpub_01',
+    institutionId: 'inst_dev_center',
+    subjectId: 'subj_math',
+    status: 'DRAFT',
+    stageId: 'stg_secondary_3',
+    groupId: 'grp_math_sec3',
+    lessonId: 'les_math_calculus_01',
+    contentId: 'cnt_unpub_doc',
+    entitlementScope: 'SUBJECT',
+    title: 'مسودة غير منشورة',
+    text: 'هذا محتوى غير منشور مسودة لا يظهر في Retrieval.',
+    vector: [0.12, 0.45, 0.78, 0.33, 0.91]
   }
 ];
 
@@ -92,8 +109,8 @@ async function retrieveAuthorizedChunks({
 
   const repository = customChunkRepository || RAG_CHUNK_REPOSITORY;
 
-  // STEP 1: Tenant Isolation Filter
-  let candidateChunks = repository.filter(c => c.institutionId === callerInstitutionId);
+  // STEP 1: Tenant Isolation & Published Status Filter
+  let candidateChunks = repository.filter(c => c.institutionId === callerInstitutionId && (!c.status || c.status === 'PUBLISHED'));
 
   // STEP 2: Subject & Group Permission Filter
   if (studentProfile) {

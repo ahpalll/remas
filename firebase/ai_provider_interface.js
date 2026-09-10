@@ -114,11 +114,32 @@ class MockLocalAIProvider extends AIProvider {
   }
 }
 
+const fs = require('node:fs');
+
+/**
+ * Resolves Gemini API key from environment variable or external server secret file
+ */
+function getGeminiApiKey() {
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+    return process.env.GEMINI_API_KEY.trim();
+  }
+  const extSecretPath = 'F:\\firebase-secrets\\gemini_api_key.txt';
+  if (fs.existsSync(extSecretPath)) {
+    try {
+      const key = fs.readFileSync(extSecretPath, 'utf8').trim();
+      if (key) return key;
+    } catch (e) {
+      // Ignore read error
+    }
+  }
+  return null;
+}
+
 /**
  * Real Google Gemini AI Provider Integration
  */
 class GeminiAIProvider extends AIProvider {
-  constructor(apiKey = process.env.GEMINI_API_KEY) {
+  constructor(apiKey = getGeminiApiKey()) {
     super();
     this.apiKey = apiKey;
   }
@@ -137,7 +158,8 @@ class GeminiAIProvider extends AIProvider {
     // Live Gemini API HTTP request execution
     try {
       const fetch = globalThis.fetch || require('node-fetch');
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+      let modelName = 'gemini-2.5-flash';
+      let url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
       const payload = {
         contents: [
           { role: 'user', parts: [{ text: `${systemPrompt}\n\nContext:\n${contextChunks.map(c => c.text).join('\n')}\n\n<STUDENT_INPUT>${userPrompt}</STUDENT_INPUT>` }] }
@@ -145,33 +167,54 @@ class GeminiAIProvider extends AIProvider {
         generationConfig: { temperature }
       };
 
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      if (!res.ok && res.status === 404) {
+        // Fallback model attempt
+        modelName = 'gemini-flash-latest';
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
       if (!res.ok) {
-        throw new Error(`GEMINI_API_ERROR: HTTP ${res.status}`);
+        const errText = await res.text();
+        // Sanitize API key from error messages
+        const safeErrText = errText.replace(/key=[A-Za-z0-9_-]+/g, 'key=[REDACTED]');
+        throw new Error(`GEMINI_API_ERROR: HTTP ${res.status} - ${safeErrText.substring(0, 150)}`);
       }
 
       const data = await res.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'تعذر الحصول على إجابة من المزود.';
+      const usage = data.usageMetadata || {};
 
       return {
         success: true,
         provider: 'GeminiAIProvider',
         isProductionProvider: true,
+        model: modelName,
         response: text,
         sourceGrounded: contextChunks.length > 0,
         sourcesUsed: contextChunks.map(c => ({ lessonId: c.lessonId, contentId: c.contentId, title: c.title })),
-        tokenUsage: { promptTokens: 150, completionTokens: 100, totalTokens: 250 }
+        tokenUsage: {
+          promptTokens: usage.promptTokenCount || 150,
+          completionTokens: usage.candidatesTokenCount || 100,
+          totalTokens: usage.totalTokenCount || 250
+        }
       };
     } catch (err) {
+      const safeMessage = (err.message || '').replace(/key=[A-Za-z0-9_-]+/g, 'key=[REDACTED]');
       return {
         success: false,
         status: 'ERROR',
-        reason: err.message
+        reason: safeMessage
       };
     }
   }
@@ -201,8 +244,12 @@ function doubleFix(val) {
  */
 function resolveAIProvider(overrideProvider = null) {
   if (overrideProvider) return overrideProvider;
-  if (process.env.GEMINI_API_KEY) {
-    return new GeminiAIProvider(process.env.GEMINI_API_KEY);
+  const apiKey = getGeminiApiKey();
+  if (apiKey) {
+    return new GeminiAIProvider(apiKey);
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return new GeminiAIProvider(null);
   }
   return new MockLocalAIProvider();
 }
@@ -211,5 +258,6 @@ module.exports = {
   AIProvider,
   MockLocalAIProvider,
   GeminiAIProvider,
-  resolveAIProvider
+  resolveAIProvider,
+  getGeminiApiKey
 };
