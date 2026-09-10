@@ -79,170 +79,142 @@ service cloud.firestore {
     // Phase 5 Server-Only Collections
     match /institutions/{institutionId}/schedules/{scheduleId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/groups/{groupId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/academicYears/{yearId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/terms/{termId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/uniqueness/{uniqueKey} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/scheduleLocks/{lockKey} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // Phase 5 Client-Mutable Collections
     match /institutions/{institutionId}/subjects/{subjectId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'code', 'description', 'status', 'updatedAt', 'updatedBy']);
-      allow delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/stages/{stageId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'code', 'order', 'status', 'updatedAt', 'updatedBy']);
-      allow delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/rooms/{roomId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'capacity', 'location', 'status', 'updatedAt', 'updatedBy']);
-      allow delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/teachers/{teacherId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'email', 'specialization', 'subjectIds', 'status', 'updatedAt', 'updatedBy']);
-      allow delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // Phase 6 Server-Only Collections
     match /institutions/{institutionId}/enrollments/{enrollmentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/guardians/{guardianId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentGuardians/{relationshipId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/groupCounters/{groupId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    // Phase 6 Client-Mutable Collection
+    // Phase 6 Operational Collection — Students
     match /institutions/{institutionId}/students/{studentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, delete: if false;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'email', 'dateOfBirth', 'gender', 'updatedAt', 'updatedBy']);
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    // Phase 7 Attendance System Server-Only Collections
+    // Phase 7 Attendance System Collections
     match /institutions/{institutionId}/attendanceSessions/{sessionId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
 
       match /records/{studentId} {
         allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-        allow create, update, delete: if false;
+        allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
       }
     }
 
     match /institutions/{institutionId}/attendanceCorrections/{correctionId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/attendanceAudits/{auditId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/attendanceAggregates/{aggregateId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    // Phase 8 Finance System Server-Only Collections
+    // Phase 8 Finance System Operational Collections
     match /institutions/{institutionId}/feeStructures/{feeStructureId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentCharges/{chargeId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentPayments/{paymentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/receipts/{receiptId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/financialRefunds/{refundId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/expenses/{expenseId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/otherIncome/{incomeId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/teacherSettlements/{settlementId} {

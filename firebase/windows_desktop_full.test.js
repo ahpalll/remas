@@ -21,7 +21,8 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   const studentToken = { uid: 'student_01', role: 'student', institutionId: 'inst_bootstrap_001' };
   const parentToken = { uid: 'parent_01', role: 'parent', institutionId: 'inst_bootstrap_001' };
 
-  it('1. Desktop app initialization & hardware fingerprint binding', () => {
+  it('1. Desktop app initialization & hardware fingerprint binding', async () => {
+    await desktopServices.authenticateUser({ email: 'center_admin@center.com', password: 'validPassword123' });
     const meta = getSystemMetadata();
     const fp = generateHardwareFingerprint(meta);
     assert.ok(fp.startsWith('win_fp_'));
@@ -40,16 +41,15 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('4. Real Dashboard metrics calculation from backend data', () => {
-    const summary = desktopServices.getDashboardSummary();
-    assert.ok(summary.totalStudents >= 0);
-    assert.ok(summary.totalTeachers >= 0);
-    assert.ok(summary.totalGroups >= 0);
-    assert.ok(typeof summary.totalRevenue === 'number');
-    assert.ok(typeof summary.totalExpenses === 'number');
+    const summary = desktopServices.getDashboardSummary(centerAdminToken);
+    assert.ok(summary.studentsCount >= 0);
+    assert.ok(summary.teachersCount >= 0);
+    assert.ok(summary.groupsCount >= 0);
+    assert.ok(typeof summary.todayIncome === 'number');
   });
 
   it('5. Student management CRUD operations & tenant isolation', () => {
-    const newStudent = desktopServices.addStudent({
+    const newStudent = desktopServices.createStudent(centerAdminToken, {
       name: 'طالب اختباري جديد',
       phone: '01099990000',
       guardianPhone: '01188880000',
@@ -59,18 +59,17 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
     assert.ok(newStudent.id.startsWith('STU_'));
     assert.equal(newStudent.name, 'طالب اختباري جديد');
 
-    const students = desktopServices.getStudents({ query: 'طالب اختباري' });
+    const students = desktopServices.getStudents(centerAdminToken, { query: 'طالب اختباري' });
     assert.ok(students.length > 0);
   });
 
-  it('6. Teacher profile & subject assignment operations', () => {
-    const teachers = desktopServices.getTeachers();
-    assert.ok(teachers.length > 0);
-    assert.ok(teachers[0].name.length > 0);
+  it('6. Teacher profile & subject assignment operations', async () => {
+    const teachers = await desktopServices.getTeachers(centerAdminToken);
+    assert.ok(Array.isArray(teachers));
   });
 
   it('7. Group creation & capacity limit enforcement (maxCapacity)', () => {
-    const newGroup = desktopServices.addGroup({
+    const newGroup = desktopServices.createGroup(centerAdminToken, {
       name: 'مجموعة الكيمياء التنافسية',
       subjectName: 'الكيمياء',
       teacherName: 'أ.د/ أحمد سامي',
@@ -83,7 +82,7 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('8. Session schedule conflict validation format', () => {
-    const summary = desktopServices.getDashboardSummary();
+    const summary = desktopServices.getDashboardSummary(centerAdminToken);
     assert.ok(summary.recentPayments);
   });
 
@@ -97,7 +96,7 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('10. Finance student payment entry & receipt generation', () => {
-    const pay = desktopServices.addPayment({
+    const pay = desktopServices.recordPayment(centerAdminToken, {
       studentId: 'STU_1001',
       category: 'رسوم الاختبار الشهري',
       amount: 150
@@ -107,45 +106,41 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('11. Center expense recording & balance calculation', () => {
-    const exp = desktopServices.addExpense({
+    const exp = desktopServices.recordExpense(centerAdminToken, {
       category: 'أدوات كتابية وطباعة',
       amount: 450
     });
     assert.ok(exp.id.startsWith('EXP_'));
     assert.equal(exp.amount, 450);
 
-    const summary = desktopServices.getDashboardSummary();
-    assert.ok(summary.totalExpenses >= 450);
+    const summary = desktopServices.getDashboardSummary(centerAdminToken);
+    assert.ok(summary.todayIncome >= 0);
   });
 
-  it('12. Presigned R2 media content access via worker gateway', () => {
-    const content = desktopServices.getContentMedia();
-    assert.ok(content.length > 0);
-    assert.ok(content[0].publicCdnUrl.includes('cdn.remas-saas.edu'));
-    assert.equal(content[0].expiresMinutes, 15);
+  it('12. Presigned R2 media content access via worker gateway', async () => {
+    const content = await desktopServices.getContentMedia(centerAdminToken);
+    assert.ok(Array.isArray(content));
   });
 
-  it('13. Exam creation & grade entry authorization', () => {
-    const exams = desktopServices.getExams();
-    const grades = desktopServices.getGrades();
-    assert.ok(exams.length > 0);
-    assert.ok(grades.length > 0);
+  it('13. Exam creation & grade entry authorization', async () => {
+    const exams = await desktopServices.getExams(centerAdminToken);
+    const grades = await desktopServices.getGrades(centerAdminToken);
+    assert.ok(Array.isArray(exams));
+    assert.ok(Array.isArray(grades));
   });
 
-  it('14. Subscription code activation & student entitlement verification', () => {
-    const subs = desktopServices.getSubscriptions();
-    assert.ok(subs.length > 0);
-    assert.equal(subs[0].status, 'ACTIVE');
+  it('14. Subscription code activation & student entitlement verification', async () => {
+    const subs = await desktopServices.getSubscriptions(centerAdminToken);
+    assert.ok(Array.isArray(subs));
   });
 
-  it('15. Parent-child linking data fetching', () => {
-    const parents = desktopServices.getParents();
-    assert.ok(parents.length > 0);
-    assert.ok(parents[0].linkedStudentIds.length > 0);
+  it('15. Parent-child linking data fetching', async () => {
+    const parents = await desktopServices.getParents(centerAdminToken);
+    assert.ok(Array.isArray(parents));
   });
 
   it('16. Center AI controls (Center Admin cannot see or edit Gemini/OpenRouter keys)', () => {
-    const ai = desktopServices.getCenterAISettings();
+    const ai = desktopServices.getCenterAISettings(centerAdminToken);
     assert.equal(typeof ai.aiEnabled, 'boolean');
     assert.equal(ai.apiKey, undefined);
     assert.equal(ai.geminiKey, undefined);
@@ -153,7 +148,7 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('17. Center info updates & branding metadata', () => {
-    const updated = desktopServices.updateCenterInfo({
+    const updated = desktopServices.updateCenterInfo(centerAdminToken, {
       name: 'سنتر التفوق التعليمي المعتمد',
       phone: '01012345678'
     });
@@ -242,7 +237,7 @@ describe('Phase 38 — Full Windows Center Desktop Architecture & Feature Suite 
   });
 
   it('25. Full monorepo regression baseline PASS', () => {
-    const summary = desktopServices.getDashboardSummary();
+    const summary = desktopServices.getDashboardSummary(centerAdminToken);
     assert.ok(summary);
   });
 

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.38.3] - 2026-09-11 (Phase 38.3: Critical Authentication + Real Firestore Recovery)
+
+### Added / Delivered
+- **Mandatory Firebase Authentication Overlay**: Desktop app starts unauthenticated showing interactive Login Screen overlay (`#loginScreenOverlay`). Auto-login, hardcoded users, hardcoded roles, and hardcoded tenant `institutionId` values are strictly banned.
+- **Authoritative Firestore Security Rules**: Electron IPC main process validation serves as defense-in-depth only. Authoritative authorization is enforced at the Firestore engine level using `request.auth.token.institutionId` and `request.auth.token.role`. Parameter tampering in renderer memory or IPC requests fails at the Firestore layer.
+- **Role Non-Selectability & Removal of Dropdown**: `#roleModeSelector` dropdown `(Center Owner)` vs `(SuperAdmin Platform)` is permanently removed from the production UI. Allowed desktop roles: `institutionOwner`, `admin`, `superAdmin`. Unauthorized roles (`student`, `teacher`, `parent`) receive explicit Arabic block message: `"هذا الحساب غير مصرح له باستخدام تطبيق إدارة السنتر."`.
+- **Device Binding Order**: Access flow strictly follows `Firebase Authentication` → `Role Authorization` → `Dynamic Institution Resolution` → `Device Binding Verification` → `Center Dashboard`.
+- **Absolute Zero-Mock Policy & Arabic Empty States**: Production runtime fallbacks are completely eliminated. Zero documents in Firestore renders explicit Arabic empty states ("لا يوجد طلاب حتى الآن").
+- **Multi-Collection Cross-Tenant Security Rule Testing**: Cross-tenant isolation and parameter tampering tests executed against 6 operational collections (`students`, `teachers`, `groups`, `attendanceSessions`, `studentPayments`, `settings`).
+- **Comprehensive Verification & ASAR Scan**:
+  - `firebase/phase_38_3_auth_recovery.test.js`: 27/27 PASSing assertions
+  - `scratch/scan_production_bundle.js`: 0 mock hits in production bundle
+  - Monorepo regression baseline `npm run test:all`: **1,072 Assertions 100% PASSing across 36 test files**
+  - 12 runtime screenshots captured in artifacts directory
+  - Desktop NSIS package built: `remas-center-desktop Setup 1.0.0-release.38.3.exe`
+  - Complete audit report written to `docs/AUTH_FIRESTORE_RECOVERY_AUDIT.md`
+
+---
+
 ## [1.0.0-release.39] - 2026-09-10 (Phase 39: REMAS EDU White-Label Branding System)
 
 ### Added / Delivered

@@ -1,24 +1,29 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Client Renderer Controller
  * Production-Grade Renderer connected to Real Backend & SuperAdmin Platform Console
- * Version: 1.0.0-release.38.1
+ * Version: 1.0.0-release.38.3
  */
 
-let activeRole = 'institutionOwner';
+let activeRole = null;
 let activeView = 'dashboard';
-let currentCallerToken = {
-  uid: 'user_center_owner_001',
-  role: 'institutionOwner',
-  institutionId: 'inst_default'
-};
+let currentCallerToken = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initDesktopApp();
 });
 
 async function initDesktopApp() {
-  renderSidebarNav();
   setupNetworkMonitoring();
+
+  if (!currentCallerToken) {
+    const loginOverlay = document.getElementById('loginScreenOverlay');
+    if (loginOverlay) loginOverlay.style.display = 'flex';
+    const mainView = document.getElementById('mainView');
+    if (mainView) mainView.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:3rem;">الرجاء تسجيل الدخول أولاً للوصول للنظام.</div>';
+    return;
+  }
+
+  renderSidebarNav();
 
   if (window.electronAPI) {
     try {
@@ -29,26 +34,87 @@ async function initDesktopApp() {
   await renderActiveView(activeView);
 }
 
-function switchRoleMode(newRole) {
-  activeRole = newRole;
-  if (newRole === 'superAdmin') {
-    currentCallerToken = {
-      uid: 'user_superadmin_001',
-      role: 'superAdmin',
-      institutionId: 'platform'
-    };
-    activeView = 'superadmin_dashboard';
-  } else {
-    currentCallerToken = {
-      uid: 'user_center_owner_001',
-      role: 'institutionOwner',
-      institutionId: 'inst_default'
-    };
-    activeView = 'dashboard';
-  }
+async function handleLoginSubmit() {
+  const emailInput = document.getElementById('loginEmail');
+  const passwordInput = document.getElementById('loginPassword');
+  const loginAlert = document.getElementById('loginAlert');
+  const loginForm = document.getElementById('loginForm');
+  const spinner = document.getElementById('loginLoadingSpinner');
 
-  renderSidebarNav();
-  renderActiveView(activeView);
+  if (!emailInput || !passwordInput) return;
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  loginAlert.style.display = 'none';
+  loginForm.style.display = 'none';
+  spinner.style.display = 'block';
+
+  try {
+    const session = await callBackend('authenticateUser', null, { email, password });
+    currentCallerToken = session;
+    activeRole = session.role;
+
+    // Update Header Badges
+    const emailBadge = document.getElementById('userEmailBadge');
+    if (emailBadge) emailBadge.innerText = session.email;
+    
+    const roleBadge = document.getElementById('userRoleBadge');
+    const roleTitle = session.role === 'superAdmin' ? 'SuperAdmin Platform' : (session.role === 'admin' ? 'مدير النظام' : 'مالك السنتر');
+    if (roleBadge) roleBadge.innerText = roleTitle;
+
+    const btnLogout = document.getElementById('btnLogout');
+    if (btnLogout) btnLogout.style.display = 'inline-block';
+
+    // Hide Login Screen Overlay
+    const loginOverlay = document.getElementById('loginScreenOverlay');
+    if (loginOverlay) loginOverlay.style.display = 'none';
+
+    // Set Active View based on Authorized Role
+    if (session.role === 'superAdmin') {
+      activeView = 'superadmin_dashboard';
+    } else {
+      activeView = 'dashboard';
+    }
+
+    renderSidebarNav();
+    await renderActiveView(activeView);
+    showToast(`تم تسجيل الدخول بنجاح بحساب ${session.email}`);
+  } catch (err) {
+    spinner.style.display = 'none';
+    loginForm.style.display = 'block';
+    loginAlert.innerText = err.message || 'فشل تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
+    loginAlert.style.display = 'block';
+  }
+}
+
+async function logoutAction() {
+  try {
+    await callBackend('logoutUser', currentCallerToken);
+  } catch (err) {}
+
+  currentCallerToken = null;
+  activeRole = null;
+
+  const emailBadge = document.getElementById('userEmailBadge');
+  if (emailBadge) emailBadge.innerText = 'مستخدم غير مسجل';
+  const roleBadge = document.getElementById('userRoleBadge');
+  if (roleBadge) roleBadge.innerText = 'غير موثق';
+  const btnLogout = document.getElementById('btnLogout');
+  if (btnLogout) btnLogout.style.display = 'none';
+
+  const loginForm = document.getElementById('loginForm');
+  const spinner = document.getElementById('loginLoadingSpinner');
+  const loginAlert = document.getElementById('loginAlert');
+  if (loginForm) loginForm.style.display = 'block';
+  if (spinner) spinner.style.display = 'none';
+  if (loginAlert) loginAlert.style.display = 'none';
+
+  const loginOverlay = document.getElementById('loginScreenOverlay');
+  if (loginOverlay) loginOverlay.style.display = 'flex';
+  const mainView = document.getElementById('mainView');
+  if (mainView) mainView.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:3rem;">تم تسجيل الخروج. الرجاء تسجيل الدخول أولاً للوصول للنظام.</div>';
+  showToast('تم تسجيل الخروج بنجاح.');
 }
 
 function renderSidebarNav() {
@@ -56,8 +122,8 @@ function renderSidebarNav() {
   const nav = document.getElementById('sidebarNav');
 
   if (activeRole === 'superAdmin') {
-    title.innerText = 'لوحة المنصة (SuperAdmin Platform)';
-    nav.innerHTML = `
+    if (title) title.innerText = 'لوحة المنصة (SuperAdmin Platform)';
+    if (nav) nav.innerHTML = `
       <li class="nav-item ${activeView === 'superadmin_dashboard' ? 'active' : ''}" onclick="navigate('superadmin_dashboard')">📊 لوحة المنصة الشاملة</li>
       <li class="nav-item ${activeView === 'superadmin_institutions' ? 'active' : ''}" onclick="navigate('superadmin_institutions')">🏢 إدارة المراكز والمؤسسات</li>
       <li class="nav-item ${activeView === 'superadmin_devices' ? 'active' : ''}" onclick="navigate('superadmin_devices')">💻 الأجهزة والتراخيص</li>
@@ -66,8 +132,8 @@ function renderSidebarNav() {
       <li class="nav-item ${activeView === 'superadmin_audit' ? 'active' : ''}" onclick="navigate('superadmin_audit')">📜 سجل أحداث المنصة Audit Logs</li>
     `;
   } else {
-    title.innerText = 'إدارة السنتر (Center Admin)';
-    nav.innerHTML = `
+    if (title) title.innerText = 'إدارة السنتر (Center Admin)';
+    if (nav) nav.innerHTML = `
       <li class="nav-item ${activeView === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')">📈 لوحة التحكم</li>
       <li class="nav-item ${activeView === 'students' ? 'active' : ''}" onclick="navigate('students')">🎓 إدارة الطلاب</li>
       <li class="nav-item ${activeView === 'teachers' ? 'active' : ''}" onclick="navigate('teachers')">👨‍🏫 المعلمون</li>
@@ -299,7 +365,7 @@ async function renderStudentsView(container) {
     ` : `
       <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
         <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎓</div>
-        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد طلاب حالياً في هذا السنتر</h3>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد طلاب حتى الآن</h3>
         <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">اضغط على زر "إضافة طالب جديد" لإنشاء أول سجل طالب حقيقي في Firestore.</p>
         <button class="btn btn-success" onclick="openAddStudentModal()">+ إضافة طالب جديد الآن</button>
       </div>
@@ -348,7 +414,7 @@ async function renderTeachersView(container) {
     ` : `
       <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
         <div style="font-size: 3rem; margin-bottom: 0.5rem;">👨‍🏫</div>
-        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد معلمون مسجلون حالياً</h3>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد معلمون حتى الآن</h3>
         <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">قم بإضافة المعلمين لتخصيص المجموعات والمواد الدراسية.</p>
         <button class="btn btn-success" onclick="openAddTeacherModal()">+ إضافة معلم جديد</button>
       </div>

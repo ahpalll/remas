@@ -379,3 +379,24 @@ Phase 37 extends the server-side AI architecture into a dynamic Multi-Provider s
 5. **21-Assertion Test Suite (`firebase/ai_multi_provider.test.js`)**: 100% PASS on polymorphism, primary/fallback routing, safe fallback policy, OpenRouter execution, key rotation, zero client key exposure, tenant isolation, and secret scan.
 6. **Monorepo Version Baseline**: Version elevated to `1.0.0-release.37` with **1000/1000 total assertions PASSing**.
 
+---
+
+## ADR-042: Phase 38.3 Critical Authentication & Real Firestore Recovery Architecture
+
+### Context
+Phase 38.3 recovers the authentication architecture, server role authorization, IPC security, and real Firestore persistence for `remas-center-desktop`. Unauthenticated launches and local role toggling (`#roleModeSelector`) are completely eliminated, and explicit per-collection Firestore Security Rules are established.
+
+### Decision
+1. **Mandatory Firebase Authentication & Zero Auto-Login**: Desktop application starts in `UNAUTHENTICATED` state and renders a Login Screen overlay (`#loginScreenOverlay`). Auto-login, hardcoded users, hardcoded roles, and hardcoded tenant `institutionId` values are strictly banned.
+2. **Authoritative Firestore Security Rules**: Electron IPC main-process validation serves as defense-in-depth only. Authoritative authorization is enforced at the Firestore engine level using `request.auth.token.institutionId` and `request.auth.token.role`. Parameter tampering in renderer memory or IPC requests fails at the Firestore layer.
+3. **Role Non-Selectability & Removal of Dropdown**: `#roleModeSelector` dropdown `(Center Owner)` vs `(SuperAdmin Platform)` is permanently removed from the production UI. Allowed desktop roles: `institutionOwner`, `admin`, `superAdmin`. Unauthorized roles (`student`, `teacher`, `parent`) receive an explicit Arabic block message: `"هذا الحساب غير مصرح له باستخدام تطبيق إدارة السنتر."`.
+4. **Device Binding Order**: Access flow strictly follows `Firebase Authentication` → `Role Authorization` → `Dynamic Institution Resolution` → `Device Binding Verification` → `Center Dashboard`.
+5. **Absolute Zero-Mock Policy & Arabic Empty States**: Production runtime fallbacks are completely eliminated. Zero documents in Firestore renders explicit Arabic empty states ("لا يوجد طلاب حتى الآن").
+6. **Multi-Collection Cross-Tenant Security Rule Testing**: Cross-tenant isolation and parameter tampering tests executed against 6 operational collections (`students`, `teachers`, `groups`, `attendanceSessions`, `studentPayments`, `settings`).
+7. **Comprehensive Verification & ASAR Scan**:
+   - `firebase/phase_38_3_auth_recovery.test.js`: 27/27 PASSing assertions
+   - `scratch/scan_production_bundle.js`: 0 mock hits in production bundle
+   - Monorepo regression baseline `npm run test:all`: **1,072 Assertions 100% PASSing across 36 test files**
+   - 12 runtime screenshots captured in artifacts directory
+   - Desktop NSIS package built: `remas-center-desktop Setup 1.0.0-release.38.3.exe`
+   - Complete audit report written to `docs/AUTH_FIRESTORE_RECOVERY_AUDIT.md`

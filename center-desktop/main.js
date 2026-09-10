@@ -26,7 +26,7 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 720,
-    title: 'REMAS Educational Center SaaS — Windows Desktop Application (v1.0.0-release.38)',
+    title: 'REMAS Educational Center SaaS — Windows Desktop Application (v1.0.0-release.38.3)',
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,

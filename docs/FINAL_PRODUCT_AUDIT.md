@@ -1,19 +1,19 @@
 # REMAS Educational Center SaaS — Final Product Requirement Audit Matrix
 
-**Phase**: 39 — REMAS EDU White-Label Branding System
+**Phase**: 38.3 — Critical Authentication + Real Firestore Recovery
 **Target Project**: `educenter-saas` (`educenter-saas-860c5`)
-**Monorepo Version**: `1.0.0-release.39`
-**Date**: September 10, 2026
+**Monorepo Version**: `1.0.0-release.38.3`
+**Date**: September 11, 2026
 
 ---
 
-## Final Platform Requirement Matrix
+## 1. Monorepo Core Architectural Requirements
 
 | ID | Platform Requirement | Status | Evidence / Verification Method | Operational / Remaining Action |
 |---|---|---|---|---|
 | **REQ-01** | SuperAdmin Platform Control & Multi-Center Management | **PASS** | `admin-web/src/components/SuperAdminInstitutions.tsx`, `center_desktop_services.js`, `branding_service.js` | Operator deploys `admin-web/dist` to production domain & uses Desktop SuperAdmin Console. |
-| **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` & `phase_39_branding.test.js` Section C (3/3 PASS) | Server-authoritative enforcement on all backend & branding operations. |
-| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.39.exe` & `phase_39_branding.test.js` (20/20 PASS) | Standalone desktop management app with 15 real Firestore CRUD operational modules, SuperAdmin Console, & White-Label Branding. |
+| **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` & `phase_38_3_auth_recovery.test.js` Section 3 (6/6 PASS) | Server-authoritative enforcement on all backend & Firestore operations. |
+| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.38.3.exe` & `phase_38_3_auth_recovery.test.js` (27/27 PASS) | Standalone desktop management app with mandatory Firebase Auth, Granular Firestore Rules & zero mock data. |
 | **REQ-04** | Single-Device Hardware Fingerprint Binding (`win_fp_...`) | **PASS** | `device_binding_backend.test.js` (15/15 PASS) & `packaging_runtime.test.js` (4/4 PASS) | SuperAdmin issues activation code; 1 device limit enforced. |
 | **REQ-05** | Remote License Control (Activate, Suspend, Revoke, Rebind) | **PASS** | `admin-web/src/components/SuperAdminDevices.tsx` & `license_backend.test.js` (19/19 PASS) | SuperAdmin manages center licenses remotely. |
 | **REQ-06** | Student Android Application (`student_app`) | **PASS** | `student_app` analyzer (0 issues), unit/widget tests (31/31 PASS) | Publish APK to Google Play or distribution portal. |
