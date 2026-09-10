@@ -1,8 +1,8 @@
 # REMAS Educational Center SaaS — Final Product Requirement Audit Matrix
 
-**Phase**: 38 — Full Windows Center Desktop Audit & Implementation
+**Phase**: 38.1 — Real Data & Real CRUD + SuperAdmin Platform Console
 **Target Project**: `educenter-saas` (`educenter-saas-860c5`)
-**Monorepo Version**: `1.0.0-release.38`
+**Monorepo Version**: `1.0.0-release.38.1`
 **Date**: September 10, 2026
 
 ---
@@ -11,9 +11,9 @@
 
 | ID | Platform Requirement | Status | Evidence / Verification Method | Operational / Remaining Action |
 |---|---|---|---|---|
-| **REQ-01** | SuperAdmin Platform Control & Multi-Center Management | **PASS** | `admin-web/src/components/SuperAdminInstitutions.tsx` & `institution_backend.test.js` | Operator deploys `admin-web/dist` to production domain. |
-| **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` (192 assertions PASS) & `CROSS_TENANT_VIOLATION` guards | Server-authoritative enforcement on all backend operations. |
-| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.38.exe` & `windows_desktop_full.test.js` (25/25 PASS) | Standalone desktop management app with 15 operational modules installed on reception PC. |
+| **REQ-01** | SuperAdmin Platform Control & Multi-Center Management | **PASS** | `admin-web/src/components/SuperAdminInstitutions.tsx`, `center-desktop/src/center_desktop_services.js`, & `phase_38_1_real_crud.test.js` | Operator deploys `admin-web/dist` to production domain & uses Desktop SuperAdmin Console. |
+| **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` (192 assertions PASS) & `phase_38_1_real_crud.test.js` Section B (4/4 PASS) | Server-authoritative enforcement on all backend operations. |
+| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.38.1.exe` & `phase_38_1_real_crud.test.js` (17/17 PASS) | Standalone desktop management app with 15 real Firestore CRUD operational modules & SuperAdmin Console. |
 | **REQ-04** | Single-Device Hardware Fingerprint Binding (`win_fp_...`) | **PASS** | `device_binding_backend.test.js` (15/15 PASS) & `packaging_runtime.test.js` (4/4 PASS) | SuperAdmin issues activation code; 1 device limit enforced. |
 | **REQ-05** | Remote License Control (Activate, Suspend, Revoke, Rebind) | **PASS** | `admin-web/src/components/SuperAdminDevices.tsx` & `license_backend.test.js` (19/19 PASS) | SuperAdmin manages center licenses remotely. |
 | **REQ-06** | Student Android Application (`student_app`) | **PASS** | `student_app` analyzer (0 issues), unit/widget tests (31/31 PASS) | Publish APK to Google Play or distribution portal. |

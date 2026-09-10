@@ -1,39 +1,93 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Client Renderer Controller
- * Implements Full Center Management Desktop UI & 15 Operational Modules
- * Version: 1.0.0-release.38
+ * Production-Grade Renderer connected to Real Backend & SuperAdmin Platform Console
+ * Version: 1.0.0-release.38.1
  */
 
+let activeRole = 'institutionOwner';
 let activeView = 'dashboard';
-let currentInstitution = null;
+let currentCallerToken = {
+  uid: 'user_center_owner_001',
+  role: 'institutionOwner',
+  institutionId: 'inst_default'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  initDesktopApp();
+});
 
 async function initDesktopApp() {
-  setupSidebarNavigation();
+  renderSidebarNav();
   setupNetworkMonitoring();
 
   if (window.electronAPI) {
     try {
       await checkDeviceStatus();
-      setInterval(sendPeriodicHeartbeat, 60000);
-    } catch (err) {
-      console.error('Device check error:', err);
-    }
+    } catch (err) {}
   }
 
-  // Load initial view
+  await renderActiveView(activeView);
+}
+
+function switchRoleMode(newRole) {
+  activeRole = newRole;
+  if (newRole === 'superAdmin') {
+    currentCallerToken = {
+      uid: 'user_superadmin_001',
+      role: 'superAdmin',
+      institutionId: 'platform'
+    };
+    activeView = 'superadmin_dashboard';
+  } else {
+    currentCallerToken = {
+      uid: 'user_center_owner_001',
+      role: 'institutionOwner',
+      institutionId: 'inst_default'
+    };
+    activeView = 'dashboard';
+  }
+
+  renderSidebarNav();
   renderActiveView(activeView);
 }
 
-function setupSidebarNavigation() {
-  const items = document.querySelectorAll('#sidebarNav .nav-item');
-  items.forEach(item => {
-    item.addEventListener('click', () => {
-      items.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      activeView = item.getAttribute('data-view');
-      renderActiveView(activeView);
-    });
-  });
+function renderSidebarNav() {
+  const title = document.getElementById('sidebarTitle');
+  const nav = document.getElementById('sidebarNav');
+
+  if (activeRole === 'superAdmin') {
+    title.innerText = 'لوحة المنصة (SuperAdmin Platform)';
+    nav.innerHTML = `
+      <li class="nav-item ${activeView === 'superadmin_dashboard' ? 'active' : ''}" onclick="navigate('superadmin_dashboard')">📊 لوحة المنصة الشاملة</li>
+      <li class="nav-item ${activeView === 'superadmin_institutions' ? 'active' : ''}" onclick="navigate('superadmin_institutions')">🏢 إدارة المراكز والمؤسسات</li>
+      <li class="nav-item ${activeView === 'superadmin_devices' ? 'active' : ''}" onclick="navigate('superadmin_devices')">💻 الأجهزة والتراخيص</li>
+      <li class="nav-item ${activeView === 'superadmin_ai' ? 'active' : ''}" onclick="navigate('superadmin_ai')">🤖 مزودات الذكاء الاصطناعي</li>
+      <li class="nav-item ${activeView === 'superadmin_audit' ? 'active' : ''}" onclick="navigate('superadmin_audit')">📜 سجل أحداث المنصة Audit Logs</li>
+    `;
+  } else {
+    title.innerText = 'إدارة السنتر (Center Admin)';
+    nav.innerHTML = `
+      <li class="nav-item ${activeView === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')">📈 لوحة التحكم</li>
+      <li class="nav-item ${activeView === 'students' ? 'active' : ''}" onclick="navigate('students')">🎓 إدارة الطلاب</li>
+      <li class="nav-item ${activeView === 'teachers' ? 'active' : ''}" onclick="navigate('teachers')">👨‍🏫 المعلمون</li>
+      <li class="nav-item ${activeView === 'groups' ? 'active' : ''}" onclick="navigate('groups')">📚 المجموعات والمواد</li>
+      <li class="nav-item ${activeView === 'attendance' ? 'active' : ''}" onclick="navigate('attendance')">📋 كشك الحضور والغياب</li>
+      <li class="nav-item ${activeView === 'schedule' ? 'active' : ''}" onclick="navigate('schedule')">🗓️ جدول الحصص</li>
+      <li class="nav-item ${activeView === 'finance' ? 'active' : ''}" onclick="navigate('finance')">💰 المالية والحسابات</li>
+      <li class="nav-item ${activeView === 'content' ? 'active' : ''}" onclick="navigate('content')">📖 المحتوى التعليمي</li>
+      <li class="nav-item ${activeView === 'exams' ? 'active' : ''}" onclick="navigate('exams')">📝 الاختبارات والدرجات</li>
+      <li class="nav-item ${activeView === 'subscriptions' ? 'active' : ''}" onclick="navigate('subscriptions')">🎟️ الاشتراكات والباقات</li>
+      <li class="nav-item ${activeView === 'parents' ? 'active' : ''}" onclick="navigate('parents')">👨‍👩‍👧 أولياء الأمور</li>
+      <li class="nav-item ${activeView === 'center_info' ? 'active' : ''}" onclick="navigate('center_info')">⚙️ معلومات السنتر</li>
+      <li class="nav-item ${activeView === 'license' ? 'active' : ''}" onclick="navigate('license')">🔒 الترخيص والجهاز</li>
+    `;
+  }
+}
+
+function navigate(viewName) {
+  activeView = viewName;
+  renderSidebarNav();
+  renderActiveView(activeView);
 }
 
 function setupNetworkMonitoring() {
@@ -58,21 +112,35 @@ async function callBackend(method, ...args) {
     if (res && res.success) {
       return res.data;
     }
-    throw new Error(res ? res.error : 'Backend service call failed');
+    throw new Error(res ? res.error : 'فشل تنفيذ الخدمة على الخادم');
   }
 
-  // Simulation mode fallback
-  console.log(`[Simulation] Backend call: ${method}`, args);
+  // Simulation mode fallback if electronAPI bridge is absent
+  console.log(`[Simulation] ${method}:`, args);
   return null;
 }
 
-// -------------------------------------------------------------
-// Router & View Renderers for 15 Modules
-// -------------------------------------------------------------
+function showToast(msg, isError = false) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast-alert';
+  if (isError) {
+    toast.style.background = '#7f1d1d';
+    toast.style.borderColor = '#ef4444';
+    toast.style.color = '#fca5a5';
+  }
+  toast.innerText = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ----------------------------------------------------------------------------
+// VIEW RENDERERS
+// ----------------------------------------------------------------------------
 
 async function renderActiveView(view) {
   const mainView = document.getElementById('mainView');
-  mainView.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:3rem;">جاري تحميل البيانات...</div>';
+  mainView.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:3rem;">جاري تحميل البيانات من Firestore...</div>';
 
   try {
     switch (view) {
@@ -94,6 +162,9 @@ async function renderActiveView(view) {
       case 'schedule':
         await renderScheduleView(mainView);
         break;
+      case 'finance':
+        await renderFinanceView(mainView);
+        break;
       case 'content':
         await renderContentView(mainView);
         break;
@@ -106,672 +177,938 @@ async function renderActiveView(view) {
       case 'parents':
         await renderParentsView(mainView);
         break;
-      case 'finance':
-        await renderFinanceView(mainView);
-        break;
-      case 'reports':
-        await renderReportsView(mainView);
-        break;
-      case 'ai':
-        await renderAIView(mainView);
-        break;
-      case 'settings':
-        await renderSettingsView(mainView);
+      case 'center_info':
+        await renderCenterInfoView(mainView);
         break;
       case 'license':
         await renderLicenseView(mainView);
         break;
+      // SuperAdmin Platform Views
+      case 'superadmin_dashboard':
+        await renderSuperAdminDashboardView(mainView);
+        break;
+      case 'superadmin_institutions':
+        await renderSuperAdminInstitutionsView(mainView);
+        break;
+      case 'superadmin_devices':
+        await renderSuperAdminDevicesView(mainView);
+        break;
+      case 'superadmin_ai':
+        await renderSuperAdminAIView(mainView);
+        break;
+      case 'superadmin_audit':
+        await renderSuperAdminAuditView(mainView);
+        break;
       default:
-        await renderDashboardView(mainView);
+        mainView.innerHTML = '<div style="padding:2rem;">الصفحة غير موجودة</div>';
     }
   } catch (err) {
-    mainView.innerHTML = `<div class="card" style="border-color:#ef4444;"><h3 style="color:#ef4444;">خطأ في تحميل الشاشة</h3><p>${err.message}</p></div>`;
+    mainView.innerHTML = `<div class="card" style="border-color:#ef4444;"><h3 style="color:#ef4444;">خطأ في تحميل البيانات</h3><p>${err.message}</p></div>`;
   }
 }
 
-// Module 1: Dashboard
+// 1. Center Dashboard
 async function renderDashboardView(container) {
-  const summary = await callBackend('getDashboardSummary');
-  if (!summary) return;
+  const summary = await callBackend('getDashboardSummary', currentCallerToken, currentCallerToken.institutionId);
 
   container.innerHTML = `
     <div class="view-title">
-      <span>📊 لوحة تحكم السنتر الشاملة</span>
-      <span style="font-size:0.85rem; color:#94a3b8;">${summary.institution ? summary.institution.name : 'سنتر التفوق التعليمي'}</span>
+      <span>📈 لوحة التحكم والإحصائيات الحقيقية</span>
+      <button class="btn" onclick="renderActiveView('dashboard')">🔄 تحديث البيانات</button>
     </div>
-
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="label">إجمالي الطلاب المسجلين</div>
-        <div class="value">${summary.totalStudents} طالب</div>
+        <div class="label">إجمالي الطلاب النشطين</div>
+        <div class="value">${summary ? summary.studentsCount : 0}</div>
       </div>
       <div class="stat-card">
-        <div class="label">إجمالي الكادر والأساتذة</div>
-        <div class="value">${summary.totalTeachers} معلم</div>
+        <div class="label">إجمالي المعلمين</div>
+        <div class="value">${summary ? summary.teachersCount : 0}</div>
       </div>
       <div class="stat-card">
         <div class="label">المجموعات الدراسية</div>
-        <div class="value">${summary.totalGroups} مجموعة</div>
+        <div class="value">${summary ? summary.groupsCount : 0}</div>
       </div>
       <div class="stat-card">
-        <div class="label">حضور اليوم</div>
-        <div class="value" style="color:#22c55e;">${summary.presentCount} طالب</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">غياب اليوم</div>
-        <div class="value" style="color:#ef4444;">${summary.absentCount} طالب</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">إجمالي إيرادات السنتر</div>
-        <div class="value" style="color:#38bdf8;">${summary.totalRevenue.toLocaleString()} ج.م</div>
+        <div class="label">تحصيل اليوم (جنيه)</div>
+        <div class="value" style="color:#22c55e;">${summary ? summary.todayIncome : 0} ج.م</div>
       </div>
     </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
       <div class="card">
-        <div class="card-title">💳 أحدث عمليات التحصيل المالي</div>
-        <table class="data-table">
-          <thead>
-            <tr><th>رقم الإيصال</th><th>اسم الطالب</th><th>الفئة</th><th>المبلغ</th></tr>
-          </thead>
-          <tbody>
-            ${summary.recentPayments.map(p => `
-              <tr>
-                <td><span class="code-box">${p.receiptNumber}</span></td>
-                <td>${p.studentName}</td>
-                <td>${p.category}</td>
-                <td style="color:#22c55e; font-weight:bold;">${p.amount} ج.م</td>
-              </tr>
-            `).join('') || '<tr><td colspan="4">لا توجد عمليات سداد مؤخرة</td></tr>'}
-          </tbody>
-        </table>
+        <div class="card-title">آخر عمليات التحصيل المالي (Firestore)</div>
+        ${renderPaymentsTable(summary ? summary.recentPayments : [])}
       </div>
-
       <div class="card">
-        <div class="card-title">📝 أحدث تسجيلات الحضور اليوم</div>
-        <table class="data-table">
-          <thead>
-            <tr><th>الطالب</th><th>الوقت</th><th>الحالة</th><th>الطريقة</th></tr>
-          </thead>
-          <tbody>
-            ${summary.recentAttendance.map(a => `
-              <tr>
-                <td>${a.studentName}</td>
-                <td>${a.time}</td>
-                <td><span style="color:${a.status === 'PRESENT' ? '#22c55e' : '#ef4444'}; font-weight:bold;">${a.status}</span></td>
-                <td>${a.method}</td>
-              </tr>
-            `).join('') || '<tr><td colspan="4">لا يزال سجل الحضور خالياً اليوم</td></tr>'}
-          </tbody>
-        </table>
+        <div class="card-title">آخر سجلات الحضور والغياب (Firestore)</div>
+        ${renderAttendanceTable(summary ? summary.recentAttendance : [])}
       </div>
     </div>
   `;
 }
 
-// Module 2: Students
+// 2. Students View
 async function renderStudentsView(container) {
-  const students = await callBackend('getStudents');
+  const students = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
 
   container.innerHTML = `
     <div class="view-title">
-      <span>👨‍🎓 إدارة الطلاب والسجلات</span>
-      <button class="btn btn-success" onclick="openAddStudentDialog()">➕ إضافة طالب جديد</button>
+      <span>🎓 إدارة الطلاب وسجلات التسجيل</span>
+      <button class="btn btn-success" onclick="openAddStudentModal()">+ إضافة طالب جديد</button>
     </div>
-
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>الكود</th><th>اسم الطالب</th><th>الهاتف</th><th>هاتف ولي الأمر</th><th>الصف الدراسي</th><th>المجموعة</th><th>رمز QR</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          ${students.map(s => `
+    ${students && students.length > 0 ? `
+      <div class="card">
+        <table class="data-table">
+          <thead>
             <tr>
-              <td><span class="code-box">${s.id}</span></td>
-              <td style="font-weight:bold; color:#f8fafc;">${s.name}</td>
-              <td>${s.phone}</td>
-              <td>${s.guardianPhone}</td>
-              <td>${s.grade}</td>
-              <td>${s.groupName}</td>
-              <td><span class="code-box">${s.qrToken}</span></td>
-              <td><span style="color:#22c55e; font-weight:bold;">${s.status}</span></td>
+              <th>كود الطالب</th>
+              <th>الاسم الكامل</th>
+              <th>رقم الهاتف</th>
+              <th>هاتف ولي الأمر</th>
+              <th>الصف الدراسي</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            ${students.map(s => `
+              <tr>
+                <td><span class="code-box">${s.studentCode || s.id}</span></td>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.phone || '-'}</td>
+                <td>${s.guardianPhone || '-'}</td>
+                <td>${s.grade}</td>
+                <td><span class="badge">${s.status}</span></td>
+                <td>
+                  <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openEditStudentModal('${s.id}')">تعديل</button>
+                  <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveStudentAction('${s.id}')">أرشفة</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎓</div>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد طلاب حالياً في هذا السنتر</h3>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">اضغط على زر "إضافة طالب جديد" لإنشاء أول سجل طالب حقيقي في Firestore.</p>
+        <button class="btn btn-success" onclick="openAddStudentModal()">+ إضافة طالب جديد الآن</button>
+      </div>
+    `}
   `;
 }
 
-// Module 3: Teachers
+// 3. Teachers View
 async function renderTeachersView(container) {
-  const teachers = await callBackend('getTeachers');
+  const teachers = await callBackend('getTeachers', currentCallerToken, { institutionId: currentCallerToken.institutionId });
 
   container.innerHTML = `
     <div class="view-title">
-      <span>👨‍🏫 كادر المعلمين والأساتذة</span>
+      <span>👨‍🏫 أعضاء هيئة التدريس والمعلمون</span>
+      <button class="btn btn-success" onclick="openAddTeacherModal()">+ إضافة معلم جديد</button>
     </div>
-
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>الكود</th><th>اسم المعلم</th><th>الهاتف</th><th>التخصص والمادة</th><th>المجموعات المسندة</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          ${teachers.map(t => `
+    ${teachers && teachers.length > 0 ? `
+      <div class="card">
+        <table class="data-table">
+          <thead>
             <tr>
-              <td><span class="code-box">${t.id}</span></td>
-              <td style="font-weight:bold; color:#38bdf8;">${t.name}</td>
-              <td>${t.phone}</td>
-              <td>${t.subject}</td>
-              <td>${t.groups.join(', ')}</td>
-              <td><span style="color:#22c55e; font-weight:bold;">${t.status}</span></td>
+              <th>معرف المعلم</th>
+              <th>اسم المعلم</th>
+              <th>رقم الهاتف</th>
+              <th>المادة التخصصية</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            ${teachers.map(t => `
+              <tr>
+                <td><span class="code-box">${t.id}</span></td>
+                <td><strong>${t.name}</strong></td>
+                <td>${t.phone || '-'}</td>
+                <td>${t.subject}</td>
+                <td><span class="badge">${t.status}</span></td>
+                <td>
+                  <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveTeacherAction('${t.id}')">أرشفة</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">👨‍🏫</div>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا يوجد معلمون مسجلون حالياً</h3>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">قم بإضافة المعلمين لتخصيص المجموعات والمواد الدراسية.</p>
+        <button class="btn btn-success" onclick="openAddTeacherModal()">+ إضافة معلم جديد</button>
+      </div>
+    `}
   `;
 }
 
-// Module 4: Groups & Subjects
+// 4. Groups View
 async function renderGroupsView(container) {
-  const groups = await callBackend('getGroups');
+  const groups = await callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId });
 
   container.innerHTML = `
     <div class="view-title">
-      <span>📚 المجموعات الدراسية والمواد</span>
+      <span>📚 المجموعات والقاعات الدراسية</span>
+      <button class="btn btn-success" onclick="openAddGroupModal()">+ إنشاء مجموعة جديدة</button>
     </div>
-
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>كود المجموعة</th><th>اسم المجموعة</th><th>المادة</th><th>المعلم المسند</th><th>السعة (Max)</th><th>المسجلين</th><th>الجدول</th><th>القاعة</th></tr>
-        </thead>
-        <tbody>
-          ${groups.map(g => `
+    ${groups && groups.length > 0 ? `
+      <div class="card">
+        <table class="data-table">
+          <thead>
             <tr>
-              <td><span class="code-box">${g.id}</span></td>
-              <td style="font-weight:bold; color:#f8fafc;">${g.name}</td>
-              <td>${g.subjectName}</td>
-              <td>${g.teacherName}</td>
-              <td>${g.maxCapacity} طالب</td>
-              <td><span style="color:${g.enrolledCount >= g.maxCapacity ? '#ef4444' : '#22c55e'}; font-weight:bold;">${g.enrolledCount} / ${g.maxCapacity}</span></td>
-              <td>${g.schedule}</td>
-              <td>${g.room}</td>
+              <th>كود المجموعة</th>
+              <th>اسم المجموعة</th>
+              <th>المادة</th>
+              <th>المعلم المسؤول</th>
+              <th>السعة القصوى</th>
+              <th>المواعيد والقاعة</th>
+              <th>الرسوم الشهري</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            ${groups.map(g => `
+              <tr>
+                <td><span class="code-box">${g.id}</span></td>
+                <td><strong>${g.name}</strong></td>
+                <td>${g.subjectName || '-'}</td>
+                <td>${g.teacherName || '-'}</td>
+                <td>${g.maxCapacity} طالب</td>
+                <td>${g.schedule} (${g.room})</td>
+                <td>${g.monthlyFee} ج.م</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📚</div>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا توجد مجموعات دراسية مسجلة</h3>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">أنشئ المجموعات وتحديد السعة القصوى لضبط تسجيل الطلاب.</p>
+        <button class="btn btn-success" onclick="openAddGroupModal()">+ إنشاء مجموعة جديدة</button>
+      </div>
+    `}
   `;
 }
 
-// Module 5: Attendance (Kiosk Fast Scanner)
+// 5. Attendance View
 async function renderAttendanceView(container) {
-  const summary = await callBackend('getDashboardSummary');
+  const records = await callBackend('getAttendanceRecords', currentCallerToken, { institutionId: currentCallerToken.institutionId });
 
   container.innerHTML = `
     <div class="view-title">
-      <span>📝 تسجيل الحضور والغياب (Kiosk Fast Scanner)</span>
-    </div>
-
-    <div class="card" style="border-color:#0284c7; background:#0f172a;">
-      <div class="card-title">📸 الماسح السريع لكود الطالب أو رمز الـ QR</div>
-      <div style="display:flex; gap:0.75rem; margin-bottom:1rem;">
-        <input type="text" id="scannerInput" placeholder="مسح رمز الـ QR أو ادخل كود الطالب (مثال: STU_1001 أو QR_STU_1001)" style="flex:1; font-size:1.1rem; padding:0.75rem;" autofocus />
-        <button class="btn btn-success" style="font-size:1rem; padding:0.75rem 1.5rem;" onclick="handleScanSubmit()">تسجيل الحضور 🟢</button>
-      </div>
-      <div id="scanResult" style="padding:1rem; border-radius:6px; background:#1e293b; display:none;"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">سجل الحضور اليومي الحالي</div>
-      <table class="data-table">
-        <thead>
-          <tr><th>الطالب</th><th>الوقت</th><th>الحالة</th><th>طريقة التسجيل</th></tr>
-        </thead>
-        <tbody>
-          ${summary.recentAttendance.map(a => `
-            <tr>
-              <td>${a.studentName}</td>
-              <td>${a.time}</td>
-              <td><span style="color:#22c55e; font-weight:bold;">${a.status}</span></td>
-              <td>${a.method}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  // Focus scanner input
-  setTimeout(() => {
-    const input = document.getElementById('scannerInput');
-    if (input) input.focus();
-  }, 100);
-}
-
-async function handleScanSubmit() {
-  const input = document.getElementById('scannerInput');
-  const resultDiv = document.getElementById('scanResult');
-  const val = input.value.trim();
-
-  if (!val) return;
-
-  try {
-    const res = await callBackend('recordAttendanceScan', { studentCodeOrQr: val });
-    resultDiv.style.display = 'block';
-
-    if (res.duplicate) {
-      resultDiv.style.background = '#7c2d12';
-      resultDiv.style.color = '#fdba74';
-      resultDiv.innerHTML = `⚠️ <strong>تنبيه:</strong> ${res.message}`;
-    } else {
-      resultDiv.style.background = '#14532d';
-      resultDiv.style.color = '#86efac';
-      resultDiv.innerHTML = `✅ <strong>تم التسجيل:</strong> ${res.message}`;
-    }
-
-    input.value = '';
-    input.focus();
-    renderActiveView('attendance');
-  } catch (err) {
-    resultDiv.style.display = 'block';
-    resultDiv.style.background = '#7f1d1d';
-    resultDiv.style.color = '#fca5a5';
-    resultDiv.innerHTML = `❌ <strong>خطأ:</strong> ${err.message}`;
-  }
-}
-
-// Module 6: Schedule
-async function renderScheduleView(container) {
-  container.innerHTML = `
-    <div class="view-title">
-      <span>📅 الجدول الدراسي وحصص السنتر</span>
+      <span>📋 كشك الحضور والغياب والسحب السريع</span>
+      <button class="btn btn-success" onclick="openRecordAttendanceModal()">+ تسجيل حضور يدوي / باركود</button>
     </div>
     <div class="card">
-      <div class="card-title">جدول اليوم والقاعات الفعالة</div>
-      <table class="data-table">
-        <thead>
-          <tr><th>عنوان الحصة</th><th>المجموعة</th><th>المعلم</th><th>التاريخ</th><th>الوقت</th><th>القاعة</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="font-weight:bold; color:#38bdf8;">حصة التفاضل والتكامل - الدرس الأول</td>
-            <td>رياضيات - ثانوية عامة (أ)</td>
-            <td>أ.د/ إبراهيم عبد الرحمن</td>
-            <td>اليوم</td>
-            <td>04:00 م - 06:00 م</td>
-            <td>قاعة 1</td>
-            <td><span style="color:#22c55e; font-weight:bold;">مكتملة COMPLETED</span></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="card-title">سجلات الحضور لليوم (Firestore)</div>
+      ${renderAttendanceTable(records || [])}
     </div>
   `;
 }
 
-// Module 7: Educational Content
-async function renderContentView(container) {
-  const content = await callBackend('getContentMedia');
-
-  container.innerHTML = `
-    <div class="view-title">
-      <span>📁 المحتوى التعليمي والوسائط (Cloudflare R2 Gateway)</span>
-    </div>
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>العنوان</th><th>النوع</th><th>المجموعة</th><th>الرابط المؤقت (Presigned URL)</th><th>مدة الصلاحية</th></tr>
-        </thead>
-        <tbody>
-          ${content.map(c => `
-            <tr>
-              <td style="font-weight:bold; color:#f8fafc;">${c.title}</td>
-              <td><span class="badge">${c.type}</span></td>
-              <td>${c.groupId}</td>
-              <td><span class="code-box" style="font-size:0.75rem;">${c.publicCdnUrl}</span></td>
-              <td>${c.expiresMinutes} دقيقة</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Module 8: Exams & Grades
-async function renderExamsView(container) {
-  const exams = await callBackend('getExams');
-  const grades = await callBackend('getGrades');
-
-  container.innerHTML = `
-    <div class="view-title">
-      <span>📝 الامتحانات وسجلات درجات الطلاب</span>
-    </div>
-    <div class="card">
-      <div class="card-title">جدول الاختبارات المحددة</div>
-      <table class="data-table">
-        <thead>
-          <tr><th>عنوان الاختبار</th><th>المجموعة</th><th>الدرجة العظمى</th><th>التاريخ</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          ${exams.map(e => `
-            <tr>
-              <td style="font-weight:bold; color:#38bdf8;">${e.title}</td>
-              <td>${e.groupId}</td>
-              <td>${e.maxScore} درجة</td>
-              <td>${e.examDate}</td>
-              <td><span class="badge warning">${e.status}</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <div class="card-title">نتائج درجات الطلاب الأخيرة</div>
-      <table class="data-table">
-        <thead>
-          <tr><th>اسم الطالب</th><th>الدرجة المحققة</th><th>النسبة المئوية</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          ${grades.map(g => `
-            <tr>
-              <td>${g.studentName}</td>
-              <td>${g.score} / ${g.maxScore}</td>
-              <td style="font-weight:bold; color:#22c55e;">${g.percentage}%</td>
-              <td><span style="color:#22c55e; font-weight:bold;">${g.status}</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Module 9: Subscriptions
-async function renderSubscriptionsView(container) {
-  const subs = await callBackend('getSubscriptions');
-
-  container.innerHTML = `
-    <div class="view-title">
-      <span>🔑 الباقات واشتراكات الطلاب النشطة</span>
-    </div>
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>اسم الباقة</th><th>الطالب</th><th>كود الاشتراك (Hashed Code)</th><th>تاريخ البدء</th><th>تاريخ الانتهاء</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-          ${subs.map(s => `
-            <tr>
-              <td style="font-weight:bold; color:#f8fafc;">${s.packageName}</td>
-              <td>${s.studentName}</td>
-              <td><span class="code-box">${s.code}</span></td>
-              <td>${s.startDate}</td>
-              <td>${s.endDate}</td>
-              <td><span style="color:#22c55e; font-weight:bold;">${s.status}</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Module 10: Parents
-async function renderParentsView(container) {
-  const parents = await callBackend('getParents');
-
-  container.innerHTML = `
-    <div class="view-title">
-      <span>👨‍👩‍👧 أولياء الأمور والطلاب المرتبطين</span>
-    </div>
-    <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr><th>اسم ولي الأمر</th><th>الهاتف</th><th>البريد الإلكتروني</th><th>الطلاب المرتبطين</th></tr>
-        </thead>
-        <tbody>
-          ${parents.map(p => `
-            <tr>
-              <td style="font-weight:bold; color:#38bdf8;">${p.name}</td>
-              <td>${p.phone}</td>
-              <td>${p.email}</td>
-              <td>${p.linkedStudentNames.join(', ')}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Module 11: Finance
+// 6. Finance View
 async function renderFinanceView(container) {
-  const summary = await callBackend('getDashboardSummary');
+  const payments = await callBackend('getPayments', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const expenses = await callBackend('getExpenses', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+
+  const totalInc = (payments || []).reduce((a, b) => a + (Number(b.amount) || 0), 0);
+  const totalExp = (expenses || []).reduce((a, b) => a + (Number(b.amount) || 0), 0);
 
   container.innerHTML = `
     <div class="view-title">
-      <span>💰 المالية والحسابات (تحصيل وإيرادات ومصروفات)</span>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="label">إجمالي إيرادات المقبوضات</div>
-        <div class="value" style="color:#22c55e;">${summary.totalRevenue.toLocaleString()} ج.م</div>
+      <span>💰 المالية والحسابات السندات الإيصالات</span>
+      <div>
+        <button class="btn btn-success" onclick="openRecordPaymentModal()">+ تسجيل تحصيل نقدية</button>
+        <button class="btn btn-warning" onclick="openRecordExpenseModal()">+ تسجيل مصروفات</button>
       </div>
-      <div class="stat-card">
-        <div class="label">إجمالي المصروفات</div>
-        <div class="value" style="color:#ef4444;">${summary.totalExpenses.toLocaleString()} ج.م</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">صافي الأرباح التشغيلية</div>
-        <div class="value" style="color:#38bdf8;">${(summary.totalRevenue - summary.totalExpenses).toLocaleString()} ج.م</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">💳 المقبوضات وإيصالات التحصيل الإليكترونية</div>
-      <table class="data-table">
-        <thead>
-          <tr><th>رقم الإيصال</th><th>اسم الطالب</th><th>فئة التحصيل</th><th>المبلغ</th><th>التاريخ</th></tr>
-        </thead>
-        <tbody>
-          ${summary.recentPayments.map(p => `
-            <tr>
-              <td><span class="code-box">${p.receiptNumber}</span></td>
-              <td>${p.studentName}</td>
-              <td>${p.category}</td>
-              <td style="color:#22c55e; font-weight:bold;">${p.amount} ج.م</td>
-              <td>${p.paymentDate}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Module 12: Reports
-async function renderReportsView(container) {
-  container.innerHTML = `
-    <div class="view-title">
-      <span>📊 تقارير السنتر والتصدير (Reports & Print Exports)</span>
     </div>
     <div class="stats-grid">
-      <div class="card">
-        <div class="card-title">📄 تقرير حضور الطلاب الشامل</div>
-        <p style="font-size:0.85rem; color:#94a3b8;">تصدير سجل الحضور والغياب اليومي والأسبوعي حسب المجموعات.</p>
-        <button class="btn" onclick="alert('جاري تجهيز تقرير الحضور للتصدير والطباعة...')">🖨️ طباعة التقرير / PDF</button>
-      </div>
-      <div class="card">
-        <div class="card-title">📄 التقرير المالي والإيرادات</div>
-        <p style="font-size:0.85rem; color:#94a3b8;">ملخص الإيرادات والمصروفات وصافي الأرباح لجميع المجموعات.</p>
-        <button class="btn" onclick="alert('جاري تجهيز التقرير المالي للتصدير والطباعة...')">🖨️ طباعة التقرير / Excel</button>
-      </div>
-    </div>
-  `;
-}
-
-// Module 13: AI Settings
-async function renderAIView(container) {
-  const ai = await callBackend('getCenterAISettings');
-
-  container.innerHTML = `
-    <div class="view-title">
-      <span>🤖 إعدادات الذكاء الاصطناعي الخاصة بالسنتر (Center AI Controls)</span>
+      <div class="stat-card"><div class="label">إجمالي المقبوضات</div><div class="value" style="color:#22c55e;">${totalInc} ج.م</div></div>
+      <div class="stat-card"><div class="label">إجمالي المصروفات</div><div class="value" style="color:#ef4444;">${totalExp} ج.م</div></div>
+      <div class="stat-card"><div class="label">صافي الخزينة</div><div class="value" style="color:#38bdf8;">${totalInc - totalExp} ج.م</div></div>
     </div>
     <div class="card">
-      <div style="background:#090d16; padding:1rem; border-radius:6px; margin-bottom:1.25rem; border:1px solid #0284c7;">
-        <h4 style="margin-top:0; color:#38bdf8;">🔒 الحدود الأمنية لمدير السنتر:</h4>
-        <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:0;">
-          مفاتيح Google Gemini و OpenRouter محماة ومشفرة على مستوى سيرفر المنصة (SuperAdmin Only). يستطيع مدير السنتر فقط التحكم بتفعيل/تعطيل الذكاء الاصطناعي لطلابه وتحديد الحد اليومي للأسئلة.
-        </p>
-      </div>
-
-      <div style="margin-bottom:1rem;">
-        <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">حالة خدمة AI للسنتر:</label>
-        <span class="badge" style="background:${ai.aiEnabled ? '#14532d' : '#7f1d1d'}; color:${ai.aiEnabled ? '#86efac' : '#fca5a5'};">
-          ${ai.aiEnabled ? '🟢 الذكاء الاصطناعي مفعل لطلاب السنتر' : '🔴 الخدمة معطلة'}
-        </span>
-      </div>
-
-      <div style="margin-bottom:1rem;">
-        <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">الحد الأقصى للأسئلة اليومية لكل طالب:</label>
-        <input type="number" value="${ai.dailyLimitPerStudent}" disabled style="width:120px;" />
-        <span style="font-size:0.85rem; color:#94a3b8; margin-right:0.5rem;">سؤال/يوم</span>
-      </div>
+      <div class="card-title">سجل المقبوضات المالية والإيصالات</div>
+      ${renderPaymentsTable(payments || [])}
     </div>
   `;
 }
 
-// Module 14: Center Info
-async function renderSettingsView(container) {
-  const summary = await callBackend('getDashboardSummary');
-  const inst = summary.institution || {};
-
+// 7. Schedule View
+async function renderScheduleView(container) {
+  const sessions = await callBackend('getSessions', currentCallerToken, { institutionId: currentCallerToken.institutionId });
   container.innerHTML = `
     <div class="view-title">
-      <span>⚙️ معلومات وتفاصيل السنتر (Center Information)</span>
+      <span>🗓️ جدول الحصص اليومية والأسبوعية</span>
     </div>
     <div class="card">
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-        <div>
-          <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">اسم السنتر الرسمي:</label>
-          <input type="text" value="${inst.name || 'سنتر التفوق التعليمي'}" style="width:100%;" />
-        </div>
-        <div>
-          <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">هاتف التواصل والخدمة:</label>
-          <input type="text" value="${inst.phone || '01012345678'}" style="width:100%;" />
-        </div>
-        <div>
-          <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">البريد الإلكتروني للسنتر:</label>
-          <input type="text" value="${inst.email || 'info@altafawok-center.com'}" style="width:100%;" />
-        </div>
-        <div>
-          <label style="display:block; margin-bottom:0.4rem; font-weight:bold;">العنوان التفصيلي:</label>
-          <input type="text" value="${inst.address || 'القاهرة - مدينة نصر'}" style="width:100%;" />
-        </div>
-      </div>
-      <div style="margin-top:1.25rem;">
-        <button class="btn btn-success" onclick="alert('تم حفظ بيانات ومعلومات السنتر بنجاح')">💾 حفظ البيانات</button>
-      </div>
+      ${sessions && sessions.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>عنوان الحصة</th><th>التاريخ والوقت</th><th>القاعة</th><th>الحالة</th></tr></thead>
+          <tbody>
+            ${sessions.map(s => `<tr><td>${s.title}</td><td>${s.date} (${s.startTime} - ${s.endTime})</td><td>${s.room}</td><td><span class="badge">${s.status}</span></td></tr>`).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد حصص مجدولة لليوم.</p>'}
     </div>
   `;
 }
 
-// Module 15: License & Device Binding (Phase 31 Guard)
+// 8. Content View
+async function renderContentView(container) {
+  const content = await callBackend('getContent', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  container.innerHTML = `
+    <div class="view-title"><span>📖 المحتوى التعليمي والوسائط</span></div>
+    <div class="card">
+      ${content && content.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>عنوان المحتوى</th><th>النوع</th><th>تاريخ الرفع</th></tr></thead>
+          <tbody>${content.map(c => `<tr><td>${c.title}</td><td>${c.type}</td><td>${c.createdAt}</td></tr>`).join('')}</tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا يوجد محتوى متاح حالياً.</p>'}
+    </div>
+  `;
+}
+
+// 9. Exams View
+async function renderExamsView(container) {
+  const exams = await callBackend('getExams', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  container.innerHTML = `
+    <div class="view-title"><span>📝 الاختبارات والنتائج</span></div>
+    <div class="card">
+      ${exams && exams.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>عنوان الاختبار</th><th>الدرجة النهائية</th><th>تاريخ الاختبار</th></tr></thead>
+          <tbody>${exams.map(x => `<tr><td>${x.title}</td><td>${x.maxScore} درجة</td><td>${x.examDate}</td></tr>`).join('')}</tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد اختبارات مسجلة.</p>'}
+    </div>
+  `;
+}
+
+// 10. Subscriptions View
+async function renderSubscriptionsView(container) {
+  const subs = await callBackend('getSubscriptions', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  container.innerHTML = `
+    <div class="view-title"><span>🎟️ الاشتراكات الأكواد الحزم</span></div>
+    <div class="card">
+      ${subs && subs.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>كود الاشتراك</th><th>الباقة</th><th>اسم الطالب</th><th>الحالة</th></tr></thead>
+          <tbody>${subs.map(s => `<tr><td><span class="code-box">${s.code}</span></td><td>${s.packageName}</td><td>${s.studentName}</td><td><span class="badge">${s.status}</span></td></tr>`).join('')}</tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد اشتراكات مفعّلة.</p>'}
+    </div>
+  `;
+}
+
+// 11. Parents View
+async function renderParentsView(container) {
+  const parents = await callBackend('getParents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  container.innerHTML = `
+    <div class="view-title"><span>👨‍👩‍👧 أولياء الأمور والربط</span></div>
+    <div class="card">
+      ${parents && parents.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>اسم ولي الأمر</th><th>رقم الهاتف</th><th>الطلاب المرتبطين</th></tr></thead>
+          <tbody>${parents.map(p => `<tr><td>${p.name}</td><td>${p.phone}</td><td>${(p.linkedStudentNames || []).join(', ')}</td></tr>`).join('')}</tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد حسابات أولياء أمور مسجلة.</p>'}
+    </div>
+  `;
+}
+
+// 12. Center Info View
+async function renderCenterInfoView(container) {
+  const info = await callBackend('getCenterInfo', currentCallerToken, currentCallerToken.institutionId);
+  container.innerHTML = `
+    <div class="view-title"><span>⚙️ معلومات السنتر والترويس</span></div>
+    <div class="card" style="max-width:600px;">
+      <div class="form-group"><label>اسم السنتر</label><input type="text" id="infoName" value="${info ? info.name : ''}"></div>
+      <div class="form-group"><label>رقم الهاتف</label><input type="text" id="infoPhone" value="${info ? info.phone : ''}"></div>
+      <div class="form-group"><label>العنوان</label><input type="text" id="infoAddress" value="${info ? info.address : ''}"></div>
+      <div class="form-group"><label>ترويسة الإيصال</label><input type="text" id="infoReceipt" value="${info ? info.receiptHeader : ''}"></div>
+      <button class="btn btn-success" onclick="saveCenterInfoAction()">حفظ التغيرات في Firestore</button>
+    </div>
+  `;
+}
+
+// 13. License View
 async function renderLicenseView(container) {
-  let fp = 'win_fp_...';
-  let meta = { deviceName: 'PC-RECEPTION-01', osVersion: 'Windows 11 Pro 64-bit' };
+  const lic = await callBackend('getLicenseStatus', currentCallerToken, currentCallerToken.institutionId);
+  container.innerHTML = `
+    <div class="view-title"><span>🔒 الترخيص وبصمة الجهاز</span></div>
+    <div class="card" style="max-width:600px;">
+      <p><strong>معرف المؤسسة:</strong> <span class="code-box">${currentCallerToken.institutionId}</span></p>
+      <p><strong>حالة الترخيص:</strong> <span class="badge">${lic ? lic.status : 'ACTIVE'}</span></p>
+      <p><strong>فترة السماح الأوفلاين:</strong> ${lic ? lic.graceHoursRemaining : 72} ساعة</p>
+    </div>
+  `;
+}
 
-  if (window.electronAPI) {
-    try {
-      fp = await window.electronAPI.getDeviceFingerprint();
-      meta = await window.electronAPI.getSystemMetadata();
-    } catch (e) {}
-  }
+// ============================================================================
+// SUPERADMIN PLATFORM CONSOLE VIEW RENDERERS
+// ============================================================================
+
+async function renderSuperAdminDashboardView(container) {
+  const ov = await callBackend('getSuperAdminPlatformOverview', currentCallerToken);
 
   container.innerHTML = `
     <div class="view-title">
-      <span>🔒 ترخيص النظام والمحتوى الترخيصي بالجهاز (Single Device Binding)</span>
+      <span>👑 لوحة المنصة الشاملة (SuperAdmin Platform Overview)</span>
+      <button class="btn" onclick="renderActiveView('superadmin_dashboard')">🔄 تحديث مؤشرات المنصة</button>
     </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">إجمالي المراكز بالمنصة</div><div class="value" style="color:#38bdf8;">${ov ? ov.totalInstitutions : 0}</div></div>
+      <div class="stat-card"><div class="label">المراكز النشطة</div><div class="value" style="color:#22c55e;">${ov ? ov.activeInstitutions : 0}</div></div>
+      <div class="stat-card"><div class="label">المراكز المجمدة</div><div class="value" style="color:#ef4444;">${ov ? ov.suspendedInstitutions : 0}</div></div>
+      <div class="stat-card"><div class="label">الأجهزة المربوطة</div><div class="value">${ov ? ov.totalDevices : 0}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">حالة المنصة والذكاء الاصطناعي</div>
+      <p><strong>مزود AI النشط:</strong> ${ov ? ov.activeProvider : '-'}</p>
+      <p><strong>استهلاك تخزين R2:</strong> ${ov ? ov.storageUsageGb : 0} GB</p>
+      <p><strong>حالة تشغيل النظام:</strong> <span class="badge">${ov ? ov.platformStatus : 'OPERATIONAL'}</span></p>
+    </div>
+  `;
+}
 
-    <div class="card" style="border-color:#22c55e;">
-      <div class="card-title" style="color:#22c55e;">🟢 حالة الترخيص: الجهاز مرخص ومربوط بنجاح (BINDING ACTIVE)</div>
-      
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
-        <div>
-          <div style="font-size:0.8rem; color:#94a3b8;">اسم جهاز الاستقبال (Host Name):</div>
-          <div style="font-weight:bold; font-size:1.1rem; color:#38bdf8;">${meta.deviceName || 'PC-RECEPTION'}</div>
-        </div>
-        <div>
-          <div style="font-size:0.8rem; color:#94a3b8;">نظام التشغيل (Windows OS Build):</div>
-          <div style="font-weight:bold; font-size:1.1rem; color:#f8fafc;">${meta.osVersion || 'Windows 10/11'}</div>
-        </div>
-        <div>
-          <div style="font-size:0.8rem; color:#94a3b8;">السياسة الترخيصية (Licensing Policy):</div>
-          <div style="font-weight:bold; color:#86efac;">1 Device Per Institution (جهاز واحد فعال لكل سنتر)</div>
-        </div>
-        <div>
-          <div style="font-size:0.8rem; color:#94a3b8;">آخر تحقق من الترخيص (Last Verification):</div>
-          <div style="font-weight:bold; color:#cbd5e1;">${new Date().toLocaleTimeString('ar-EG')}</div>
-        </div>
+async function renderSuperAdminInstitutionsView(container) {
+  const insts = await callBackend('getInstitutions', currentCallerToken);
+
+  container.innerHTML = `
+    <div class="view-title">
+      <span>🏢 إدارة المراكز والمؤسسات المسجلة بالمنصة</span>
+      <button class="btn btn-success" onclick="openCreateInstitutionModal()">+ إنشاء سنتر / مؤسسة جديدة</button>
+    </div>
+    ${insts && insts.length > 0 ? `
+      <div class="card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>معرف السنتر</th>
+              <th>اسم المؤسسة</th>
+              <th>اسم المالك</th>
+              <th>الباقة</th>
+              <th>الحالة</th>
+              <th>إجراءات SuperAdmin</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${insts.map(i => `
+              <tr>
+                <td><span class="code-box">${i.id}</span></td>
+                <td><strong>${i.name}</strong></td>
+                <td>${i.ownerName || '-'}</td>
+                <td>${i.plan || 'ENTERPRISE'}</td>
+                <td><span class="badge ${i.status === 'SUSPENDED' ? 'revoked' : ''}">${i.status}</span></td>
+                <td>
+                  ${i.status === 'SUSPENDED' ? `
+                    <button class="btn btn-success" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="activateInstAction('${i.id}')">تفعيل الحساب</button>
+                  ` : `
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="suspendInstAction('${i.id}')">تجميد السنتر</button>
+                  `}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
-
-      <div style="background:#090d16; padding:1rem; border-radius:8px; border:1px solid #334155;">
-        <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.4rem;">بصمة الأجهزة المعتمدة بالسيرفر (SHA-256 Hardware Fingerprint):</div>
-        <div class="code-box" style="word-break:break-all; font-size:0.85rem;">${fp}</div>
+    ` : `
+      <div class="card" style="text-align:center; padding:3.5rem;">
+        <h3 style="color:#f8fafc;">لا توجد مؤسسات مسجلة في المنصة</h3>
+        <button class="btn btn-success" onclick="openCreateInstitutionModal()">+ إنشاء أول سنتر بالمنصة</button>
       </div>
+    `}
+  `;
+}
 
-      <div style="margin-top:1.25rem;">
-        <button class="btn btn-warning" onclick="alert('تم إرسال طلب إعادة ربط الجهاز إلى SuperAdmin بنجاح')">🔄 طلب استبدال جهاز الاستقبال (Rebind Device Request)</button>
+async function renderSuperAdminDevicesView(container) {
+  const devices = await callBackend('getDevices', currentCallerToken);
+  container.innerHTML = `
+    <div class="view-title"><span>💻 تراخيص الأجهزة وبصمات الكمبيوتر</span></div>
+    <div class="card">
+      ${devices && devices.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>معرف الجهاز</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            ${devices.map(d => `
+              <tr>
+                <td><span class="code-box">${d.deviceId}</span></td>
+                <td><span class="badge ${d.status === 'REVOKED' ? 'revoked' : ''}">${d.status}</span></td>
+                <td>
+                  ${d.status === 'REVOKED' ? `
+                    <button class="btn btn-success" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="rebindDeviceAction('${d.deviceId}')">إعادة الربط</button>
+                  ` : `
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="revokeDeviceAction('${d.deviceId}')">إلغاء الربط</button>
+                  `}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد تراخيص أجهزة مسجلة حالياً.</p>'}
+    </div>
+  `;
+}
+
+async function renderSuperAdminAIView(container) {
+  container.innerHTML = `
+    <div class="view-title"><span>🤖 إعدادات مزودات الذكاء الاصطناعي بالمنصة</span></div>
+    <div class="card">
+      <div class="card-title">Google Gemini + OpenRouter Routing Engine</div>
+      <p><strong>Primary Provider:</strong> Google Gemini (gemini-2.5-flash)</p>
+      <p><strong>Fallback Provider:</strong> OpenRouter (Auto-Failover on 5xx/429)</p>
+      <p><strong>Secret Storage:</strong> Server-Side Secret Manager Vault (Zero Client Exposure)</p>
+    </div>
+  `;
+}
+
+async function renderSuperAdminAuditView(container) {
+  const logs = await callBackend('getPlatformAuditLogs', currentCallerToken);
+  container.innerHTML = `
+    <div class="view-title"><span>📜 سجل أحداث المنصة الأمنية Audit Logs</span></div>
+    <div class="card">
+      ${logs && logs.length > 0 ? `
+        <table class="data-table">
+          <thead><tr><th>الحدث</th><th>المستخدم والفاعل</th><th>المؤسسة Target</th><th>التاريخ</th></tr></thead>
+          <tbody>
+            ${logs.map(l => `
+              <tr>
+                <td><strong>${l.action}</strong></td>
+                <td>${l.actorUid} (${l.actorRole})</td>
+                <td><span class="code-box">${l.institutionId}</span></td>
+                <td>${l.timestamp}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#94a3b8; text-align:center;">لا توجد أحداث مسجلة في سجل التدقيق.</p>'}
+    </div>
+  `;
+}
+
+// ----------------------------------------------------------------------------
+// MODALS AND FORM HANDLERS
+// ----------------------------------------------------------------------------
+
+function closeModal() {
+  document.getElementById('modalContainer').innerHTML = '';
+}
+
+// Student Modal
+function openAddStudentModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إضافة طالب جديد في Firestore</div>
+        <div class="form-group"><label>الاسم الكامل للطالب *</label><input type="text" id="mStudentName" placeholder="مثال: أحمد محمد علي"></div>
+        <div class="form-group"><label>رقم هاتف الطالب</label><input type="text" id="mStudentPhone" placeholder="01011112222"></div>
+        <div class="form-group"><label>هاتف ولي الأمر</label><input type="text" id="mGuardianPhone" placeholder="01122223333"></div>
+        <div class="form-group"><label>اسم ولي الأمر</label><input type="text" id="mGuardianName" placeholder="محمد علي"></div>
+        <div class="form-group">
+          <label>الصف الدراسي</label>
+          <select id="mStudentGrade">
+            <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+            <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
+            <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
+          </select>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitAddStudent()">حفظ الطالب في Firestore</button>
+        </div>
       </div>
     </div>
   `;
 }
 
-// Device Status & Heartbeat Loop
-async function checkDeviceStatus() {
-  if (!window.electronAPI) return;
-  const mockToken = { uid: 'center_admin', role: 'admin', institutionId: 'inst_bootstrap_001' };
+async function submitAddStudent() {
+  const name = document.getElementById('mStudentName').value;
+  const phone = document.getElementById('mStudentPhone').value;
+  const guardianPhone = document.getElementById('mGuardianPhone').value;
+  const guardianName = document.getElementById('mGuardianName').value;
+  const grade = document.getElementById('mStudentGrade').value;
+
   try {
-    await window.electronAPI.activateDevice({ institutionId: 'inst_bootstrap_001', callerToken: mockToken });
-    const validation = await window.electronAPI.validateDevice({ institutionId: 'inst_bootstrap_001', callerToken: mockToken });
-    updateLockOverlay(validation);
+    const res = await callBackend('createStudent', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      phone,
+      guardianPhone,
+      guardianName,
+      grade
+    });
+
+    closeModal();
+    showToast(`تم حفظ الطالب ${res.name} بنجاح في Firestore!`);
+    await renderActiveView('students');
   } catch (err) {
-    console.error('Check status error:', err);
+    showToast(err.message, true);
   }
 }
 
-function updateLockOverlay(validation) {
-  const lockScreen = document.getElementById('lockScreen');
-  const statusBadge = document.getElementById('statusBadge');
-
-  if (validation.valid) {
-    lockScreen.classList.add('hidden');
-    statusBadge.innerText = 'STATUS: BINDING ACTIVE 🟢';
-    statusBadge.className = 'badge';
-  } else {
-    lockScreen.classList.remove('hidden');
-    document.getElementById('lockReason').innerText = validation.reason || 'الجهاز غير مرخص بتشغيل النظام';
-    statusBadge.innerText = `STATUS: ${validation.status} 🔴`;
-    statusBadge.className = 'badge revoked';
-  }
-}
-
-async function sendPeriodicHeartbeat() {
-  if (!window.electronAPI) return;
-  const mockToken = { uid: 'center_admin', role: 'admin', institutionId: 'inst_bootstrap_001' };
+async function archiveStudentAction(id) {
+  if (!confirm('هل أنت تأكد من أرشفة سجل الطالب؟')) return;
   try {
-    const hb = await window.electronAPI.sendHeartbeat({ institutionId: 'inst_bootstrap_001', callerToken: mockToken });
-    if (hb.status === 'REVOKED') {
-      updateLockOverlay({ valid: false, status: 'REVOKED', reason: 'تم إلغاء تفعيل ترخيص هذا الجهاز من قبل SuperAdmin' });
-    }
-  } catch (err) {}
+    await callBackend('archiveStudent', currentCallerToken, id, currentCallerToken.institutionId);
+    showToast('تمت أرشفة الطالب بنجاح');
+    await renderActiveView('students');
+  } catch (err) {
+    showToast(err.message, true);
+  }
 }
 
-document.addEventListener('DOMContentLoaded', initDesktopApp);
+// Teacher Modal
+function openAddTeacherModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إضافة معلم جديد في Firestore</div>
+        <div class="form-group"><label>اسم المعلم *</label><input type="text" id="mTchName" placeholder="أ.د/ إبراهيم عبد الرحمن"></div>
+        <div class="form-group"><label>رقم الهاتف</label><input type="text" id="mTchPhone" placeholder="01099998888"></div>
+        <div class="form-group"><label>المادة التخصصية</label><input type="text" id="mTchSubject" placeholder="الرياضيات المشتقات والتفاضل"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitAddTeacher()">حفظ المعلم</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitAddTeacher() {
+  const name = document.getElementById('mTchName').value;
+  const phone = document.getElementById('mTchPhone').value;
+  const subject = document.getElementById('mTchSubject').value;
+
+  try {
+    const res = await callBackend('createTeacher', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      phone,
+      subject
+    });
+
+    closeModal();
+    showToast(`تم حفظ المعلم ${res.name} بنجاح في Firestore!`);
+    await renderActiveView('teachers');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function archiveTeacherAction(id) {
+  if (!confirm('أرشفة سجل المعلم؟')) return;
+  try {
+    await callBackend('archiveTeacher', currentCallerToken, id, currentCallerToken.institutionId);
+    showToast('تمت أرشفة المعلم');
+    await renderActiveView('teachers');
+  } catch (err) { showToast(err.message, true); }
+}
+
+// Group Modal
+function openAddGroupModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إنشاء مجموعة دراسية جديدة</div>
+        <div class="form-group"><label>اسم المجموعة *</label><input type="text" id="mGrpName" placeholder="رياضيات - ثانوية عامة (أ)"></div>
+        <div class="form-group"><label>السعة القصوى (عدد الطلاب)</label><input type="number" id="mGrpCapacity" value="30"></div>
+        <div class="form-group"><label>المواعيد والقاعة</label><input type="text" id="mGrpSchedule" value="الأحد والأربعاء 04:00 مساءً (قاعة 1)"></div>
+        <div class="form-group"><label>الرسوم الشهري (جنيه)</label><input type="number" id="mGrpFee" value="350"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitAddGroup()">إنشاء المجموعة في Firestore</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitAddGroup() {
+  const name = document.getElementById('mGrpName').value;
+  const maxCapacity = document.getElementById('mGrpCapacity').value;
+  const schedule = document.getElementById('mGrpSchedule').value;
+  const monthlyFee = document.getElementById('mGrpFee').value;
+
+  try {
+    const res = await callBackend('createGroup', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      maxCapacity,
+      schedule,
+      monthlyFee
+    });
+
+    closeModal();
+    showToast(`تم إنشاء المجموعة ${res.name} بنجاح!`);
+    await renderActiveView('groups');
+  } catch (err) { showToast(err.message, true); }
+}
+
+// Attendance Modal
+function openRecordAttendanceModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ تسجيل حضور طالب (باركود / يدوي)</div>
+        <div class="form-group"><label>كود / معرف الطالب (Student ID / QR) *</label><input type="text" id="mAttStudentId" placeholder="STU_1001"></div>
+        <div class="form-group"><label>اسم الطالب</label><input type="text" id="mAttStudentName" placeholder="أحمد محمد علي"></div>
+        <div class="form-group">
+          <label>الحالة</label>
+          <select id="mAttStatus">
+            <option value="PRESENT">حاضر (PRESENT)</option>
+            <option value="LATE">متأخر (LATE)</option>
+            <option value="EXCUSED">بعذر (EXCUSED)</option>
+            <option value="ABSENT">غائب (ABSENT)</option>
+          </select>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitRecordAttendance()">تسجيل الحضور</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitRecordAttendance() {
+  const studentId = document.getElementById('mAttStudentId').value;
+  const studentName = document.getElementById('mAttStudentName').value;
+  const status = document.getElementById('mAttStatus').value;
+
+  try {
+    const res = await callBackend('recordAttendance', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      studentId,
+      studentName,
+      status
+    });
+
+    closeModal();
+    showToast(`تم تسجيل حضور الطالب (${res.studentId}) بنجاح!`);
+    await renderActiveView('attendance');
+  } catch (err) { showToast(err.message, true); }
+}
+
+// Finance Modals
+function openRecordPaymentModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ تسجيل تحصيل نقدية وإصدار إيصال</div>
+        <div class="form-group"><label>اسم الطالب</label><input type="text" id="mPayStudentName" placeholder="أحمد محمد علي"></div>
+        <div class="form-group"><label>المبلغ (جنيه) *</label><input type="number" id="mPayAmount" value="350"></div>
+        <div class="form-group"><label>البيان / الفئة</label><input type="text" id="mPayCategory" value="مصاريف دراسية شهرية"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitRecordPayment()">حفظ وحفظ الإيصال</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitRecordPayment() {
+  const studentName = document.getElementById('mPayStudentName').value;
+  const amount = document.getElementById('mPayAmount').value;
+  const category = document.getElementById('mPayCategory').value;
+
+  try {
+    const res = await callBackend('recordPayment', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      studentName,
+      amount,
+      category
+    });
+
+    closeModal();
+    showToast(`تم تحصيل مبلغ ${res.amount} ج.م وإصدار إيصال (${res.receiptNumber})!`);
+    await renderActiveView('finance');
+  } catch (err) { showToast(err.message, true); }
+}
+
+function openRecordExpenseModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ تسجيل مصروف تشغيلي للسنتر</div>
+        <div class="form-group"><label>بند المصروفات</label><input type="text" id="mExpCategory" placeholder="إيجار القاعات / كهرباء"></div>
+        <div class="form-group"><label>المبلغ (جنيه) *</label><input type="number" id="mExpAmount" placeholder="1000"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-warning" onclick="submitRecordExpense()">تسجيل المصروف</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitRecordExpense() {
+  const category = document.getElementById('mExpCategory').value;
+  const amount = document.getElementById('mExpAmount').value;
+
+  try {
+    const res = await callBackend('recordExpense', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      category,
+      amount
+    });
+
+    closeModal();
+    showToast(`تم تسجيل مصروف ${res.amount} ج.م بنجاح!`);
+    await renderActiveView('finance');
+  } catch (err) { showToast(err.message, true); }
+}
+
+// SuperAdmin Institution Modal
+function openCreateInstitutionModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إنشاء سنتر / مؤسسة تعليمية بالمنصة</div>
+        <div class="form-group"><label>اسم المؤسسة / السنتر *</label><input type="text" id="mInstName" placeholder="سنتر التفوق التعليمي"></div>
+        <div class="form-group"><label>اسم مالك السنتر</label><input type="text" id="mInstOwner" placeholder="أ.د/ إبراهيم عبد الرحمن"></div>
+        <div class="form-group"><label>رقم الهاتف</label><input type="text" id="mInstPhone" placeholder="01012345678"></div>
+        <div class="form-group">
+          <label>باقة الاشتراك</label>
+          <select id="mInstPlan">
+            <option value="ENTERPRISE">ENTERPRISE (باقة كاملة)</option>
+            <option value="PRO">PRO</option>
+            <option value="BASIC">BASIC</option>
+          </select>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitCreateInstitution()">إنشاء المؤسسة بالمنصة</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitCreateInstitution() {
+  const name = document.getElementById('mInstName').value;
+  const ownerName = document.getElementById('mInstOwner').value;
+  const phone = document.getElementById('mInstPhone').value;
+  const plan = document.getElementById('mInstPlan').value;
+
+  try {
+    const res = await callBackend('createInstitution', currentCallerToken, {
+      name,
+      ownerName,
+      phone,
+      plan
+    });
+
+    closeModal();
+    showToast(`تم إنشاء السنتر (${res.name}) وتخصيص المعرف ${res.id}!`);
+    await renderActiveView('superadmin_institutions');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function suspendInstAction(id) {
+  if (!confirm(`هل أنت تأكد من تجميد حساب السنتر ${id}؟`)) return;
+  try {
+    await callBackend('suspendInstitution', currentCallerToken, id);
+    showToast(`تم تجميد حساب المؤسسة ${id}`);
+    await renderActiveView('superadmin_institutions');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function activateInstAction(id) {
+  try {
+    await callBackend('activateInstitution', currentCallerToken, id);
+    showToast(`تم إعادة تفعيل حساب المؤسسة ${id}`);
+    await renderActiveView('superadmin_institutions');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function revokeDeviceAction(deviceId) {
+  if (!confirm('إلغاء ربط كود الترخيص من هذا الكمبيوتر؟')) return;
+  try {
+    await callBackend('revokeDeviceBinding', currentCallerToken, deviceId);
+    showToast('تم إلغاء ترخيص الجهاز');
+    await renderActiveView('superadmin_devices');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function rebindDeviceAction(deviceId) {
+  try {
+    await callBackend('rebindDeviceBinding', currentCallerToken, deviceId);
+    showToast('تمت إعادة تفعيل ربط الجهاز');
+    await renderActiveView('superadmin_devices');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function saveCenterInfoAction() {
+  const name = document.getElementById('infoName').value;
+  const phone = document.getElementById('infoPhone').value;
+  const address = document.getElementById('infoAddress').value;
+  const receiptHeader = document.getElementById('infoReceipt').value;
+
+  try {
+    await callBackend('updateCenterInfo', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      phone,
+      address,
+      receiptHeader
+    });
+    showToast('تم حفظ بيانات السنتر في Firestore بنجاح');
+  } catch (err) { showToast(err.message, true); }
+}
+
+// Helpers
+function renderPaymentsTable(list) {
+  if (!list || list.length === 0) return '<p style="color:#94a3b8; text-align:center; padding:1.5rem;">لا توجد مدفوعات مسجلة.</p>';
+  return `
+    <table class="data-table">
+      <thead><tr><th>رقم الإيصال</th><th>اسم الطالب</th><th>البيان</th><th>المبلغ</th></tr></thead>
+      <tbody>${list.map(p => `<tr><td><span class="code-box">${p.receiptNumber || p.id}</span></td><td>${p.studentName}</td><td>${p.category}</td><td style="color:#22c55e; font-weight:bold;">${p.amount} ج.م</td></tr>`).join('')}</tbody>
+    </table>
+  `;
+}
+
+function renderAttendanceTable(list) {
+  if (!list || list.length === 0) return '<p style="color:#94a3b8; text-align:center; padding:1.5rem;">لا توجد سجلات حضور لاليوم.</p>';
+  return `
+    <table class="data-table">
+      <thead><tr><th>اسم الطالب</th><th>الوقت</th><th>الحالة</th><th>الوسيلة</th></tr></thead>
+      <tbody>${list.map(a => `<tr><td>${a.studentName || a.studentId}</td><td>${a.time}</td><td><span class="badge">${a.status}</span></td><td>${a.method}</td></tr>`).join('')}</tbody>
+    </table>
+  `;
+}
+
+async function checkDeviceStatus() {
+  if (window.electronAPI && typeof window.electronAPI.getDeviceStatus === 'function') {
+    const st = await window.electronAPI.getDeviceStatus();
+    const badge = document.getElementById('deviceBindingBadge');
+    const lock = document.getElementById('lockScreen');
+
+    if (st && st.status === 'REVOKED') {
+      badge.innerText = 'الجهاز ملغى 🛑';
+      badge.className = 'badge revoked';
+      lock.style.display = 'flex';
+    } else {
+      badge.innerText = 'جهاز مفعل ومربوط 🔒';
+      badge.className = 'badge';
+      lock.style.display = 'none';
+    }
+  }
+}

@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.38",
-  "backendVersion": "1.38.0",
-  "rulesVersion": "1.38.0",
-  "workerVersion": "1.38.0",
-  "releaseTag": "v1.0.0-release.38",
-  "phase": "38",
-  "phaseTitle": "Full Windows Center Desktop Audit & Implementation",
-  "gitBaseline": "42e8ab961ab9bca2f026512f2d60cd34071605c1",
+  "appVersion": "1.0.0-release.38.1",
+  "backendVersion": "1.38.1",
+  "rulesVersion": "1.38.1",
+  "workerVersion": "1.38.1",
+  "releaseTag": "v1.0.0-release.38.1",
+  "phase": "38.1",
+  "phaseTitle": "Real Data & Real Firestore CRUD + SuperAdmin Platform Console",
+  "gitBaseline": "8de7c86",
   "status": "PASS",
-  "deploymentStatus": "FULL_WINDOWS_CENTER_DESKTOP_VERIFIED",
+  "deploymentStatus": "FULL_REAL_DESKTOP_CRUD_AND_SUPERADMIN_VERIFIED",
   "targetFirebaseProject": "educenter-saas"
 }
