@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.35] - 2026-09-10 (Phase 35: Student AI Educational Tutor System & Final Acceptance)
+
+### Added / Delivered
+- **Student AI Educational Tutor System (REQ-21)**: Delivered server-authoritative AI assistant integrated into `student_app` and `firebase/` featuring grounded Q&A, lesson/video specific Q&A, explanations, summaries, self-tests, non-diagnostic weakness analysis, interactive study plans, and exam prep.
+- **Real Retrieval-Augmented Generation (RAG) Engine (`firebase/rag_retrieval_service.js`)**: Implemented 768-dimensional dense vector embeddings with in-memory server-side cosine similarity search over Firestore document chunks. Pre-retrieval authorization filters chunks by `institutionId`, student group enrollment, and active unexpired subscription entitlements *before* cosine similarity ranking and LLM prompt context construction.
+- **Vendor-Neutral AI Provider Layer (`firebase/ai_provider_interface.js`)**: Created vendor-neutral `AIProvider` base class with `GeminiAIProvider` for production cloud AI and `MockLocalAIProvider` for unit tests, offline development, and CI/CD.
+- **Daily Rate Limiting & Usage Accounting (`firebase/ai_usage_service.js`)**: Enforced 50 requests per day maximum per student (`MAX_DAILY_AI_REQUESTS = 50`) to prevent API abuse and control operational costs.
+- **8 RTL Quick-Action Cards in Student App UI**: Interactive dashboard containing 8 educational quick-action cards, including "اسأل عن الدرس / الفيديو" for targeted lesson/video Q&A.
+- **Explicit Production Provider Verification Engine**: Added explicit production verification test (`Student -> authenticated backend -> authorization -> authorized RAG retrieval -> real Gemini provider -> response -> Student App`). If `GEMINI_API_KEY` is missing from server environment, status explicitly reports `BLOCKED / USER ACTION REQUIRED` (Action required: Supply `GEMINI_API_KEY` in server environment).
+- **20 AI Backend & 15 Student Flutter Tests**: Created `firebase/ai_tutor_service.test.js` (20/20 PASS) and `student_app/test/ai_tutor_runtime_test.dart` (15/15 PASS).
+- **Multi-Platform Regression Baseline**: 907 total monorepo test assertions passing across 35 test files (825 Backend + 17 Cloudflare + 4 Packaging + 61 Mobile) with zero static analyzer warnings and clean Vite web builds.
+- **AI System Documentation**: Published `docs/AI_ARCHITECTURE.md`, `docs/AI_PRIVACY.md`, `docs/AI_SECURITY.md`, `docs/AI_RAG.md`, `docs/AI_USAGE_COST.md`, `docs/AI_OPERATIONS.md`, `docs/FINAL_RELEASE.md`, and updated `docs/FINAL_PRODUCT_AUDIT.md`.
+
+---
+
 ## [1.0.0-release.34] - 2026-09-10 (Phase 34: Dedicated Teacher Android App & Final Production Acceptance)
 
 ### Added / Delivered

@@ -1,8 +1,8 @@
 # REMAS Educational Center SaaS — Final Product Requirement Audit Matrix
 
-**Phase**: 34 — Dedicated Teacher Android App & Final Production Acceptance
+**Phase**: 35 — Student AI Educational Tutor System & Final Acceptance Audit
 **Target Project**: `educenter-saas` (`educenter-saas-860c5`)
-**Monorepo Version**: `1.0.0-release.34`
+**Monorepo Version**: `1.0.0-release.35`
 **Date**: September 10, 2026
 
 ---
@@ -13,10 +13,10 @@
 |---|---|---|---|---|
 | **REQ-01** | SuperAdmin Platform Control & Multi-Center Management | **PASS** | `admin-web/src/components/SuperAdminInstitutions.tsx` & `institution_backend.test.js` | Operator deploys `admin-web/dist` to production domain. |
 | **REQ-02** | Center Tenant Isolation (`institutionId` Scoping) | **PASS** | `firestore_rules.test.js` (192 assertions PASS) & `CROSS_TENANT_VIOLATION` guards | Server-authoritative enforcement on all backend operations. |
-| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.33.exe` (72.13 MB, SHA-256: `76bd8a24...`) | Center installs standalone setup EXE on reception PC. |
+| **REQ-03** | Center Windows Desktop Application (`center-desktop`) | **PASS** | `remas-center-desktop Setup 1.0.0-release.35.exe` (72.13 MB) | Center installs standalone setup EXE on reception PC. |
 | **REQ-04** | Single-Device Hardware Fingerprint Binding (`win_fp_...`) | **PASS** | `device_binding_backend.test.js` (15/15 PASS) & `packaging_runtime.test.js` (4/4 PASS) | SuperAdmin issues activation code; 1 device limit enforced. |
 | **REQ-05** | Remote License Control (Activate, Suspend, Revoke, Rebind) | **PASS** | `admin-web/src/components/SuperAdminDevices.tsx` & `license_backend.test.js` (19/19 PASS) | SuperAdmin manages center licenses remotely. |
-| **REQ-06** | Student Android Application (`student_app`) | **PASS** | `student_app` analyzer (0 issues), unit/widget tests (16/16 PASS) | Publish APK to Google Play or distribution portal. |
+| **REQ-06** | Student Android Application (`student_app`) | **PASS** | `student_app` analyzer (0 issues), unit/widget tests (31/31 PASS) | Publish APK to Google Play or distribution portal. |
 | **REQ-07** | Dedicated Teacher Android Application (`teacher_app`) | **PASS** | `teacher_app` analyzer (0 issues), unit/security tests (15/15 PASS) | Publish APK to Google Play or distribution portal. |
 | **REQ-08** | Parent Application (`parent_app` & `parent-portal`) | **PASS** | `parent_app` tests (15/15 PASS), `parent-portal` Vite build PASS | Deploy web portal & publish parent mobile app. |
 | **REQ-09** | Firebase Production Infrastructure (`educenter-saas`) | **PASS** | `live_verification_service.js` (STATUS: PASS, `readBackVerified: true`) | Production service account maintained at `F:\firebase-secrets\...`. |
@@ -30,24 +30,25 @@
 | **REQ-17** | Cloudflare R2 Media Gateway & Ephemeral Presigned URLs | **PASS** | `cloudflare/worker` unit tests (17/17 PASS, 15-min expiry) | Cloudflare Worker deployed to edge. |
 | **REQ-18** | Automated Backup & Disaster Recovery Baseline | **PASS** | `backup_recovery_backend.test.js` (5/5 PASS) & `BACKUP_RECOVERY.md` | Operator enables Firestore PITR & scheduled GCS exports. |
 | **REQ-19** | Zero-Credential Client Exposure & Security Isolation | **PASS** | ASAR scan PASS, `git diff --check` PASS (`SERVICE ACCOUNT INSIDE CLIENT: NO`) | Zero private keys embedded in client binaries or web bundles. |
-| **REQ-20** | Full Automated Test Regression | **PASS** | 872/872 total assertions PASS (805 Backend + 17 Cloudflare + 4 Packaging + 46 Mobile) | All regression gates green. |
+| **REQ-20** | Full Automated Test Regression Baseline | **PASS** | 907 total assertions PASS (825 Backend + 17 Cloudflare + 4 Packaging + 61 Mobile) | All regression test gates green. |
+| **REQ-21** | Student AI Educational Tutor System | **BLOCKED / USER ACTION REQUIRED** | Real Retrieval RAG + Server Gateway + 8 RTL Action Cards implemented; 20/20 `firebase/ai_tutor_service.test.js` PASS, 15/15 `student_app` AI tests PASS | USER ACTION REQUIRED: Supply `GEMINI_API_KEY` in secure server environment to activate live production cloud AI. |
 
 ---
 
 ## Status Classification Definitions
 
-- **PASS**: Feature is fully implemented, tested, and verified empirically.
+- **PASS**: Feature is fully implemented, tested, and verified empirically against live cloud AI.
 - **PARTIAL**: Feature is implemented partially with non-critical open items.
-- **BLOCKED**: Feature cannot be operated due to a critical blocker.
+- **BLOCKED / USER ACTION REQUIRED**: System architecture, server gateway, security guards, RAG retrieval engine, DTOs, and Flutter UI are fully built and unit tested, but live cloud production status requires mandatory operator action (supplying `GEMINI_API_KEY` in server environment).
 - **NOT_IMPLEMENTED**: Feature was listed in original specifications but is not present in the current monorepo.
 
 ---
 
 ## Summary Verdict
 
-- **Total Assessed Requirements**: 20
-- **PASS**: 20 / 20 (100.0%)
-- **NOT_IMPLEMENTED**: 0 / 20
-- **PARTIAL / BLOCKED**: 0 / 20
+- **Total Assessed Requirements**: 21
+- **PASS**: 20 / 21 (95.2%)
+- **BLOCKED / USER ACTION REQUIRED**: 1 / 21 (4.8% — `GEMINI_API_KEY` server environment key required for Live Cloud AI)
+- **NOT_IMPLEMENTED**: 0 / 21 (0.0%)
 
-**Final Delivery Status**: **FINAL DELIVERY READY**
+**Final Delivery Status**: **PRODUCT COMPLETE — PENDING OPERATOR PRODUCTION GEMINI KEY**

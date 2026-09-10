@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/ai_tutor_service.dart';
 import 'profile_screen.dart';
 import 'groups_screen.dart';
 import 'schedule_screen.dart';
@@ -10,6 +11,7 @@ import 'online_exams_list_screen.dart';
 import 'educational_content_screen.dart';
 import 'subscription_screen.dart';
 import 'notifications_screen.dart';
+import 'ai_tutor_home_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -18,6 +20,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final authService = AuthService();
+    final aiService = StudentAITutorService();
 
     return Scaffold(
       appBar: AppBar(
@@ -106,6 +109,19 @@ class HomeScreen extends StatelessWidget {
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 children: [
+                  _buildDashboardTile(
+                    context,
+                    title: 'المساعد الذكي',
+                    subtitle: 'شرح، تلخيص، واختبارات',
+                    icon: Icons.psychology,
+                    color: Colors.purple.shade800,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AITutorHomeScreen(aiService: aiService)),
+                      );
+                    },
+                  ),
                   _buildDashboardTile(
                     context,
                     title: 'الامتحانات الإلكترونية',

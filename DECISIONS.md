@@ -256,3 +256,45 @@ Phase 33 executes the final product audit, production connection validation agai
    - Student & Parent Flutter App Static Analyzers (0 issues)
 5. **Zero Secret Leakage Audit**: Verified 0 private keys, service account JSON files, or secrets inside `app.asar`, installer, web bundles, or mobile app source (`SERVICE ACCOUNT INSIDE CLIENT: NO`).
 6. **System Status**: Monorepo version elevated to `1.0.0-release.33` and status set to `FINAL_DELIVERY_RELEASE`. Final delivery verdict: `FINAL DELIVERY READY WITH OPERATIONAL STEPS`.
+
+---
+
+## ADR-034: Phase 34 Dedicated Teacher Android App Architecture
+
+### Context
+Phase 34 implemented the missing dedicated `teacher_app` Flutter Android application to fulfill REQ-07, providing assigned teachers with roster management, session attendance recording, assessment grade entry, and session schedule viewing.
+
+### Decision
+1. **Dedicated Flutter App (`teacher_app/`)**: Developed standalone Flutter app with `TeacherProfileDTO`, `TeacherGroupDTO`, `TeacherScheduleItemDTO`, `TeacherGradeDTO`, and `TeacherAuthService`.
+2. **Server-Authoritative Role Guards**: Enforces `TEACHER` role authentication. Rejects student and parent logins (`UNAUTHORIZED_ROLE`).
+3. **15-Assertion Flutter Test Suite**: Verified 100% PASS for `teacher_runtime_test.dart`.
+
+---
+
+## ADR-035: Phase 35 Student AI Educational Tutor System Architecture
+
+### Context
+Phase 35 implements REQ-21 (Student AI Educational Tutor System) as a server-authoritative, pre-retrieval RAG-based AI assistant integrated into `student_app` and `firebase/`.
+
+### Decision
+1. **Zero Client API Keys**: All AI provider calls execute strictly through trusted Firebase Cloud Function gateway (`firebase/ai_tutor_service.js`). API keys are stored in secure server environment variables (`GEMINI_API_KEY`).
+2. **Real Pre-Retrieval RAG Engine (`firebase/rag_retrieval_service.js`)**: Implements 768-dimensional dense vector embeddings with in-memory server-side cosine similarity search over authorized Firestore document chunks. Chunks are filtered by `institutionId`, student group enrollment, and active unexpired subscription entitlements *before* cosine similarity evaluation and prompt construction.
+3. **Vendor-Neutral AI Provider Abstraction (`firebase/ai_provider_interface.js`)**: Defines `AIProvider` base class with `GeminiAIProvider` for production cloud AI and `MockLocalAIProvider` for unit tests, offline development, and CI. Mock provider is explicitly prohibited from being counted as proof of live cloud AI deployment.
+4. **Daily Rate Limits & Token Accounting (`firebase/ai_usage_service.js`)**: Enforces 50 requests per day maximum per student (`MAX_DAILY_AI_REQUESTS = 50`) to prevent runaway costs and API abuse.
+5. **8 RTL Quick-Action Cards in Student App**: Interactive dashboard featuring:
+   1. اسأل المساعد
+   2. اسأل عن الدرس / الفيديو
+   3. اشرح لي الدرس
+   4. لخص لي
+   5. اختبرني
+   6. تحليل مستواي
+   7. خطة مذاكرتي
+   8. استعد للامتحان
+6. **Explicit Production Verification & Audit Status**: If `GEMINI_API_KEY` is missing from server environment, production verification status explicitly reports `BLOCKED / USER ACTION REQUIRED` (Action required: Supply `GEMINI_API_KEY` in server environment). REQ-21 status is reported accurately as `BLOCKED / USER ACTION REQUIRED` pending live key deployment.
+7. **Comprehensive Regression**:
+   - 20 AI backend unit/security assertions (`ai_tutor_service.test.js` PASS)
+   - 15 Student Flutter App AI unit/UI assertions (`ai_tutor_runtime_test.dart` PASS)
+   - 907 total monorepo assertions PASS across 35 test files
+   - 0 static analysis issues in Flutter apps
+   - Production Vite web builds clean
+

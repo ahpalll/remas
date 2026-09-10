@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.34",
-  "backendVersion": "1.34.0",
-  "rulesVersion": "1.34.0",
-  "workerVersion": "1.34.0",
-  "releaseTag": "v1.0.0-release.34",
-  "phase": "34",
-  "phaseTitle": "Dedicated Teacher Android App & Final Production Acceptance",
-  "gitBaseline": "065f927a88a1de9e8f628af1a584773b30eded39",
+  "appVersion": "1.0.0-release.35",
+  "backendVersion": "1.35.0",
+  "rulesVersion": "1.35.0",
+  "workerVersion": "1.35.0",
+  "releaseTag": "v1.0.0-release.35",
+  "phase": "35",
+  "phaseTitle": "Student AI Educational Tutor System & Final Acceptance",
+  "gitBaseline": "5c21f92e4a8412850cf5324ab5e5df612948bc54",
   "status": "PASS",
-  "deploymentStatus": "FINAL_DELIVERY_READY",
+  "deploymentStatus": "PRODUCT_COMPLETE_PENDING_PRODUCTION_AI_KEY",
   "targetFirebaseProject": "educenter-saas"
 }
