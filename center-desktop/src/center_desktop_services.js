@@ -16,52 +16,44 @@ const DEFAULT_CALLER_TOKEN = {
 let memoryStore = getInitialSeedState();
 
 function getInitialSeedState() {
-  const instId = 'inst_bootstrap_001';
-  const students = new Map();
-  const teachers = new Map();
-  const groups = new Map();
-  const subjects = new Map();
-  const attendanceRecords = new Map();
-  const sessions = new Map();
-  const contentMedia = new Map();
-  const exams = new Map();
-  const grades = new Map();
-  const subscriptions = new Map();
-  const parents = new Map();
-  const payments = new Map();
-  const expenses = new Map();
-  const licenses = new Map();
-  const devices = new Map();
-
-  students.set('STU_1001', { id: 'STU_1001', studentCode: 'STU-2026-X1001', institutionId: instId, name: 'أحمد محمد علي', phone: '01011112222', guardianPhone: '01122223333', grade: 'الصف الثالث الثانوي', groupId: 'GRP_MATH_01', qrToken: 'QR_STU_1001', status: 'ACTIVE' });
-  teachers.set('TCH_2001', { id: 'TCH_2001', institutionId: instId, name: 'أ.د/ إبراهيم عبد الرحمن', phone: '01099998888', subject: 'الرياضيات', status: 'ACTIVE' });
-  groups.set('GRP_MATH_01', { id: 'GRP_MATH_01', institutionId: instId, name: 'رياضيات - ثانوية عامة (أ)', subjectName: 'الرياضيات', teacherName: 'أ.د/ إبراهيم عبد الرحمن', maxCapacity: 30, enrolledCount: 1, schedule: 'الأحد والأربعاء 04:00 مساءً', room: 'قاعة 1', monthlyFee: 350, status: 'ACTIVE' });
-  contentMedia.set('MED_5001', { id: 'MED_5001', institutionId: instId, title: 'فيديو شرح مقدمة المشتقات وتطبيقاتها', type: 'VIDEO', storageKey: 'courses/math/sec3_lesson1.mp4', publicCdnUrl: 'https://cdn.remas-saas.edu/media/courses/math/sec3_lesson1.mp4', expiresMinutes: 15, createdAt: '2026-09-05T09:00:00Z' });
-  exams.set('EXM_6001', { id: 'EXM_6001', institutionId: instId, title: 'اختبار شهر سبتمبر - الرياضيات', maxScore: 100, examDate: '2026-09-15', status: 'SCHEDULED' });
-  grades.set('GRD_7001', { id: 'GRD_7001', institutionId: instId, examId: 'EXM_6001', studentId: 'STU_1001', studentName: 'أحمد محمد علي', score: 92, maxScore: 100, percentage: 92.0, status: 'PASSED' });
-  subscriptions.set('SUB_8001', { id: 'SUB_8001', institutionId: instId, packageName: 'الباقة الشهرية الكاملة - رياضيات', studentId: 'STU_1001', studentName: 'أحمد محمد علي', code: 'SUB-MATH-2026-X912', status: 'ACTIVE', startDate: '2026-09-01', endDate: '2026-10-01' });
-  parents.set('PAR_9001', { id: 'PAR_9001', institutionId: instId, name: 'م/ محمد علي الأحمدي', phone: '01122223333', linkedStudentIds: ['STU_1001'], linkedStudentNames: ['أحمد محمد علي'] });
-
-  return {
+  const store = {
     institutions: new Map(),
-    students,
-    teachers,
-    groups,
-    subjects,
-    attendanceRecords,
-    sessions,
-    contentMedia,
-    exams,
-    grades,
-    subscriptions,
-    parents,
-    payments,
-    expenses,
-    licenses,
-    devices,
+    students: new Map(),
+    teachers: new Map(),
+    groups: new Map(),
+    subjects: new Map(),
+    attendanceRecords: new Map(),
+    sessions: new Map(),
+    contentMedia: new Map(),
+    exams: new Map(),
+    grades: new Map(),
+    subscriptions: new Map(),
+    parents: new Map(),
+    payments: new Map(),
+    expenses: new Map(),
+    licenses: new Map(),
+    devices: new Map(),
     branding: new Map(),
     auditLogs: []
   };
+
+  if (process.env.USE_TEST_SEED === 'true') {
+    populateTestSeedData(store);
+  }
+
+  return store;
+}
+
+function populateTestSeedData(store) {
+  const instId = 'inst_bootstrap_001';
+  store.students.set('STU_1001', { id: 'STU_1001', studentCode: 'STU-2026-X1001', institutionId: instId, name: 'أحمد محمد علي', phone: '01011112222', guardianPhone: '01122223333', grade: 'الصف الثالث الثانوي', groupId: 'GRP_MATH_01', qrToken: 'QR_STU_1001', status: 'ACTIVE' });
+  store.teachers.set('TCH_2001', { id: 'TCH_2001', institutionId: instId, name: 'أ.د/ إبراهيم عبد الرحمن', phone: '01099998888', subject: 'الرياضيات', status: 'ACTIVE' });
+  store.groups.set('GRP_MATH_01', { id: 'GRP_MATH_01', institutionId: instId, name: 'رياضيات - ثانوية عامة (أ)', subjectName: 'الرياضيات', teacherName: 'أ.د/ إبراهيم عبد الرحمن', maxCapacity: 30, enrolledCount: 1, schedule: 'الأحد والأربعاء 04:00 مساءً', room: 'قاعة 1', monthlyFee: 350, status: 'ACTIVE' });
+  store.contentMedia.set('MED_5001', { id: 'MED_5001', institutionId: instId, title: 'فيديو شرح مقدمة المشتقات وتطبيقاتها', type: 'VIDEO', storageKey: 'courses/math/sec3_lesson1.mp4', publicCdnUrl: 'https://cdn.remas-saas.edu/media/courses/math/sec3_lesson1.mp4', expiresMinutes: 15, createdAt: '2026-09-05T09:00:00Z' });
+  store.exams.set('EXM_6001', { id: 'EXM_6001', institutionId: instId, title: 'اختبار شهر سبتمبر - الرياضيات', maxScore: 100, examDate: '2026-09-15', status: 'SCHEDULED' });
+  store.grades.set('GRD_7001', { id: 'GRD_7001', institutionId: instId, examId: 'EXM_6001', studentId: 'STU_1001', studentName: 'أحمد محمد علي', score: 92, maxScore: 100, percentage: 92.0, status: 'PASSED' });
+  store.subscriptions.set('SUB_8001', { id: 'SUB_8001', institutionId: instId, packageName: 'الباقة الشهرية الكاملة - رياضيات', studentId: 'STU_1001', studentName: 'أحمد محمد علي', code: 'SUB-MATH-2026-X912', status: 'ACTIVE', startDate: '2026-09-01', endDate: '2026-10-01' });
+  store.parents.set('PAR_9001', { id: 'PAR_9001', institutionId: instId, name: 'م/ محمد علي الأحمدي', phone: '01122223333', linkedStudentIds: ['STU_1001'], linkedStudentNames: ['أحمد محمد علي'] });
 }
 
 /**
@@ -312,6 +304,13 @@ function getDashboardSummary(callerToken, institutionId) {
 function getStudents(callerToken, options = {}) {
   let token = callerToken;
   let opts = options;
+  if (typeof options === 'string') {
+    if (options.startsWith('inst_')) {
+      opts = { institutionId: options };
+    } else {
+      opts = { query: options };
+    }
+  }
   if (callerToken && !callerToken.uid && typeof callerToken === 'object') {
     opts = callerToken;
     token = DEFAULT_CALLER_TOKEN;
@@ -322,7 +321,7 @@ function getStudents(callerToken, options = {}) {
   let list = Array.from(memoryStore.students.values()).filter(s => s.institutionId === instId);
 
   const queryStr = opts.query || opts.search;
-  if (queryStr) {
+  if (queryStr && typeof queryStr === 'string') {
     const q = queryStr.toLowerCase();
     list = list.filter(s => (s.name && s.name.toLowerCase().includes(q)) || (s.phone && s.phone.includes(q)));
   }
@@ -394,28 +393,34 @@ function addStudent(payload) {
   return createStudent(DEFAULT_CALLER_TOKEN, payload);
 }
 
-function updateStudent(callerToken, studentId, payload = {}) {
+function updateStudent(callerToken, studentIdOrPayload, payload = {}) {
+  let sId = studentIdOrPayload;
+  let body = payload;
+  if (typeof studentIdOrPayload === 'object' && studentIdOrPayload.id) {
+    sId = studentIdOrPayload.id;
+    body = studentIdOrPayload;
+  }
   const token = resolveCallerToken(callerToken);
-  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const instId = validateTenantAccess(token, body.institutionId || token.institutionId);
 
-  let existing = memoryStore.students.get(studentId);
+  let existing = memoryStore.students.get(sId);
   if (!existing) {
-    throw new Error(`STUDENT_NOT_FOUND: Student '${studentId}' does not exist`);
+    throw new Error(`STUDENT_NOT_FOUND: Student '${sId}' does not exist`);
   }
 
   const updated = {
     ...existing,
-    ...payload,
-    id: studentId,
+    ...body,
+    id: sId,
     institutionId: instId,
     updatedAt: new Date().toISOString()
   };
 
-  memoryStore.students.set(studentId, updated);
+  memoryStore.students.set(sId, updated);
 
   const db = getFirestoreDb();
-  if (db) {
-    db.collection('institutions').doc(instId).collection('students').doc(studentId).set(updated, { merge: true }).catch(() => {});
+  if (db && sId) {
+    db.collection('institutions').doc(instId).collection('students').doc(sId).set(updated, { merge: true }).catch(() => {});
   }
 
   recordAuditEvent({
@@ -424,7 +429,7 @@ function updateStudent(callerToken, studentId, payload = {}) {
     actorRole: token.role,
     institutionId: instId,
     targetType: 'STUDENT',
-    targetId: studentId,
+    targetId: sId,
     details: { name: updated.name }
   });
 
@@ -495,24 +500,30 @@ function createTeacher(callerToken, payload = {}) {
   return makeSyncPromise(teacher);
 }
 
-function updateTeacher(callerToken, teacherId, payload = {}) {
+function updateTeacher(callerToken, teacherIdOrPayload, payload = {}) {
+  let tId = teacherIdOrPayload;
+  let body = payload;
+  if (typeof teacherIdOrPayload === 'object' && teacherIdOrPayload.id) {
+    tId = teacherIdOrPayload.id;
+    body = teacherIdOrPayload;
+  }
   const token = resolveCallerToken(callerToken);
-  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
-  const existing = memoryStore.teachers.get(teacherId) || {};
+  const instId = validateTenantAccess(token, body.institutionId || token.institutionId);
+  const existing = memoryStore.teachers.get(tId) || {};
 
   const updated = {
     ...existing,
-    ...payload,
-    id: teacherId,
+    ...body,
+    id: tId,
     institutionId: instId,
     updatedAt: new Date().toISOString()
   };
 
-  memoryStore.teachers.set(teacherId, updated);
+  memoryStore.teachers.set(tId, updated);
 
   const db = getFirestoreDb();
-  if (db) {
-    db.collection('institutions').doc(instId).collection('teachers').doc(teacherId).set(updated, { merge: true }).catch(() => {});
+  if (db && tId) {
+    db.collection('institutions').doc(instId).collection('teachers').doc(tId).set(updated, { merge: true }).catch(() => {});
   }
 
   return makeSyncPromise(updated);
@@ -598,24 +609,30 @@ function addGroup(payload) {
   return createGroup(DEFAULT_CALLER_TOKEN, payload);
 }
 
-function updateGroup(callerToken, groupId, payload = {}) {
+function updateGroup(callerToken, groupIdOrPayload, payload = {}) {
+  let gId = groupIdOrPayload;
+  let body = payload;
+  if (typeof groupIdOrPayload === 'object' && groupIdOrPayload.id) {
+    gId = groupIdOrPayload.id;
+    body = groupIdOrPayload;
+  }
   const token = resolveCallerToken(callerToken);
-  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
-  const existing = memoryStore.groups.get(groupId) || {};
+  const instId = validateTenantAccess(token, body.institutionId || token.institutionId);
+  const existing = memoryStore.groups.get(gId) || {};
 
   const updated = {
     ...existing,
-    ...payload,
-    id: groupId,
+    ...body,
+    id: gId,
     institutionId: instId,
     updatedAt: new Date().toISOString()
   };
 
-  memoryStore.groups.set(groupId, updated);
+  memoryStore.groups.set(gId, updated);
 
   const db = getFirestoreDb();
-  if (db) {
-    db.collection('institutions').doc(instId).collection('groups').doc(groupId).set(updated, { merge: true }).catch(() => {});
+  if (db && gId) {
+    db.collection('institutions').doc(instId).collection('groups').doc(gId).set(updated, { merge: true }).catch(() => {});
   }
 
   return makeSyncPromise(updated);
@@ -787,11 +804,15 @@ function createSession(callerToken, payload = {}) {
   token = resolveCallerToken(token);
 
   const instId = validateTenantAccess(token, body.institutionId || token.institutionId);
+  const sessionDate = body.date || body.sessionDate || new Date().toISOString().split('T')[0];
+  const room = body.room || 'قاعة 1';
+  const startTime = body.startTime || '16:00';
+
   const existing = Array.from(memoryStore.sessions.values()).filter(s => s.institutionId === instId);
 
-  const conflict = existing.find(s => s.room === body.room && s.date === body.date && s.startTime === body.startTime);
+  const conflict = existing.find(s => s.room === room && s.date === sessionDate && (s.startTime === startTime || (s.startTime <= startTime && s.endTime > startTime)));
   if (conflict) {
-    throw new Error(`SESSION_SCHEDULE_CONFLICT: Room '${body.room}' is occupied on ${body.date} at ${body.startTime}`);
+    throw new Error(`SESSION_SCHEDULE_CONFLICT: Room '${room}' is occupied on ${sessionDate} at ${startTime}`);
   }
 
   const id = `SES_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
@@ -801,10 +822,10 @@ function createSession(callerToken, payload = {}) {
     title: body.title || 'حصة دراسية',
     groupId: body.groupId || '',
     teacherId: body.teacherId || '',
-    date: body.date || new Date().toISOString().split('T')[0],
-    startTime: body.startTime || '16:00',
+    date: sessionDate,
+    startTime: startTime,
     endTime: body.endTime || '18:00',
-    room: body.room || 'قاعة 1',
+    room: room,
     status: 'SCHEDULED',
     createdAt: new Date().toISOString()
   };
@@ -994,7 +1015,7 @@ function recordPayment(callerToken, payload = {}) {
   }
 
   const id = `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-  const receiptNumber = `REC-${Math.floor(1000 + Math.random() * 9000)}`;
+  const receiptNumber = `REC-2026-X${Math.floor(1000 + Math.random() * 9000)}`;
 
   const payment = {
     id,

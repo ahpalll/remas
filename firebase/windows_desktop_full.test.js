@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+process.env.USE_TEST_SEED = 'true';
 const desktopServices = require('../center-desktop/src/center_desktop_services');
 const deviceBinding = require('../center-desktop/src/device_binding_service');
 const { generateHardwareFingerprint, validateFingerprintFormat, getSystemMetadata } = require('../center-desktop/src/device_fingerprint');
