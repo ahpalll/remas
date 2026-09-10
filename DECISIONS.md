@@ -1,5 +1,23 @@
 # Architectural Decision Records (ADR)
 
+## ADR-041: Phase 39 REMAS EDU White-Label Branding System Architecture
+
+### Context
+In Phase 39, the platform required establishing an official REMAS EDU Platform Brand Identity while delivering dynamic multi-tenant white-label branding for individual education centers. The architecture needed to guarantee that all institutions run identical software binaries (single APK, single EXE, single Web app) while dynamically rendering center branding at runtime based on authenticated tenant context (`institutionId`).
+
+### Decision
+1. **REMAS EDU Platform Identity Preservation**: Platform identity (`REMAS EDU` / `رِماس للتقنية التعليمية` - `إدارة أذكى.. تعليم أفضل`) remains constant across all applications. Institution branding customizes center name, colors, logos, and login messages without altering platform identity.
+2. **Missing Logo Asset Compliance**: In strict adherence to user instructions, zero synthetic CSS approximations or alternate logos were created for missing platform asset files (`remas_logo_primary`, etc.). Missing assets are formally logged as `BLOCKED — REQUIRED BRAND ASSET FILES`.
+3. **Strict Input Sanitization & Validation**:
+   - Color values are validated against strict `#RRGGBB` hex regex patterns on client and server to prevent CSS/HTML injection.
+   - Asset uploads are validated for MIME type (`image/png`, `image/jpeg`, `image/webp`), extension (`.png`, `.jpg`, `.jpeg`, `.webp`), and size (`<= 5 MB`). Executable files, HTML, JS, and unsanitized SVG are strictly rejected.
+4. **Cloudflare R2 Media Integration**: Branding logos and watermarks are stored in private Cloudflare R2 buckets, with metadata stored in Firestore. Assets are accessed via short-lived signed URLs (15-minute expiry).
+5. **Tenant Isolation Guards**: Firestore Security Rules and server services restrict branding modifications to authorized institution owners (`request.auth.token.institutionId == institutionId`). Cross-tenant modification attempts throw `CROSS_TENANT_VIOLATION`.
+6. **SuperAdmin Reset Engine**: SuperAdmin platform operators possess authority to inspect center brandings, reset center configurations to REMAS default tokens, and update platform taglines.
+7. **Automated Verification**: 20/20 assertions in `firebase/phase_39_branding.test.js` pass 100% clean alongside the full 1045 monorepo assertion baseline.
+
+---
+
 ## ADR-040: Phase 38.1 Real Firestore CRUD & SuperAdmin Platform Console Architecture
 
 ### Context

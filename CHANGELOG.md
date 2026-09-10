@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.39] - 2026-09-10 (Phase 39: REMAS EDU White-Label Branding System)
+
+### Added / Delivered
+- **Official Platform Brand Identity**: Established immutable REMAS EDU Platform Identity tokens (`REMAS EDU` / `رِماس للتقنية التعليمية` - `إدارة أذكى.. تعليم أفضل`).
+- **Dynamic Multi-Tenant Theme Engine (`firebase/brand_theme_engine.js`)**: Resolves institution-specific overrides merged with REMAS platform default tokens. Enforces strict `#RRGGBB` hex color validation and asset metadata validation (.png, .jpg, .jpeg, .webp <= 5MB).
+- **Branding Backend & R2 Signed Gateway (`firebase/branding_service.js`)**: Handles Firestore metadata persistence, Cloudflare R2 presigned asset upload URL generation, tenant isolation guards, and SuperAdmin reset capabilities.
+- **Center Owner Desktop Branding Console**: Added `الهوية والعلامة التجارية` screen in `center-desktop` with custom color inputs, title/subtitle fields, logo file uploader, and live interactive preview card.
+- **SuperAdmin Desktop Platform Branding Console**: Added platform brand control view for inspecting center brandings, resetting center themes to REMAS defaults, and tracking required platform brand asset files.
+- **Automated Test Suite (`firebase/phase_39_branding.test.js`)**: 20/20 assertions PASSing clean across Sections A-H. Total monorepo executed assertions reached **1045 PASS**.
+- **Missing Asset Logged**: Formally logged `BLOCKED — REQUIRED BRAND ASSET FILES` for official logo assets (`remas_logo_primary`, etc.) pending file provision.
+
+---
+
 ## [1.0.0-release.38.1] - 2026-09-10 (Phase 38.1: Real Data & Real CRUD + SuperAdmin Platform Console)
 
 ### Added / Delivered

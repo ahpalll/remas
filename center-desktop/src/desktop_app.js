@@ -62,6 +62,7 @@ function renderSidebarNav() {
       <li class="nav-item ${activeView === 'superadmin_institutions' ? 'active' : ''}" onclick="navigate('superadmin_institutions')">🏢 إدارة المراكز والمؤسسات</li>
       <li class="nav-item ${activeView === 'superadmin_devices' ? 'active' : ''}" onclick="navigate('superadmin_devices')">💻 الأجهزة والتراخيص</li>
       <li class="nav-item ${activeView === 'superadmin_ai' ? 'active' : ''}" onclick="navigate('superadmin_ai')">🤖 مزودات الذكاء الاصطناعي</li>
+      <li class="nav-item ${activeView === 'superadmin_branding' ? 'active' : ''}" onclick="navigate('superadmin_branding')">🎨 إدارة الهوية والمؤسسات</li>
       <li class="nav-item ${activeView === 'superadmin_audit' ? 'active' : ''}" onclick="navigate('superadmin_audit')">📜 سجل أحداث المنصة Audit Logs</li>
     `;
   } else {
@@ -78,6 +79,7 @@ function renderSidebarNav() {
       <li class="nav-item ${activeView === 'exams' ? 'active' : ''}" onclick="navigate('exams')">📝 الاختبارات والدرجات</li>
       <li class="nav-item ${activeView === 'subscriptions' ? 'active' : ''}" onclick="navigate('subscriptions')">🎟️ الاشتراكات والباقات</li>
       <li class="nav-item ${activeView === 'parents' ? 'active' : ''}" onclick="navigate('parents')">👨‍👩‍👧 أولياء الأمور</li>
+      <li class="nav-item ${activeView === 'branding' ? 'active' : ''}" onclick="navigate('branding')">🎨 الهوية والعلامة التجارية</li>
       <li class="nav-item ${activeView === 'center_info' ? 'active' : ''}" onclick="navigate('center_info')">⚙️ معلومات السنتر</li>
       <li class="nav-item ${activeView === 'license' ? 'active' : ''}" onclick="navigate('license')">🔒 الترخيص والجهاز</li>
     `;
@@ -177,6 +179,9 @@ async function renderActiveView(view) {
       case 'parents':
         await renderParentsView(mainView);
         break;
+      case 'branding':
+        await renderBrandingView(mainView);
+        break;
       case 'center_info':
         await renderCenterInfoView(mainView);
         break;
@@ -195,6 +200,9 @@ async function renderActiveView(view) {
         break;
       case 'superadmin_ai':
         await renderSuperAdminAIView(mainView);
+        break;
+      case 'superadmin_branding':
+        await renderSuperAdminBrandingView(mainView);
         break;
       case 'superadmin_audit':
         await renderSuperAdminAuditView(mainView);
@@ -1112,3 +1120,214 @@ async function checkDeviceStatus() {
     }
   }
 }
+
+// ----------------------------------------------------------------------------
+// BRANDING VIEW RENDERERS & ACTIONS (PHASE 39)
+// ----------------------------------------------------------------------------
+
+async function renderBrandingView(container) {
+  let b = {};
+  try {
+    b = await callBackend('getBranding', currentCallerToken, currentCallerToken.institutionId);
+  } catch (e) {
+    b = {
+      centerName: 'سنتر التفوق التعليمي',
+      colors: { primary: '#0F172A', secondary: '#0284C7', accent: '#D97706', backgroundColor: '#FFFFFF' },
+      loginTitle: 'مرحباً بكم في المنظومة التعليمية',
+      loginSubtitle: 'منظومة المتابعة والإدارة',
+      welcomeMessage: 'إدارة أذكى.. تعليم أفضل'
+    };
+  }
+
+  container.innerHTML = `
+    <div class="view-title">
+      <span>🎨 الهوية والعلامة التجارية (White-Label Branding)</span>
+      <span class="badge" style="background:#0284C7; color:#fff;">REMAS EDU Platform Powered</span>
+    </div>
+    <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div class="stat-card">
+        <div class="card-title">تخصيص هوية السنتر</div>
+        <form onsubmit="event.preventDefault(); saveBrandingAction();">
+          <div class="form-group">
+            <label>اسم السنتر الظاهر:</label>
+            <input type="text" id="brandCenterName" value="${b.centerName || ''}" required>
+          </div>
+          <div class="form-group" style="display:flex; gap:1rem;">
+            <div style="flex:1;">
+              <label>اللون الرئيسي (Primary):</label>
+              <input type="color" id="brandPrimaryColor" value="${b.colors ? b.colors.primary : '#0F172A'}" style="height:40px; padding:2px; cursor:pointer;" onchange="updateLivePreview()">
+            </div>
+            <div style="flex:1;">
+              <label>اللون الثانوي (Secondary):</label>
+              <input type="color" id="brandSecondaryColor" value="${b.colors ? b.colors.secondary : '#0284C7'}" style="height:40px; padding:2px; cursor:pointer;" onchange="updateLivePreview()">
+            </div>
+            <div style="flex:1;">
+              <label>لون التمييز (Accent):</label>
+              <input type="color" id="brandAccentColor" value="${b.colors ? b.colors.accent : '#D97706'}" style="height:40px; padding:2px; cursor:pointer;" onchange="updateLivePreview()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>عنوان شاشة الدخول:</label>
+            <input type="text" id="brandLoginTitle" value="${b.loginTitle || ''}" oninput="updateLivePreview()">
+          </div>
+          <div class="form-group">
+            <label>الوصف الفرعي لشاشة الدخول:</label>
+            <input type="text" id="brandLoginSubtitle" value="${b.loginSubtitle || ''}" oninput="updateLivePreview()">
+          </div>
+          <div class="form-group">
+            <label>رسالة الترحيب:</label>
+            <input type="text" id="brandWelcomeMessage" value="${b.welcomeMessage || ''}" oninput="updateLivePreview()">
+          </div>
+          <div class="form-group">
+            <label>رفع الشعار (PNG, JPEG, WebP - max 5MB):</label>
+            <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp">
+          </div>
+          <button type="submit" class="btn btn-success" style="width:100%; margin-top:1rem;">💾 حفظ الهوية وتفعيل التغييرات في Firestore</button>
+        </form>
+      </div>
+
+      <div class="stat-card">
+        <div class="card-title">معاينة حية للواجهة (Live Branding Preview)</div>
+        <div id="brandingLivePreview" style="background:#0a192f; border:2px solid #0284c7; border-radius:10px; padding:1.5rem; text-align:center; color:#fff;">
+          <div style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem;">REMAS EDU Platform Identity</div>
+          <div id="previewCenterName" style="font-size:1.4rem; font-weight:bold; color:#38bdf8; margin-bottom:0.5rem;">${b.centerName || 'اسم السنتر'}</div>
+          <div id="previewLoginTitle" style="font-size:1.1rem; font-weight:600; margin-bottom:0.25rem;">${b.loginTitle || 'عنوان شاشة الدخول'}</div>
+          <div id="previewLoginSubtitle" style="font-size:0.85rem; color:#94a3b8; margin-bottom:1rem;">${b.loginSubtitle || 'الوصف الفرعي'}</div>
+          <div id="previewWelcome" style="background:#0f172a; padding:0.75rem; border-radius:6px; border-right:4px solid #d97706; font-size:0.9rem; margin-bottom:1rem;">
+            ${b.welcomeMessage || 'رسالة الترحيب'}
+          </div>
+          <div style="display:flex; gap:0.5rem; justify-content:center;">
+            <button id="previewBtnPrimary" style="background:#0f172a; color:#fff; border:none; padding:0.5rem 1rem; border-radius:4px; font-weight:bold;">الزر الرئيسي</button>
+            <button id="previewBtnSecondary" style="background:#0284c7; color:#fff; border:none; padding:0.5rem 1rem; border-radius:4px; font-weight:bold;">الزر الثانوي</button>
+            <button id="previewBtnAccent" style="background:#d97706; color:#fff; border:none; padding:0.5rem 1rem; border-radius:4px; font-weight:bold;">تمييز</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function updateLivePreview() {
+  const name = document.getElementById('brandCenterName').value || 'اسم السنتر';
+  const primary = document.getElementById('brandPrimaryColor').value || '#0F172A';
+  const secondary = document.getElementById('brandSecondaryColor').value || '#0284C7';
+  const accent = document.getElementById('brandAccentColor').value || '#D97706';
+  const title = document.getElementById('brandLoginTitle').value || 'عنوان الدخول';
+  const subtitle = document.getElementById('brandLoginSubtitle').value || 'الوصف الفرعي';
+  const welcome = document.getElementById('brandWelcomeMessage').value || 'رسالة الترحيب';
+
+  const previewName = document.getElementById('previewCenterName');
+  if (previewName) previewName.innerText = name;
+  const previewTitle = document.getElementById('previewLoginTitle');
+  if (previewTitle) previewTitle.innerText = title;
+  const previewSubtitle = document.getElementById('previewLoginSubtitle');
+  if (previewSubtitle) previewSubtitle.innerText = subtitle;
+  const previewWelcome = document.getElementById('previewWelcome');
+  if (previewWelcome) {
+    previewWelcome.innerText = welcome;
+    previewWelcome.style.borderRightColor = accent;
+  }
+  const btnP = document.getElementById('previewBtnPrimary');
+  if (btnP) btnP.style.background = primary;
+  const btnS = document.getElementById('previewBtnSecondary');
+  if (btnS) btnS.style.background = secondary;
+  const btnA = document.getElementById('previewBtnAccent');
+  if (btnA) btnA.style.background = accent;
+}
+
+async function saveBrandingAction() {
+  const centerName = document.getElementById('brandCenterName').value;
+  const primaryColor = document.getElementById('brandPrimaryColor').value;
+  const secondaryColor = document.getElementById('brandSecondaryColor').value;
+  const accentColor = document.getElementById('brandAccentColor').value;
+  const loginTitle = document.getElementById('brandLoginTitle').value;
+  const loginSubtitle = document.getElementById('brandLoginSubtitle').value;
+  const welcomeMessage = document.getElementById('brandWelcomeMessage').value;
+
+  try {
+    let logoAssetId = undefined;
+    const fileInput = document.getElementById('brandLogoFile');
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const uploaded = await callBackend('uploadBrandingAsset', currentCallerToken, {
+        institutionId: currentCallerToken.institutionId,
+        assetType: 'logo',
+        fileMeta: { fileName: file.name, mimeType: file.type, sizeBytes: file.size }
+      });
+      logoAssetId = uploaded.assetId;
+    }
+
+    await callBackend('updateBranding', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      centerName,
+      primaryColor,
+      secondaryColor,
+      accentColor,
+      loginTitle,
+      loginSubtitle,
+      welcomeMessage,
+      logoAssetId
+    });
+
+    showToast('تم حفظ واختبار هوية السنتر بنجاح في Firestore');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function renderSuperAdminBrandingView(container) {
+  let list = [];
+  try {
+    list = await callBackend('getInstitutions', currentCallerToken);
+  } catch (err) { list = []; }
+
+  container.innerHTML = `
+    <div class="view-title">
+      <span>🎨 لوحة منصة رِماس - إدارة الهوية والمؤسسات</span>
+      <span class="badge" style="background:#d97706; color:#000;">SuperAdmin Authority</span>
+    </div>
+
+    <div class="stat-card" style="margin-bottom: 1.5rem; border-right: 4px solid #0284c7;">
+      <div class="card-title">REMAS EDU Official Brand Assets Status</div>
+      <div style="font-weight:bold; color:#ef4444; margin-bottom:0.5rem;">BLOCKED — REQUIRED BRAND ASSET FILES</div>
+      <p style="color:#94a3b8; font-size:0.85rem; margin:0;">
+        الأصول البصرية المطلوبة للهوية المنصية الرسمية:
+        <code>remas_logo_primary</code>, <code>remas_logo_horizontal</code>, <code>remas_logo_arabic</code>, <code>remas_icon</code>, <code>remas_splash_logo</code>, <code>remas_app_icon</code>
+      </p>
+    </div>
+
+    <div class="stat-card">
+      <div class="card-title">هويات المراكز المسجلة على المنصة (${list.length})</div>
+      ${list.length === 0 ? '<p style="color:#94a3b8; padding:1rem; text-align:center;">لا توجد مؤسسات مسجلة.</p>' : `
+        <table class="data-table">
+          <thead>
+            <tr><th>معرف المؤسسة</th><th>اسم السنتر</th><th>الحالة</th><th>إعادة ضبط الهوية (Reset)</th></tr>
+          </thead>
+          <tbody>
+            ${list.map(inst => `
+              <tr>
+                <td><span class="code-box">${inst.id}</span></td>
+                <td><strong>${inst.name}</strong></td>
+                <td><span class="badge">${inst.status}</span></td>
+                <td>
+                  <button class="btn btn-warning" onclick="resetInstitutionBrandingAction('${inst.id}')">🔄 Reset to REMAS Default</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+async function resetInstitutionBrandingAction(instId) {
+  try {
+    await callBackend('resetBranding', currentCallerToken, instId);
+    showToast('تمت إعادة ضبط هوية المؤسسة لإعدادات منصة رِماس الافتراضية');
+    await renderSuperAdminBrandingView(document.getElementById('mainView'));
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+

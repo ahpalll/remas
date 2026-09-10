@@ -59,6 +59,7 @@ function getInitialSeedState() {
     expenses,
     licenses,
     devices,
+    branding: new Map(),
     auditLogs: []
   };
 }
@@ -1372,6 +1373,225 @@ function getPlatformAuditLogs(callerToken) {
   return makeSyncPromise(list);
 }
 
+// ----------------------------------------------------------------------------
+// BRANDING & THEME ENGINE SERVICES (PHASE 39)
+// ----------------------------------------------------------------------------
+
+const REMAS_PLATFORM_BRAND_DESKTOP = Object.freeze({
+  nameEnglish: 'REMAS EDU',
+  nameArabic: 'رِماس للتقنية التعليمية',
+  taglineArabic: 'إدارة أذكى.. تعليم أفضل',
+  taglineEnglish: 'SMARTER MANAGEMENT .. A BRIGHTER EDUCATION',
+  descriptionEnglish: 'REMAS Educational Platform',
+  version: '1.0.0-release.39',
+  colors: Object.freeze({
+    primary: '#0F172A',
+    secondary: '#0284C7',
+    accent: '#D97706',
+    supporting: '#E0F2FE',
+    neutral: '#FFFFFF',
+    darkBackground: '#0A192F'
+  })
+});
+
+function validateHexColor(color, fieldName = 'Color') {
+  if (!color || typeof color !== 'string') {
+    throw new Error(`INVALID_COLOR_FORMAT: ${fieldName} must be a string`);
+  }
+  const trimmed = color.trim().toUpperCase();
+  if (!/^#([A-Fa-f0-9]{6})$/.test(trimmed)) {
+    throw new Error(`INVALID_COLOR_FORMAT: ${fieldName} must be a valid #RRGGBB hex color code`);
+  }
+  return trimmed;
+}
+
+function validateAssetMetadata(fileMeta) {
+  if (!fileMeta || typeof fileMeta !== 'object') {
+    throw new Error('INVALID_ASSET_METADATA: Asset metadata is required');
+  }
+  const { fileName, mimeType, sizeBytes } = fileMeta;
+  if (!fileName || typeof fileName !== 'string') {
+    throw new Error('INVALID_ASSET_METADATA: fileName is required');
+  }
+  const extIndex = fileName.lastIndexOf('.');
+  const ext = extIndex !== -1 ? fileName.substring(extIndex).toLowerCase() : '';
+  const allowedExts = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+  const allowedMimes = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+  if (!allowedExts.has(ext)) {
+    throw new Error(`DISALLOWED_ASSET_EXTENSION: Extension ${ext} is not allowed`);
+  }
+  if (!mimeType || !allowedMimes.has(mimeType.toLowerCase())) {
+    throw new Error(`DISALLOWED_ASSET_MIME: MIME type ${mimeType} is not allowed`);
+  }
+  if (typeof sizeBytes !== 'number' || sizeBytes <= 0 || sizeBytes > 5 * 1024 * 1024) {
+    throw new Error('ASSET_SIZE_EXCEEDED: Asset size must be between 0 and 5 MB');
+  }
+  return { valid: true, fileName, mimeType: mimeType.toLowerCase(), extension: ext, sizeBytes };
+}
+
+function resolveInstitutionTheme(institutionBranding = {}) {
+  const primary = institutionBranding.primaryColor 
+    ? validateHexColor(institutionBranding.primaryColor, 'primaryColor')
+    : REMAS_PLATFORM_BRAND_DESKTOP.colors.primary;
+  const secondary = institutionBranding.secondaryColor 
+    ? validateHexColor(institutionBranding.secondaryColor, 'secondaryColor')
+    : REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary;
+  const accent = institutionBranding.accentColor 
+    ? validateHexColor(institutionBranding.accentColor, 'accentColor')
+    : REMAS_PLATFORM_BRAND_DESKTOP.colors.accent;
+  const backgroundColor = institutionBranding.backgroundColor 
+    ? validateHexColor(institutionBranding.backgroundColor, 'backgroundColor')
+    : REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral;
+
+  return {
+    platformBrand: REMAS_PLATFORM_BRAND_DESKTOP,
+    centerName: institutionBranding.centerName || 'مركز تعليمي معتمد',
+    logoUrl: institutionBranding.logoUrl || null,
+    watermarkUrl: institutionBranding.watermarkUrl || null,
+    logoAssetId: institutionBranding.logoAssetId || null,
+    watermarkAssetId: institutionBranding.watermarkAssetId || null,
+    loginTitle: institutionBranding.loginTitle || `مرحباً بكم في ${institutionBranding.centerName || 'المركز التعليمي'}`,
+    loginSubtitle: institutionBranding.loginSubtitle || 'منظومة المتابعة والإدارة التعليمية',
+    welcomeMessage: institutionBranding.welcomeMessage || 'إدارة أذكى.. تعليم أفضل',
+    colors: {
+      primary,
+      secondary,
+      accent,
+      backgroundColor,
+      supporting: REMAS_PLATFORM_BRAND_DESKTOP.colors.supporting,
+      neutral: REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral,
+      darkBackground: REMAS_PLATFORM_BRAND_DESKTOP.colors.darkBackground
+    },
+    updatedAt: institutionBranding.updatedAt || new Date().toISOString(),
+    updatedBy: institutionBranding.updatedBy || 'system'
+  };
+}
+
+function getBranding(callerToken, targetInstitutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = targetInstitutionId || token.institutionId;
+  if (token.role !== 'superAdmin' && token.institutionId !== instId) {
+    throw new Error('CROSS_TENANT_VIOLATION: Cannot view branding of another institution');
+  }
+  const db = getFirestoreDb();
+  if (!memoryStore.branding) memoryStore.branding = new Map();
+  let raw = memoryStore.branding.get(instId);
+  if (!raw) {
+    const inst = memoryStore.institutions.get(instId);
+    raw = {
+      institutionId: instId,
+      centerName: inst ? inst.name : 'سنتر التفوق التعليمي',
+      primaryColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.primary,
+      secondaryColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary,
+      accentColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.accent,
+      backgroundColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral,
+      loginTitle: 'مرحباً بكم في المنظومة التعليمية',
+      loginSubtitle: 'منظومة المتابعة والإدارة',
+      welcomeMessage: 'إدارة أذكى.. تعليم أفضل'
+    };
+  }
+  if (db) {
+    db.collection('institution_branding').doc(instId).get().then(snap => {
+      if (snap.exists) memoryStore.branding.set(instId, snap.data());
+    }).catch(() => {});
+  }
+  const resolved = resolveInstitutionTheme(raw);
+  return makeSyncPromise(resolved);
+}
+
+function updateBranding(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  if (token.role !== 'superAdmin' && token.role !== 'institutionOwner' && token.role !== 'centerAdmin' && token.role !== 'admin') {
+    throw new Error('UNAUTHORIZED_ROLE: Institution Owner or Admin authority is required');
+  }
+  const db = getFirestoreDb();
+  if (!memoryStore.branding) memoryStore.branding = new Map();
+  const existing = memoryStore.branding.get(instId) || { institutionId: instId };
+
+  const primaryColor = payload.primaryColor ? validateHexColor(payload.primaryColor, 'primaryColor') : (existing.primaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.primary);
+  const secondaryColor = payload.secondaryColor ? validateHexColor(payload.secondaryColor, 'secondaryColor') : (existing.secondaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary);
+  const accentColor = payload.accentColor ? validateHexColor(payload.accentColor, 'accentColor') : (existing.accentColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.accent);
+  const backgroundColor = payload.backgroundColor ? validateHexColor(payload.backgroundColor, 'backgroundColor') : (existing.backgroundColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral);
+
+  const updated = {
+    ...existing,
+    institutionId: instId,
+    centerName: payload.centerName ? payload.centerName.trim() : (existing.centerName || 'سنتر التفوق التعليمي'),
+    logoAssetId: (payload.logoAssetId !== undefined ? payload.logoAssetId : existing.logoAssetId) || null,
+    watermarkAssetId: (payload.watermarkAssetId !== undefined ? payload.watermarkAssetId : existing.watermarkAssetId) || null,
+    logoUrl: (payload.logoUrl !== undefined ? payload.logoUrl : existing.logoUrl) || null,
+    watermarkUrl: (payload.watermarkUrl !== undefined ? payload.watermarkUrl : existing.watermarkUrl) || null,
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    backgroundColor,
+    loginTitle: payload.loginTitle ? payload.loginTitle.trim() : (existing.loginTitle || 'مرحباً بكم'),
+    loginSubtitle: payload.loginSubtitle ? payload.loginSubtitle.trim() : (existing.loginSubtitle || 'منظومة المتابعة التعليمية'),
+    welcomeMessage: payload.welcomeMessage ? payload.welcomeMessage.trim() : (existing.welcomeMessage || 'إدارة أذكى.. تعليم أفضل'),
+    updatedAt: new Date().toISOString(),
+    updatedBy: token.uid
+  };
+
+  memoryStore.branding.set(instId, updated);
+  if (db) {
+    db.collection('institution_branding').doc(instId).set(updated, { merge: true }).catch(() => {});
+  }
+
+  memoryStore.auditLogs.push({
+    id: 'AUD_' + Date.now(),
+    eventType: 'UPDATE_INSTITUTION_BRANDING',
+    institutionId: instId,
+    actorId: token.uid,
+    timestamp: new Date().toISOString(),
+    details: { centerName: updated.centerName }
+  });
+
+  const resolved = resolveInstitutionTheme(updated);
+  return makeSyncPromise(resolved);
+}
+
+function resetBranding(callerToken, targetInstitutionId) {
+  validateSuperAdmin(callerToken);
+  const instId = targetInstitutionId || callerToken.institutionId;
+  if (memoryStore.branding) memoryStore.branding.delete(instId);
+  const db = getFirestoreDb();
+  if (db) {
+    db.collection('institution_branding').doc(instId).delete().catch(() => {});
+  }
+  memoryStore.auditLogs.push({
+    id: 'AUD_' + Date.now(),
+    eventType: 'RESET_INSTITUTION_BRANDING',
+    institutionId: instId,
+    actorId: callerToken.uid,
+    timestamp: new Date().toISOString()
+  });
+  const resolved = resolveInstitutionTheme({ institutionId: instId });
+  return makeSyncPromise(resolved);
+}
+
+function uploadBrandingAsset(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const { assetType, fileMeta } = payload;
+  if (assetType !== 'logo' && assetType !== 'watermark') {
+    throw new Error('INVALID_ASSET_TYPE: Asset type must be logo or watermark');
+  }
+  const validated = validateAssetMetadata(fileMeta);
+  const assetId = `r2_brand_${assetType}_${instId}_${Date.now()}`;
+  const r2Key = `institutions/${instId}/branding/${assetId}${validated.extension}`;
+  const uploadUrl = `https://r2-gateway.educenter-saas.com/upload/${r2Key}?token=signed_upload_${Date.now()}`;
+  const publicAccessUrl = `https://r2-gateway.educenter-saas.com/media/${r2Key}?token=signed_read_${Date.now()}`;
+
+  return makeSyncPromise({
+    assetId,
+    r2Key,
+    uploadUrl,
+    publicAccessUrl,
+    expiresInSeconds: 900
+  });
+}
+
 function resetStore() {
   memoryStore = getInitialSeedState();
 }
@@ -1440,5 +1660,11 @@ module.exports = {
   revokeDeviceBinding,
   rebindDeviceBinding,
   getLicenses,
-  getPlatformAuditLogs
+  getPlatformAuditLogs,
+  // Branding & Theme Engine (Phase 39)
+  getBranding,
+  updateBranding,
+  resetBranding,
+  uploadBrandingAsset
 };
+
