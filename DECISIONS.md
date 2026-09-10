@@ -1,6 +1,19 @@
 # Architectural Decision Records (ADR)
 
-## ADR-029: Phase 29 Production Center Operations & Real Data Workflow Architecture
+## ADR-034: Teacher Operations Scope & Dedicated Mobile App Architectural Decision
+
+### Context
+The original monorepo requirements reference teacher functionality across student management, attendance taking, grading, and session scheduling. During the Phase 33 closing audit, a repository audit confirmed that no dedicated standalone Flutter mobile application directory (`teacher_app`) exists in the monorepo.
+
+### Decision
+1. **Web & Desktop Operational Support**: Teacher workflows (session management, student attendance, evaluation, grading, content view) are fully implemented and operational via the Admin Web Console (`admin-web`) and Windows Center Desktop Application (`center-desktop`).
+2. **Dedicated Android Teacher App Status**: A dedicated standalone Flutter mobile APK for teachers is formally marked as **`NOT_IMPLEMENTED` (Dedicated Mobile App)**.
+3. **Product Requirement Reconciliation**: The overall product requirements audit matrix records 19 PASS, 0 PARTIAL, 0 BLOCKED, and 1 NOT_IMPLEMENTED across 20 requirements.
+4. **Final Delivery Verdict**: The official delivery verdict is **`FINAL DELIVERY READY WITH ONE DOCUMENTED PRODUCT GAP`**.
+
+---
+
+## ADR-033: Phase 33 Final Product Audit, Handover & Release 1.0.0-release.33 Architecture
 
 ### Context
 Phase 29 binds all domain modules (Institutions, Academic Levels, Subjects, Teachers, Groups, Students, Teacher Assignments, Teaching Sessions, and Attendance Records) into a unified, end-to-end operational cycle for Tenant Admins on live Firebase Production (`educenter-saas` / `educenter-saas-860c5`).

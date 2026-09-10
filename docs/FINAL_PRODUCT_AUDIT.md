@@ -30,7 +30,7 @@
 | **REQ-17** | Cloudflare R2 Media Gateway & Ephemeral Presigned URLs | **PASS** | `cloudflare/worker` unit tests (17/17 PASS, 15-min expiry) | Cloudflare Worker deployed to edge. |
 | **REQ-18** | Automated Backup & Disaster Recovery Baseline | **PASS** | `backup_recovery_backend.test.js` (5/5 PASS) & `BACKUP_RECOVERY.md` | Operator enables Firestore PITR & scheduled GCS exports. |
 | **REQ-19** | Zero-Credential Client Exposure & Security Isolation | **PASS** | ASAR scan PASS, `git diff --check` PASS (`SERVICE ACCOUNT INSIDE CLIENT: NO`) | Zero private keys embedded in client binaries or web bundles. |
-| **REQ-20** | Full Automated Test Regression | **PASS** | 915/915 total assertions PASS (867 Backend + 17 Cloudflare + 31 Mobile) | All regression gates green. |
+| **REQ-20** | Full Automated Test Regression | **PASS** | 857/857 total assertions PASS (805 Backend + 17 Cloudflare + 4 Packaging + 31 Mobile) | All regression gates green. |
 
 ---
 
@@ -39,7 +39,7 @@
 - **PASS**: Feature is fully implemented, tested, and verified empirically.
 - **PARTIAL**: Feature is implemented partially with non-critical open items.
 - **BLOCKED**: Feature cannot be operated due to a critical blocker.
-- **NOT_IMPLEMENTED**: Feature was listed in optional specifications but is not present in the current codebase.
+- **NOT_IMPLEMENTED**: Feature was listed in original specifications but is not present in the current monorepo.
 
 ---
 
@@ -50,4 +50,4 @@
 - **NOT_IMPLEMENTED**: 1 / 20 (Dedicated Teacher Android App — operations supported via Web/Desktop)
 - **PARTIAL / BLOCKED**: 0 / 20
 
-**Final Delivery Status**: **FINAL DELIVERY READY WITH OPERATIONAL STEPS**
+**Final Delivery Status**: **FINAL DELIVERY READY WITH ONE DOCUMENTED PRODUCT GAP**
