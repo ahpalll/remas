@@ -29,6 +29,7 @@ import { NotificationDashboard } from './components/notifications/NotificationDa
 import { CenterOperationsConsole } from './components/CenterOperationsConsole';
 import { SuperAdminDevices } from './components/SuperAdminDevices';
 import { SuperAdminLicenses } from './components/SuperAdminLicenses';
+import { SuperAdminAISettings } from './components/SuperAdminAISettings';
 
 function DashboardView() {
   const { currentUser, role, institutionId, logout } = useAuth();
@@ -116,6 +117,7 @@ function DashboardView() {
       <SuperAdminInstitutions />
       <SuperAdminDevices />
       <SuperAdminLicenses />
+      <SuperAdminAISettings />
     </div>
   );
 }

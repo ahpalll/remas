@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.36] - 2026-09-10 (Phase 36: SuperAdmin AI Key Management & Secure Key Rotation)
+
+### Added / Delivered
+- **SuperAdmin AI Key Management UI (`admin-web/src/components/SuperAdminAISettings.tsx`)**: Material 3 Arabic RTL React console displaying AI Status (`ENABLED`/`DISABLED`/`ERROR`), Provider (`Google Gemini`), Model (`gemini-2.5-flash`), masked key (`••••••••••••HOg`), and key management action buttons (**Add Key**, **Test Connection**, **Activate & Replace Key**, **Disable/Enable AI**).
+- **Server-Side Secret Vault (`firebase/ai_secret_provider.js`)**: Isolated server secret vault (`F:\firebase-secrets\gemini_secret_store.json`) providing zero-downtime key rotation, live key testing against Google Gemini API, masked representation generation, and key history retention. Plaintext keys are NEVER saved to Firestore documents or git repository.
+- **SuperAdmin & Center Admin AI Gateway API (`firebase/ai_admin_service.js`)**: SuperAdmin-only administrative backend API for global key management and key rotation, plus isolated Center Admin controls allowing center owners to configure institution AI limits without seeing or accessing Gemini API keys.
+- **Zero-Downtime Safe Key Rotation**: Candidate keys are tested live via Gemini API before activation. If testing fails, the current active working key remains active without service interruption.
+- **Auditable System Events**: Audit log entries (`AI_KEY_TESTED`, `AI_KEY_ACTIVATED`, `AI_KEY_REPLACED`, `AI_KEY_DISABLED`, `CENTER_AI_SETTINGS_UPDATED`) record `actorId`, `timestamp`, `environment`, and `maskedKey` without exposing raw secret keys.
+- **18-Assertion Security & Admin Test Suite (`firebase/ai_admin_service.test.js`)**: 100% PASS on role guards, test connection, zero downtime rotation, secret scan, tenant isolation, and live Gemini E2E query.
+- **Comprehensive Monorepo Test Regression Baseline**: **979/979 total assertions PASSing** across 36 test files (918 Backend + 4 Packaging + 61 Mobile).
+
+---
+
 ## [1.0.0-release.35] - 2026-09-10 (Phase 35: Student AI Educational Tutor System & Final Acceptance)
 
 ### Added / Delivered

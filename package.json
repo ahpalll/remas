@@ -35,6 +35,7 @@
     "test:device_binding": "node --test firebase/device_binding_backend.test.js",
     "test:license": "node --test firebase/license_backend.test.js",
     "test:ai": "node --test firebase/ai_tutor_service.test.js",
+    "test:ai_admin": "node --test firebase/ai_admin_service.test.js",
     "verify:release": "node firebase/deploy_runner.js verify-release",
     "verify:production": "node firebase/deploy_runner.js verify-prod",
     "deploy:staging": "node firebase/deploy_runner.js deploy-staging",
@@ -47,7 +48,7 @@
     "production:operations": "node firebase/center_operations_service.js status",
     "production:benchmarks": "node firebase/load_concurrency_benchmarks.js",
     "live:verify": "node firebase/live_verification_service.js",
-    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification && npm run test:readiness && npm run test:release && npm run test:connectivity && npm run test:bootstrap && npm run test:live && npm run test:tenant_bootstrap && npm run test:institution && npm run test:academic_structure && npm run test:student_enrollment && npm run test:academic_operations && npm run test:center_operations && npm run test:backup_recovery && npm run test:load_concurrency && npm run test:device_binding && npm run test:license && npm run test:ai"
+    "test:all": "npm run test:rules && npm run test:backend && npm run test:academic && npm run test:student && npm run test:attendance && npm run test:finance && npm run test:inventory && npm run test:exam && npm run test:online_exam && npm run test:content && npm run test:media && npm run test:worker && npm run test:subscription && npm run test:parent && npm run test:notification && npm run test:readiness && npm run test:release && npm run test:connectivity && npm run test:bootstrap && npm run test:live && npm run test:tenant_bootstrap && npm run test:institution && npm run test:academic_structure && npm run test:student_enrollment && npm run test:academic_operations && npm run test:center_operations && npm run test:backup_recovery && npm run test:load_concurrency && npm run test:device_binding && npm run test:license && npm run test:ai && npm run test:ai_admin"
   },
   "dependencies": {
     "firebase-admin": "^13.1.0"

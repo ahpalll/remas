@@ -1,14 +1,14 @@
 {
   "name": "remas-monorepo",
-  "appVersion": "1.0.0-release.35",
-  "backendVersion": "1.35.0",
-  "rulesVersion": "1.35.0",
-  "workerVersion": "1.35.0",
-  "releaseTag": "v1.0.0-release.35",
-  "phase": "35",
-  "phaseTitle": "Student AI Educational Tutor System & Final Acceptance",
+  "appVersion": "1.0.0-release.36",
+  "backendVersion": "1.36.0",
+  "rulesVersion": "1.36.0",
+  "workerVersion": "1.36.0",
+  "releaseTag": "v1.0.0-release.36",
+  "phase": "36",
+  "phaseTitle": "SuperAdmin AI Key Management & Secure Key Rotation",
   "gitBaseline": "5c21f92e4a8412850cf5324ab5e5df612948bc54",
   "status": "PASS",
-  "deploymentStatus": "PRODUCT_COMPLETE_PENDING_PRODUCTION_AI_KEY",
+  "deploymentStatus": "PRODUCTION_AI_VERIFIED_SECURE_MANAGEMENT",
   "targetFirebaseProject": "educenter-saas"
 }

@@ -298,3 +298,22 @@ Phase 35 implements REQ-21 (Student AI Educational Tutor System) as a server-aut
    - 0 static analysis issues in Flutter apps
    - Production Vite web builds clean
 
+---
+
+## ADR-037: Phase 36 SuperAdmin AI Key Management & Secure Key Rotation Architecture
+
+### Context
+Phase 36 transitions Gemini API Key management from manual server environment configuration to a secure, SuperAdmin-managed web platform feature (`admin-web/src/components/SuperAdminAISettings.tsx`) with zero-downtime key rotation, server-side secret vault isolation, masked key representations, center AI controls, and audit event logging.
+
+### Decision
+1. **Server-Side Secret Vault (`firebase/ai_secret_provider.js`)**: Isolated server secret vault (`F:\firebase-secrets\gemini_secret_store.json`) managing active/previous keys and masked values (`••••••••••••HOg`). Plaintext keys are NEVER stored in Firestore documents, Git repository files, or client builds.
+2. **SuperAdmin AI Settings Console (`admin-web/src/components/SuperAdminAISettings.tsx`)**: Responsive Arabic RTL Material 3 card displaying AI Status (`ENABLED`/`DISABLED`/`ERROR`), Provider (`Google Gemini`), Model (`gemini-2.5-flash`), masked key (`••••••••••••HOg`), and controls (**Add Key**, **Test Connection**, **Activate & Replace Key**, **Disable/Enable AI**).
+3. **Zero-Downtime Key Rotation**: Candidate keys are tested live via `testGeminiKey()` before activation. If testing fails, the current active working key remains active without service disruption.
+4. **Role-Based Privilege Boundary**:
+   - SuperAdmin: Full access to global AI settings and key rotation.
+   - Center Owner: Can toggle center AI availability and daily limit for their own institution. NO access to Gemini API keys or global settings.
+   - Teacher / Student / Parent: Strictly DENIED access to AI administration endpoints.
+5. **Auditable System Events**: Audit log entries (`AI_KEY_TESTED`, `AI_KEY_ACTIVATED`, `AI_KEY_REPLACED`, `AI_KEY_DISABLED`, `CENTER_AI_SETTINGS_UPDATED`) record `actorId`, `timestamp`, `environment`, and `maskedKey` without exposing raw secret keys.
+6. **18-Assertion Test Suite (`firebase/ai_admin_service.test.js`)**: 100% PASS on role guards, test connection, zero downtime rotation, secret scan, tenant isolation, and live Gemini E2E query.
+7. **Monorepo Version Baseline**: Version elevated to `1.0.0-release.36` with **979/979 total assertions PASSing**.
+
