@@ -1,0 +1,412 @@
+{
+  "institution": {
+    "id": "inst_bootstrap_001",
+    "name": "سنتر التفوق التعليمي المعتمد",
+    "phone": "01012345678",
+    "email": "info@altafawok-center.com",
+    "address": "القاهرة - مدينة نصر - شارع الطيران",
+    "receiptHeader": "سنتر التفوق التعليمي - خدمات تعليمية متكاملة",
+    "logoUrl": null
+  },
+  "students": [
+    {
+      "id": "STU_1001",
+      "name": "أحمد محمد علي",
+      "phone": "01011112222",
+      "guardianPhone": "01122223333",
+      "grade": "الصف الثالث الثانوي",
+      "groupId": "GRP_MATH_01",
+      "groupName": "رياضيات - ثانوية عامة (أ)",
+      "qrToken": "QR_STU_1001",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-01T10:00:00Z"
+    },
+    {
+      "id": "STU_1002",
+      "name": "سارة محمود حسن",
+      "phone": "01022223333",
+      "guardianPhone": "01133334444",
+      "grade": "الصف الثالث الثانوي",
+      "groupId": "GRP_PHYS_01",
+      "groupName": "فيزياء - ثانوية عامة (أ)",
+      "qrToken": "QR_STU_1002",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-02T11:00:00Z"
+    },
+    {
+      "id": "STU_1003",
+      "name": "عمر خالد فؤاد",
+      "phone": "01033334444",
+      "guardianPhone": "01144445555",
+      "grade": "الصف الثاني الثانوي",
+      "groupId": "GRP_MATH_02",
+      "groupName": "رياضيات - ثانية ثانوي (ب)",
+      "qrToken": "QR_STU_1003",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-03T12:00:00Z"
+    },
+    {
+      "id": "STU_1004",
+      "name": "طالب اختباري جديد",
+      "phone": "01099990000",
+      "guardianPhone": "01188880000",
+      "grade": "الصف الثالث الثانوي",
+      "groupId": "GRP_MATH_02",
+      "groupName": "مجموعة افتراضية",
+      "qrToken": "QR_STU_1004",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-10T19:11:08.667Z"
+    },
+    {
+      "id": "STU_1005",
+      "name": "طالب اختباري جديد",
+      "phone": "01099990000",
+      "guardianPhone": "01188880000",
+      "grade": "الصف الثالث الثانوي",
+      "groupId": "GRP_MATH_02",
+      "groupName": "مجموعة افتراضية",
+      "qrToken": "QR_STU_1005",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-10T19:12:09.656Z"
+    },
+    {
+      "id": "STU_1006",
+      "name": "طالب اختباري جديد",
+      "phone": "01099990000",
+      "guardianPhone": "01188880000",
+      "grade": "الصف الثالث الثانوي",
+      "groupId": "GRP_MATH_02",
+      "groupName": "مجموعة افتراضية",
+      "qrToken": "QR_STU_1006",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-10T19:16:25.595Z"
+    }
+  ],
+  "teachers": [
+    {
+      "id": "TCH_2001",
+      "name": "أ.د/ إبراهيم عبد الرحمن",
+      "phone": "01099998888",
+      "email": "ibrahim@center.com",
+      "subject": "الرياضيات المشتقات والتفاضل",
+      "groups": [
+        "GRP_MATH_01",
+        "GRP_MATH_02"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": "TCH_2002",
+      "name": "م/ مصطفى كمال",
+      "phone": "01088887777",
+      "email": "kamal@center.com",
+      "subject": "الفيزياء الحديثة والكهربية",
+      "groups": [
+        "GRP_PHYS_01"
+      ],
+      "status": "ACTIVE"
+    }
+  ],
+  "academicLevels": [
+    {
+      "id": "LVL_SEC3",
+      "name": "الصف الثالث الثانوي",
+      "code": "SEC3",
+      "order": 3
+    },
+    {
+      "id": "LVL_SEC2",
+      "name": "الصف الثاني الثانوي",
+      "code": "SEC2",
+      "order": 2
+    }
+  ],
+  "subjects": [
+    {
+      "id": "SUBJ_MATH",
+      "name": "الرياضيات البحتا والتطبيقية",
+      "code": "MATH",
+      "levelId": "LVL_SEC3"
+    },
+    {
+      "id": "SUBJ_PHYS",
+      "name": "الفيزياء للثانوية العامة",
+      "code": "PHYS",
+      "levelId": "LVL_SEC3"
+    }
+  ],
+  "groups": [
+    {
+      "id": "GRP_MATH_01",
+      "name": "رياضيات - ثانوية عامة (أ)",
+      "subjectId": "SUBJ_MATH",
+      "subjectName": "الرياضيات",
+      "teacherId": "TCH_2001",
+      "teacherName": "أ.د/ إبراهيم عبد الرحمن",
+      "maxCapacity": 30,
+      "enrolledCount": 1,
+      "schedule": "الأحد والأربعاء 04:00 مساءً",
+      "room": "قاعة 1",
+      "monthlyFee": 350
+    },
+    {
+      "id": "GRP_PHYS_01",
+      "name": "فيزياء - ثانوية عامة (أ)",
+      "subjectId": "SUBJ_PHYS",
+      "subjectName": "الفيزياء",
+      "teacherId": "TCH_2002",
+      "teacherName": "م/ مصطفى كمال",
+      "maxCapacity": 25,
+      "enrolledCount": 1,
+      "schedule": "الإثنين والخميس 05:00 مساءً",
+      "room": "قاعة 2",
+      "monthlyFee": 300
+    },
+    {
+      "id": "GRP_MATH_02",
+      "name": "رياضيات - ثانية ثانوي (ب)",
+      "subjectId": "SUBJ_MATH",
+      "subjectName": "الرياضيات",
+      "teacherId": "TCH_2001",
+      "teacherName": "أ.د/ إبراهيم عبد الرحمن",
+      "maxCapacity": 20,
+      "enrolledCount": 4,
+      "schedule": "الثلاثاء 03:00 مساءً",
+      "room": "قاعة 3",
+      "monthlyFee": 300
+    },
+    {
+      "id": "GRP_4",
+      "name": "مجموعة الكيمياء التنافسية",
+      "subjectId": "SUBJ_MATH",
+      "subjectName": "الكيمياء",
+      "teacherId": "TCH_2001",
+      "teacherName": "أ.د/ أحمد سامي",
+      "maxCapacity": 2,
+      "enrolledCount": 0,
+      "schedule": "السبت 02:00 م",
+      "room": "قاعة 4",
+      "monthlyFee": 300
+    },
+    {
+      "id": "GRP_5",
+      "name": "مجموعة الكيمياء التنافسية",
+      "subjectId": "SUBJ_MATH",
+      "subjectName": "الكيمياء",
+      "teacherId": "TCH_2001",
+      "teacherName": "أ.د/ أحمد سامي",
+      "maxCapacity": 2,
+      "enrolledCount": 0,
+      "schedule": "السبت 02:00 م",
+      "room": "قاعة 4",
+      "monthlyFee": 300
+    },
+    {
+      "id": "GRP_6",
+      "name": "مجموعة الكيمياء التنافسية",
+      "subjectId": "SUBJ_MATH",
+      "subjectName": "الكيمياء",
+      "teacherId": "TCH_2001",
+      "teacherName": "أ.د/ أحمد سامي",
+      "maxCapacity": 2,
+      "enrolledCount": 0,
+      "schedule": "السبت 02:00 م",
+      "room": "قاعة 4",
+      "monthlyFee": 300
+    }
+  ],
+  "attendanceRecords": [
+    {
+      "id": "ATT_3001",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "groupId": "GRP_MATH_01",
+      "date": "2026-09-10",
+      "time": "16:02:10",
+      "status": "PRESENT",
+      "method": "QR_SCANNER"
+    },
+    {
+      "id": "ATT_3002",
+      "studentId": "STU_1002",
+      "studentName": "سارة محمود حسن",
+      "groupId": "GRP_PHYS_01",
+      "date": "2026-09-10",
+      "time": "17:05:00",
+      "status": "PRESENT",
+      "method": "MANUAL"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "SES_4001",
+      "title": "حصة التفاضل والتكامل - الدرس الأول",
+      "groupId": "GRP_MATH_01",
+      "teacherId": "TCH_2001",
+      "date": "2026-09-10",
+      "startTime": "16:00",
+      "endTime": "18:00",
+      "room": "قاعة 1",
+      "status": "COMPLETED"
+    }
+  ],
+  "contentMedia": [
+    {
+      "id": "MED_5001",
+      "title": "فيديو شرح مقدمة المشتقات وتطبيقاتها",
+      "type": "VIDEO",
+      "subjectId": "SUBJ_MATH",
+      "groupId": "GRP_MATH_01",
+      "storageKey": "courses/math/sec3_lesson1.mp4",
+      "publicCdnUrl": "https://cdn.remas-saas.edu/media/courses/math/sec3_lesson1.mp4",
+      "expiresMinutes": 15,
+      "createdAt": "2026-09-05T09:00:00Z"
+    },
+    {
+      "id": "MED_5002",
+      "title": "ملزمة مذكرات التمارين والأسئلة الشاملة PDF",
+      "type": "PDF",
+      "subjectId": "SUBJ_MATH",
+      "groupId": "GRP_MATH_01",
+      "storageKey": "courses/math/sec3_workbook.pdf",
+      "publicCdnUrl": "https://cdn.remas-saas.edu/media/courses/math/sec3_workbook.pdf",
+      "expiresMinutes": 15,
+      "createdAt": "2026-09-06T10:00:00Z"
+    }
+  ],
+  "exams": [
+    {
+      "id": "EXM_6001",
+      "title": "اختبار شهر سبتمبر - الرياضيات",
+      "subjectId": "SUBJ_MATH",
+      "groupId": "GRP_MATH_01",
+      "maxScore": 100,
+      "examDate": "2026-09-15",
+      "status": "SCHEDULED"
+    }
+  ],
+  "grades": [
+    {
+      "id": "GRD_7001",
+      "examId": "EXM_6001",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "score": 92,
+      "maxScore": 100,
+      "percentage": 92,
+      "status": "PASSED"
+    }
+  ],
+  "subscriptions": [
+    {
+      "id": "SUB_8001",
+      "packageName": "الباقة الشهرية الكاملة - رياضيات",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "subjectId": "SUBJ_MATH",
+      "code": "SUB-MATH-2026-X912",
+      "status": "ACTIVE",
+      "startDate": "2026-09-01",
+      "endDate": "2026-10-01"
+    }
+  ],
+  "parents": [
+    {
+      "id": "PAR_9001",
+      "name": "م/ محمد علي الأحمدي",
+      "phone": "01122223333",
+      "email": "m.ali@gmail.com",
+      "linkedStudentIds": [
+        "STU_1001"
+      ],
+      "linkedStudentNames": [
+        "أحمد محمد علي"
+      ]
+    }
+  ],
+  "payments": [
+    {
+      "id": "PAY_10001",
+      "receiptNumber": "REC-1001",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "category": "مصاريف دراسية شهرية",
+      "amount": 350,
+      "paymentDate": "2026-09-10",
+      "notes": "سداد رسوم شهر سبتمبر"
+    },
+    {
+      "id": "PAY_10002",
+      "receiptNumber": "REC-1002",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "category": "رسوم الاختبار الشهري",
+      "amount": 150,
+      "paymentDate": "2026-09-10",
+      "notes": ""
+    },
+    {
+      "id": "PAY_10003",
+      "receiptNumber": "REC-1003",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "category": "رسوم الاختبار الشهري",
+      "amount": 150,
+      "paymentDate": "2026-09-10",
+      "notes": ""
+    },
+    {
+      "id": "PAY_10004",
+      "receiptNumber": "REC-1004",
+      "studentId": "STU_1001",
+      "studentName": "أحمد محمد علي",
+      "category": "رسوم الاختبار الشهري",
+      "amount": 150,
+      "paymentDate": "2026-09-10",
+      "notes": ""
+    }
+  ],
+  "expenses": [
+    {
+      "id": "EXP_20001",
+      "category": "إيجار القاعات والكهرباء",
+      "amount": 3500,
+      "expenseDate": "2026-09-10",
+      "notes": "فاتورة الكهرباء والصيانة الشهرية"
+    },
+    {
+      "id": "EXP_20002",
+      "category": "أدوات كتابية وطباعة",
+      "amount": 450,
+      "expenseDate": "2026-09-10",
+      "notes": ""
+    },
+    {
+      "id": "EXP_20003",
+      "category": "أدوات كتابية وطباعة",
+      "amount": 450,
+      "expenseDate": "2026-09-10",
+      "notes": ""
+    },
+    {
+      "id": "EXP_20004",
+      "category": "أدوات كتابية وطباعة",
+      "amount": 450,
+      "expenseDate": "2026-09-10",
+      "notes": ""
+    }
+  ],
+  "aiSettings": {
+    "institutionId": "inst_bootstrap_001",
+    "aiEnabled": true,
+    "dailyLimitPerStudent": 50,
+    "allowedFeatures": [
+      "QA",
+      "LESSON_EXPLAIN",
+      "SUMMARIZE",
+      "SELF_TEST",
+      "WEAKNESS_ANALYSIS",
+      "STUDY_PLAN"
+    ]
+  }
+}

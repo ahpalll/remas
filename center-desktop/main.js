@@ -1,13 +1,14 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Application Main Process
  * Target Project: educenter-saas
- * Version: 1.0.0-release.33
+ * Version: 1.0.0-release.38
  */
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { generateHardwareFingerprint, getSystemMetadata } = require('./src/device_fingerprint');
 const { validateDeviceBinding, requestDeviceActivation, heartbeatDevice } = require('./src/device_binding_service');
+const desktopServices = require('./src/center_desktop_services');
 
 let mainWindow = null;
 let currentDeviceStatus = {
@@ -21,11 +22,11 @@ let currentDeviceStatus = {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 850,
-    minWidth: 1024,
-    minHeight: 700,
-    title: 'REMAS Educational Center SaaS — Windows Desktop (Single Device Licensing)',
+    width: 1360,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 720,
+    title: 'REMAS Educational Center SaaS — Windows Desktop Application (v1.0.0-release.38)',
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,
@@ -126,8 +127,21 @@ ipcMain.handle('send-heartbeat', async (event, { institutionId, callerToken }) =
   const result = await heartbeatDevice({
     institutionId,
     deviceFingerprint: fingerprint,
-    appVersion: '1.0.0-release.33',
+    appVersion: '1.0.0-release.38',
     callerToken
   });
   return result;
+});
+
+// Trusted Backend Service Gateway Handler for Renderer Process
+ipcMain.handle('call-backend-service', async (event, { method, args = [] }) => {
+  if (typeof desktopServices[method] === 'function') {
+    try {
+      const res = await desktopServices[method](...args);
+      return { success: true, data: res };
+    } catch (err) {
+      return { success: false, error: err.message || 'Error executing desktop service' };
+    }
+  }
+  return { success: false, error: `Method '${method}' not found on desktop services` };
 });

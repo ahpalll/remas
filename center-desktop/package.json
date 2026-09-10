@@ -1,11 +1,11 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.37",
+  "version": "1.0.0-release.38",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win nsis"
+    "build:win": "npx electron-builder --win nsis"
   },
   "keywords": [
     "remas",

@@ -1,5 +1,19 @@
 # Architectural Decision Records (ADR)
 
+## ADR-039: Full Standalone Windows Center Desktop Application & 15 Operational Modules
+
+### Context
+In Phase 38, a comprehensive audit of `center-desktop/` revealed that the Electron renderer rendered only static device binding status badges (`index.html`), lacking the full operational management capabilities required for center administrators.
+
+### Decision
+1. **Full Operational Desktop Suite (`center-desktop/`)**: Transformed `remas-center-desktop` into a standalone, desktop-first Arabic RTL center management application with 15 fully functional modules: Dashboard, Students, Teachers, Groups & Subjects, Attendance Kiosk, Schedule, Educational Content, Exams & Grades, Subscriptions, Parents, Finance, Reports, AI Settings, Center Info, and License & Device.
+2. **Desktop Backend Data Engine (`center-desktop/src/center_desktop_services.js`)**: Encapsulated trusted data operations, QR attendance processing, payment recording, and seat capacity validation inside an isolated desktop backend service accessible via Electron `preload.js` `contextBridge` (`window.electronAPI.callBackendService`).
+3. **Packaging Isolation & Security Contract**: `main.js` maintains zero external relative file imports outside `center-desktop/`, ensuring complete portability when packaged with `electron-builder` (`app.asar`). Zero AI secret keys or Firebase service account keys are embedded in the desktop bundle.
+4. **License & Hardware Binding Overlay**: Hardware fingerprint validation (`win_fp_...`) is enforced at main process startup. Valid licenses grant full desktop application access; revoked licenses trigger an overlay lock screen with rebind request capability.
+5. **Verification**: 25 automated assertions in `firebase/windows_desktop_full.test.js` pass 100% clean alongside the 911-assertion backend regression suite and 4-assertion packaging test.
+
+---
+
 ## ADR-035: Dedicated Teacher Android App Delivery & 100% Product Acceptance
 
 ### Context

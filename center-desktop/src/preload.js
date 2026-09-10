@@ -1,6 +1,7 @@
 /**
  * Secure IPC Context Bridge Preload Script
  * REMAS Educational Center SaaS — Windows Desktop
+ * Version: 1.0.0-release.38
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
@@ -11,5 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDeviceStatus: () => ipcRenderer.invoke('get-device-status'),
   validateDevice: (payload) => ipcRenderer.invoke('validate-device', payload),
   activateDevice: (payload) => ipcRenderer.invoke('activate-device', payload),
-  sendHeartbeat: (payload) => ipcRenderer.invoke('send-heartbeat', payload)
+  sendHeartbeat: (payload) => ipcRenderer.invoke('send-heartbeat', payload),
+  callBackendService: (method, ...args) => ipcRenderer.invoke('call-backend-service', { method, args })
 });

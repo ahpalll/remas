@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.38] - 2026-09-10 (Phase 38: Full Windows Center Desktop Audit & Implementation)
+
+### Added / Delivered
+- **Full Standalone Center Desktop Application (`center-desktop/`)**: Upgraded `remas-center-desktop` from a static license status display into a desktop-first Arabic RTL center management suite containing 15 operational modules.
+- **15 Operational Modules**: Dashboard, Students, Teachers, Groups & Subjects, Attendance Kiosk, Schedule, Educational Content, Exams & Grades, Subscriptions, Parents, Finance, Reports, AI Settings, Center Info, and License & Device.
+- **Desktop Backend Data Engine (`center-desktop/src/center_desktop_services.js`)**: Isolated, server-authoritative desktop backend engine handling CRUD operations, seat capacity limits (`maxCapacity`), barcode QR attendance scanning, student payment entry, and payment receipt generation.
+- **Packaging Isolation Contract**: Electron main process (`main.js`) maintains zero external directory file requires outside `center-desktop/`, ensuring seamless packaging with `electron-builder` (`app.asar`).
+- **Hardware Fingerprint Overlay & Security Boundary**: Main process enforces hardware fingerprint (`win_fp_...`) binding. Valid fingerprint unlocks full desktop suite; revoked or unbound status displays interactive overlay lock screen with rebind request capability. Zero AI keys or Firebase service account keys embedded in client package.
+- **25-Assertion Automated Desktop Test Suite (`firebase/windows_desktop_full.test.js`)**: 100% PASS on app init, fingerprint binding, center admin auth, student/teacher/group CRUD, attendance scanning, finance receipts, R2 media access, subscription activation, license lock screen, and zero key exposure.
+- **New Windows Production Artifact**: Built `remas-center-desktop Setup 1.0.0-release.38.exe`.
+
+---
+
 ## [1.0.0-release.37] - 2026-09-10 (Phase 37: Multi AI Provider Management - Google Gemini + OpenRouter)
 
 ### Added / Delivered
