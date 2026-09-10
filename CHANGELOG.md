@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.34] - 2026-09-10 (Phase 34: Dedicated Teacher Android App & Final Production Acceptance)
+
+### Added / Delivered
+- **Dedicated Teacher Android Mobile Application (`teacher_app/`)**: Delivered standalone Flutter mobile app for teachers featuring Arabic RTL Material 3 UI, Teacher Dashboard, Today's Sessions, Session Details, Fast Attendance Marking (`PRESENT`, `LATE`, `ABSENT`, `EXCUSED`), Group Rosters (view-only), Assessment Grade Entry & Updates, Weekly Schedule, and Administrative Notifications.
+- **Server-Authoritative Mobile Security Boundary**: Enforced Firebase Auth custom claims (`role: teacher`, `institutionId`) with 0 service account keys or secrets embedded in the client.
+- **Teacher Security & Unit Test Suite (`teacher_app/test/teacher_runtime_test.dart`)**: 15 unit and security assertions validating authentication, role assertion (`UNAUTHORIZED_ROLE`), cross-teacher session isolation (`FORBIDDEN_TEACHER_SCOPE`), group roster isolation (`FORBIDDEN_GROUP_ACCESS`), attendance status validation (`INVALID_ATTENDANCE_STATUS`), and grade bounds (`INVALID_SCORE_BOUNDS`).
+- **100% Product Requirement Audit Matrix (`docs/FINAL_PRODUCT_AUDIT.md`)**: Elevated REQ-07 status from `NOT_IMPLEMENTED` to `PASS`, bringing the monorepo score to **20 PASS / 0 NOT_IMPLEMENTED (100.0%)**.
+- **872-Assertion Multi-Platform Reconciled Regression**: 29 Node.js backend files (805 assertions), Cloudflare Worker (17 assertions), Windows Packaging Runtime (4 assertions), Student Flutter App (16 assertions), Parent Flutter App (15 assertions), and Dedicated Teacher Flutter App (15 assertions) — 100% PASS across 35 test files.
+- **Final Release Documentation & Verdict**: Created `docs/TEACHER_APP.md`, `docs/FINAL_RELEASE.md`, recorded ADR-035 in `DECISIONS.md`, and elevated final verdict to **`FINAL DELIVERY READY`**.
+
+---
+
 ## [1.0.0-release.33] - 2026-09-10 (Phase 33: Final Product Audit, Handover & Customer Delivery)
 
 ### Added / Verified

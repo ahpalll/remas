@@ -1,5 +1,19 @@
 # Architectural Decision Records (ADR)
 
+## ADR-035: Dedicated Teacher Android App Delivery & 100% Product Acceptance
+
+### Context
+To address the single remaining product gap identified in the Phase 33 audit, a dedicated Android-first Flutter application (`teacher_app`) was constructed under `teacher_app/` mirroring the Flutter/Dart architecture of `student_app` and `parent_app`.
+
+### Decision
+1. **Dedicated Flutter App Architecture (`teacher_app/`)**: Delivered `teacher_app` with Arabic RTL Material 3 screens: Teacher Dashboard, Assigned Sessions, Session Details, Fast Attendance Marking, Group Rosters, Grade Entry & Updates, Schedule View, and Notifications.
+2. **Server-Authoritative Security Boundary**: `teacher_app` relies strictly on Firebase Authentication identity/custom claims (`role: teacher`, `institutionId`). It embeds zero service account keys or backend secrets.
+3. **Multi-Tenant & Cross-Teacher Security Enforcements**: 15 unit and security tests in `teacher_app/test/teacher_runtime_test.dart` validate authentication, role assertion (`UNAUTHORIZED_ROLE`), cross-teacher session isolation (`FORBIDDEN_TEACHER_SCOPE`), group roster isolation (`FORBIDDEN_GROUP_ACCESS`), attendance status validation (`INVALID_ATTENDANCE_STATUS`), and grade bounds (`INVALID_SCORE_BOUNDS`).
+4. **100% Product Requirement Completion**: REQ-07 status in `docs/FINAL_PRODUCT_AUDIT.md` moved from `NOT_IMPLEMENTED` to `PASS`. Total requirement score reached **20 PASS / 0 NOT_IMPLEMENTED (100.0%)**.
+5. **Final Delivery Verdict**: Elevated to **`FINAL DELIVERY READY`**.
+
+---
+
 ## ADR-034: Teacher Operations Scope & Dedicated Mobile App Architectural Decision
 
 ### Context
