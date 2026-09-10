@@ -52,7 +52,7 @@ function getSystemMetadata(overrideMeta = {}) {
     arch: overrideMeta.arch || os.arch(),
     cpuCores: overrideMeta.cpuCores || (cpus ? cpus.length : 4),
     totalMemoryGb: overrideMeta.totalMemoryGb || Math.round(os.totalmem() / (1024 * 1024 * 1024)),
-    appVersion: overrideMeta.appVersion || '1.0.0-release.32'
+    appVersion: overrideMeta.appVersion || '1.0.0-release.33'
   };
 }
 
