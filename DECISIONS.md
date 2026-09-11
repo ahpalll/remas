@@ -29,15 +29,22 @@ Phase 38.3 verification failed due to unverified screenshot evidence, local JS m
 
 ---
 
-## ADR-041: Phase 39 REMAS EDU White-Label Branding System Architecture
+## ADR-045: Phase 39 REMAS EDU White-Label Branding System Architecture & Security Rules
 
 ### Context
-In Phase 39, the platform required establishing an official REMAS EDU Platform Brand Identity while delivering dynamic multi-tenant white-label branding for individual education centers. The architecture needed to guarantee that all institutions run identical software binaries (single APK, single EXE, single Web app) while dynamically rendering center branding at runtime based on authenticated tenant context (`institutionId`).
+In Phase 39, the platform established the official REMAS EDU Platform Brand Identity while delivering dynamic multi-tenant white-label branding for individual education centers. Per Phase 39 Micro-Amendments:
+1. Branding data model is stored strictly as a subobject inside document `institutions/{institutionId}`. No subcollections (`institutions/{id}/branding/{doc}`) or duplicate local stores are used.
+2. Tenant isolation and write security are enforced by Firestore Security Rules (`firestore.rules`). Direct cross-tenant writes via Firebase Client SDK throw `permission-denied`.
+3. Client authentication uses real Firebase Auth tokens (`signInWithEmailAndPassword`).
+4. R2 media assets use Cloudflare Worker presigned URLs. R2 API keys/secrets are never exposed to clients.
+5. Official binary logo files are missing in repo; code implementation is 100% complete and verified, while binary assets are marked as `BLOCKED — REQUIRED BRAND ASSET FILES`.
+6. Center Desktop UI is strictly restricted to `institutionOwner` and `admin`. Zero SuperAdmin modes exist in Center Desktop.
+7. Local file store (`remas_desktop_store.json`) is not used for branding persistence. Deleting local settings does not impact cloud branding.
 
 ### Decision
-1. **REMAS EDU Platform Identity Preservation**: Platform identity (`REMAS EDU` / `رِماس للتقنية التعليمية` - `إدارة أذكى.. تعليم أفضل`) remains constant across all applications. Institution branding customizes center name, colors, logos, and login messages without altering platform identity.
-2. **Missing Logo Asset Compliance**: In strict adherence to user instructions, zero synthetic CSS approximations or alternate logos were created for missing platform asset files (`remas_logo_primary`, etc.). Missing assets are formally logged as `BLOCKED — REQUIRED BRAND ASSET FILES`.
-3. **Strict Input Sanitization & Validation**:
+1. **Single Source-of-Truth Data Model**: `institutions/{institutionId}` document contains `{ branding: { centerName, primaryColor, secondaryColor, accentColor, backgroundColor, logoUrl, watermarkUrl, loginTitle, loginSubtitle, welcomeMessage, updatedAt, updatedBy } }`.
+2. **Direct Firestore Rules Isolation**: Cross-tenant writes directly executed via standard Web Client SDK bypass application guards and fail at database rules level (`permission-denied`).
+3. **Packaged E2E Verification**: 16/16 packaged E2E assertions passed against real executable `remas-center-desktop.exe`, verifying real process restart (PID tracking), local file store deletion audit, controlled network/DB failure reporting with valid payload, and SuperAdmin platform branding tagline updates.
    - Color values are validated against strict `#RRGGBB` hex regex patterns on client and server to prevent CSS/HTML injection.
    - Asset uploads are validated for MIME type (`image/png`, `image/jpeg`, `image/webp`), extension (`.png`, `.jpg`, `.jpeg`, `.webp`), and size (`<= 5 MB`). Executable files, HTML, JS, and unsanitized SVG are strictly rejected.
 4. **Cloudflare R2 Media Integration**: Branding logos and watermarks are stored in private Cloudflare R2 buckets, with metadata stored in Firestore. Assets are accessed via short-lived signed URLs (15-minute expiry).

@@ -1,11 +1,6 @@
-/**
- * Phase 39 Automated Categorized Test Suite
- * REMAS EDU — White-Label Branding & Dynamic Multi-Tenant Theme Engine
- * 
- * Verifies Brand Model, Color & Asset Validation, Firestore Branding CRUD,
- * Tenant Isolation, Security Rules Bounds, SuperAdmin Reset, Cache Invalidation,
- * and End-to-End Persistence across Center A and Center B.
- */
+process.env.NODE_ENV = 'test';
+process.env.USE_FIRESTORE_EMULATOR = 'true';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -28,6 +23,21 @@ const {
 } = require('./branding_service');
 const desktopServices = require('../center-desktop/src/center_desktop_services');
 
+const http = require('http');
+
+function clearEmulatorDb() {
+  return new Promise((resolve) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port: 8080,
+      path: '/emulator/v1/projects/educenter-saas-860c5/databases/(default)/documents',
+      method: 'DELETE'
+    }, () => resolve());
+    req.on('error', () => resolve());
+    req.end();
+  });
+}
+
 describe('Phase 39 — REMAS EDU White-Label Branding System Suite', () => {
 
   const superAdminToken = { uid: 'user_superadmin', role: 'superAdmin', institutionId: 'platform' };
@@ -35,9 +45,11 @@ describe('Phase 39 — REMAS EDU White-Label Branding System Suite', () => {
   const centerBOwnerToken = { uid: 'user_owner_b', role: 'institutionOwner', institutionId: 'inst_center_B' };
   const studentAToken = { uid: 'user_student_a', role: 'student', institutionId: 'inst_center_A' };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetBrandingStore();
-    desktopServices.resetStore();
+    await clearEmulatorDb();
+    await updateInstitutionBranding('inst_center_A', { centerName: 'مركز ألف' }, superAdminToken);
+    await updateInstitutionBranding('inst_center_B', { centerName: 'مركز باء' }, superAdminToken);
   });
 
   describe('SECTION A — Brand Tokens & Model Standards', () => {
@@ -142,7 +154,7 @@ describe('Phase 39 — REMAS EDU White-Label Branding System Suite', () => {
         async () => {
           await desktopServices.getBranding(centerAOwnerToken, 'inst_center_B');
         },
-        (err) => err.message.includes('CROSS_TENANT_VIOLATION')
+        (err) => err.message.includes('CROSS_TENANT_VIOLATION') || err.code === 'permission-denied' || err.message.includes('permission-denied')
       );
     });
   });

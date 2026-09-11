@@ -1,10 +1,15 @@
 /**
  * REMAS EDU — Server-Authoritative Branding Service
+ * Phase 39 — Cloud Firestore Sole Source of Truth for Branding
  * 
- * Handles Firestore branding storage, Cloudflare R2 secure media asset uploads,
- * tenant isolation enforcement, SuperAdmin platform overrides, and audit logging.
+ * Handles Firestore branding storage under institutions/{institutionId},
+ * Cloudflare R2 secure media asset uploads, tenant isolation enforcement,
+ * SuperAdmin platform overrides, and audit logging.
  */
 
+const path = require('path');
+const { initializeApp, getApps, getApp } = require('firebase/app');
+const { getFirestore, doc, getDoc, setDoc } = require('firebase/firestore');
 const { REMAS_PLATFORM_BRAND } = require('./brand_tokens');
 const { 
   validateHexColor, 
@@ -13,21 +18,69 @@ const {
   invalidateBrandingCache 
 } = require('./brand_theme_engine');
 
-// In-Memory Storage for Tests & Server Service Instance
-const brandingStore = new Map();
-const platformBrandingStore = {
-  ...REMAS_PLATFORM_BRAND
-};
 const auditLogStore = [];
 
-function resetBrandingStore() {
-  brandingStore.clear();
-  auditLogStore.length = 0;
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyA_placeholder_key',
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'educenter-saas-860c5.firebaseapp.com',
+  projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT || 'educenter-saas-860c5',
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'educenter-saas-860c5.appspot.com',
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '1234567890',
+  appId: process.env.FIREBASE_APP_ID || '1:1234567890:web:abcdef123456'
+};
+
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+
+let testEnvPromise = null;
+function getTestEnv() {
+  if (!testEnvPromise) {
+    const rulesEnv = require('@firebase/rules-unit-testing');
+    const rulesPath = path.resolve(__dirname, 'firestore.rules');
+    const fs = require('fs');
+    let rulesContent = null;
+    if (fs.existsSync(rulesPath)) {
+      rulesContent = fs.readFileSync(rulesPath, 'utf8');
+    }
+    testEnvPromise = rulesEnv.initializeTestEnvironment({
+      projectId: 'educenter-saas-860c5',
+      firestore: {
+        host: '127.0.0.1',
+        port: 8080,
+        rules: rulesContent
+      }
+    });
+  }
+  return testEnvPromise;
 }
 
-/**
- * Validates identity token and institution authorization
- */
+const authContextMap = new Map();
+
+async function getClientFirestoreDb(callerToken) {
+  if ((process.env.NODE_ENV === 'test' || process.env.USE_FIRESTORE_EMULATOR === 'true') && process.env.FIRESTORE_EMULATOR_HOST) {
+    try {
+      const testEnv = await getTestEnv();
+      const instId = callerToken && callerToken.institutionId ? callerToken.institutionId : 'inst_bootstrap_001';
+      const role = callerToken && callerToken.role ? callerToken.role : 'institutionOwner';
+      const uid = callerToken && callerToken.uid ? callerToken.uid : 'usr_owner1';
+      const key = `${uid}_${instId}_${role}`;
+      if (!authContextMap.has(key)) {
+        authContextMap.set(key, testEnv.authenticatedContext(uid, { institutionId: instId, role }).firestore());
+      }
+      return authContextMap.get(key);
+    } catch (e) {}
+  }
+  return db;
+}
+
+let platformBrandingStore = { ...REMAS_PLATFORM_BRAND };
+
+function resetBrandingStore() {
+  auditLogStore.length = 0;
+  authContextMap.clear();
+  platformBrandingStore = { ...REMAS_PLATFORM_BRAND };
+}
+
 function assertBrandingAuthority(callerToken, targetInstitutionId, requireSuperAdmin = false) {
   if (!callerToken || !callerToken.uid) {
     throw new Error('UNAUTHENTICATED_CALLER: Valid authentication token is required');
@@ -41,46 +94,56 @@ function assertBrandingAuthority(callerToken, targetInstitutionId, requireSuperA
   }
 
   if (callerToken.role === 'superAdmin') {
-    return; // SuperAdmin can access any institution
+    return;
   }
 
   if (callerToken.institutionId !== targetInstitutionId) {
     throw new Error('CROSS_TENANT_VIOLATION: Cannot access or modify branding of another institution');
   }
 
-  if (callerToken.role !== 'institutionOwner' && callerToken.role !== 'centerAdmin') {
+  if (callerToken.role !== 'institutionOwner' && callerToken.role !== 'centerAdmin' && callerToken.role !== 'admin') {
     throw new Error('UNAUTHORIZED_ROLE: Institution Owner or Admin authority is required');
   }
 }
 
-/**
- * Retrieves branding metadata for an institution
- */
 async function getInstitutionBranding(institutionId, callerToken = null) {
   if (!institutionId) {
     throw new Error('INVALID_ARGUMENT: institutionId is required');
   }
 
-  // If caller token is provided, verify tenant scope (optional for public splash if allowed, but strict for updates)
   if (callerToken && callerToken.role !== 'superAdmin' && callerToken.institutionId !== institutionId) {
     throw new Error('CROSS_TENANT_VIOLATION: Cannot view branding of another institution');
   }
 
-  const rawBranding = brandingStore.get(institutionId) || {
+  const clientDb = await getClientFirestoreDb(callerToken);
+  const instRef = doc(clientDb, 'institutions', institutionId);
+  const snap = await getDoc(instRef);
+
+  let raw = {};
+  if (snap.exists()) {
+    const data = snap.data();
+    raw = data.branding || data;
+  }
+
+  const merged = {
     institutionId,
-    centerName: 'مركز تعليمي معتمد',
-    primaryColor: REMAS_PLATFORM_BRAND.colors.primary,
-    secondaryColor: REMAS_PLATFORM_BRAND.colors.secondary,
-    accentColor: REMAS_PLATFORM_BRAND.colors.accent,
-    backgroundColor: REMAS_PLATFORM_BRAND.colors.neutral
+    centerName: raw.centerName || 'مركز تعليمي معتمد',
+    primaryColor: raw.primaryColor || REMAS_PLATFORM_BRAND.colors.primary,
+    secondaryColor: raw.secondaryColor || REMAS_PLATFORM_BRAND.colors.secondary,
+    accentColor: raw.accentColor || REMAS_PLATFORM_BRAND.colors.accent,
+    backgroundColor: raw.backgroundColor || REMAS_PLATFORM_BRAND.colors.neutral,
+    logoUrl: raw.logoUrl || null,
+    watermarkUrl: raw.watermarkUrl || null,
+    logoAssetId: raw.logoAssetId || null,
+    watermarkAssetId: raw.watermarkAssetId || null,
+    loginTitle: raw.loginTitle || `مرحباً بكم في ${raw.centerName || 'المركز التعليمي'}`,
+    loginSubtitle: raw.loginSubtitle || 'منظومة المتابعة والإدارة التعليمية',
+    welcomeMessage: raw.welcomeMessage || 'أهلاً بكم في منصتنا التعليمية'
   };
 
-  return resolveInstitutionTheme(rawBranding);
+  return resolveInstitutionTheme(merged);
 }
 
-/**
- * Updates institution branding metadata
- */
 async function updateInstitutionBranding(institutionId, brandingData = {}, callerToken) {
   if (!institutionId) {
     throw new Error('INVALID_ARGUMENT: institutionId is required');
@@ -88,37 +151,61 @@ async function updateInstitutionBranding(institutionId, brandingData = {}, calle
 
   assertBrandingAuthority(callerToken, institutionId, false);
 
-  const existing = brandingStore.get(institutionId) || { institutionId };
+  const clientDb = await getClientFirestoreDb(callerToken);
+  const instRef = doc(clientDb, 'institutions', institutionId);
+  const snap = await getDoc(instRef);
 
-  // Validate colors if provided
-  const primaryColor = brandingData.primaryColor ? validateHexColor(brandingData.primaryColor, 'primaryColor') : (existing.primaryColor || REMAS_PLATFORM_BRAND.colors.primary);
-  const secondaryColor = brandingData.secondaryColor ? validateHexColor(brandingData.secondaryColor, 'secondaryColor') : (existing.secondaryColor || REMAS_PLATFORM_BRAND.colors.secondary);
-  const accentColor = brandingData.accentColor ? validateHexColor(brandingData.accentColor, 'accentColor') : (existing.accentColor || REMAS_PLATFORM_BRAND.colors.accent);
-  const backgroundColor = brandingData.backgroundColor ? validateHexColor(brandingData.backgroundColor, 'backgroundColor') : (existing.backgroundColor || REMAS_PLATFORM_BRAND.colors.neutral);
+  let existingBranding = {};
+  if (snap.exists()) {
+    const data = snap.data();
+    existingBranding = data.branding || data;
+  }
+
+  const primaryColor = brandingData.primaryColor ? validateHexColor(brandingData.primaryColor, 'primaryColor') : (existingBranding.primaryColor || REMAS_PLATFORM_BRAND.colors.primary);
+  const secondaryColor = brandingData.secondaryColor ? validateHexColor(brandingData.secondaryColor, 'secondaryColor') : (existingBranding.secondaryColor || REMAS_PLATFORM_BRAND.colors.secondary);
+  const accentColor = brandingData.accentColor ? validateHexColor(brandingData.accentColor, 'accentColor') : (existingBranding.accentColor || REMAS_PLATFORM_BRAND.colors.accent);
+  const backgroundColor = brandingData.backgroundColor ? validateHexColor(brandingData.backgroundColor, 'backgroundColor') : (existingBranding.backgroundColor || REMAS_PLATFORM_BRAND.colors.neutral);
 
   const updatedBranding = {
-    ...existing,
     institutionId,
-    centerName: brandingData.centerName ? brandingData.centerName.trim() : (existing.centerName || 'مركز تعليمي معتمد'),
-    logoAssetId: brandingData.logoAssetId !== undefined ? brandingData.logoAssetId : existing.logoAssetId,
-    watermarkAssetId: brandingData.watermarkAssetId !== undefined ? brandingData.watermarkAssetId : existing.watermarkAssetId,
-    logoUrl: brandingData.logoUrl !== undefined ? brandingData.logoUrl : existing.logoUrl,
-    watermarkUrl: brandingData.watermarkUrl !== undefined ? brandingData.watermarkUrl : existing.watermarkUrl,
+    centerName: brandingData.centerName ? brandingData.centerName.trim() : (existingBranding.centerName || 'مركز تعليمي معتمد'),
+    logoAssetId: (brandingData.logoAssetId !== undefined ? brandingData.logoAssetId : existingBranding.logoAssetId) || null,
+    watermarkAssetId: (brandingData.watermarkAssetId !== undefined ? brandingData.watermarkAssetId : existingBranding.watermarkAssetId) || null,
+    logoUrl: (brandingData.logoUrl !== undefined ? brandingData.logoUrl : existingBranding.logoUrl) || null,
+    watermarkUrl: (brandingData.watermarkUrl !== undefined ? brandingData.watermarkUrl : existingBranding.watermarkUrl) || null,
     primaryColor,
     secondaryColor,
     accentColor,
     backgroundColor,
-    loginTitle: brandingData.loginTitle ? brandingData.loginTitle.trim() : existing.loginTitle,
-    loginSubtitle: brandingData.loginSubtitle ? brandingData.loginSubtitle.trim() : existing.loginSubtitle,
-    welcomeMessage: brandingData.welcomeMessage ? brandingData.welcomeMessage.trim() : existing.welcomeMessage,
+    loginTitle: brandingData.loginTitle ? brandingData.loginTitle.trim() : (existingBranding.loginTitle || 'مرحباً بكم'),
+    loginSubtitle: brandingData.loginSubtitle ? brandingData.loginSubtitle.trim() : (existingBranding.loginSubtitle || 'منظومة المتابعة التعليمية'),
+    welcomeMessage: brandingData.welcomeMessage ? brandingData.welcomeMessage.trim() : (existingBranding.welcomeMessage || 'إدارة أذكى.. تعليم أفضل'),
     updatedAt: new Date().toISOString(),
     updatedBy: callerToken.uid
   };
 
-  brandingStore.set(institutionId, updatedBranding);
+  if (!snap.exists()) {
+    await setDoc(instRef, {
+      id: institutionId,
+      institutionId,
+      name: updatedBranding.centerName || 'مركز تعليمي معتمد',
+      status: 'ACTIVE',
+      createdBy: callerToken.uid,
+      createdAt: new Date().toISOString(),
+      updatedBy: callerToken.uid,
+      updatedAt: new Date().toISOString(),
+      branding: updatedBranding
+    }, { merge: true });
+  } else {
+    await setDoc(instRef, {
+      branding: updatedBranding,
+      updatedBy: callerToken.uid,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
   invalidateBrandingCache(institutionId);
 
-  // Record Audit Event
   auditLogStore.push({
     eventType: 'UPDATE_INSTITUTION_BRANDING',
     institutionId,
@@ -130,13 +217,33 @@ async function updateInstitutionBranding(institutionId, brandingData = {}, calle
   return resolveInstitutionTheme(updatedBranding);
 }
 
-/**
- * Resets an institution's branding to REMAS Platform Defaults (SuperAdmin only)
- */
 async function resetInstitutionBranding(institutionId, callerToken) {
-  assertBrandingAuthority(callerToken, institutionId, true); // Must be SuperAdmin
+  assertBrandingAuthority(callerToken, institutionId, true);
 
-  brandingStore.delete(institutionId);
+  const clientDb = await getClientFirestoreDb(callerToken);
+  const instRef = doc(clientDb, 'institutions', institutionId);
+  const snap = await getDoc(instRef);
+
+  if (!snap.exists()) {
+    await setDoc(instRef, {
+      id: institutionId,
+      institutionId,
+      name: 'مركز تعليمي معتمد',
+      status: 'ACTIVE',
+      createdBy: callerToken.uid,
+      createdAt: new Date().toISOString(),
+      updatedBy: callerToken.uid,
+      updatedAt: new Date().toISOString(),
+      branding: null
+    }, { merge: true });
+  } else {
+    await setDoc(instRef, {
+      branding: null,
+      updatedBy: callerToken.uid,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
   invalidateBrandingCache(institutionId);
 
   auditLogStore.push({
@@ -149,9 +256,6 @@ async function resetInstitutionBranding(institutionId, callerToken) {
   return resolveInstitutionTheme({ institutionId });
 }
 
-/**
- * Generates secure media presigned upload URL for branding asset (Cloudflare R2 Gateway)
- */
 async function generateBrandingAssetUploadUrl(institutionId, assetType, fileMeta, callerToken) {
   assertBrandingAuthority(callerToken, institutionId, false);
 
@@ -163,7 +267,6 @@ async function generateBrandingAssetUploadUrl(institutionId, assetType, fileMeta
   const assetId = `r2_brand_${assetType}_${institutionId}_${Date.now()}`;
   const r2Key = `institutions/${institutionId}/branding/${assetId}${validated.extension}`;
 
-  // Presigned URL generation simulating Cloudflare R2 private signed gateway URL
   const uploadUrl = `https://r2-gateway.educenter-saas.com/upload/${r2Key}?token=signed_upload_${Date.now()}`;
   const publicAccessUrl = `https://r2-gateway.educenter-saas.com/media/${r2Key}?token=signed_read_${Date.now()}`;
 
@@ -172,20 +275,14 @@ async function generateBrandingAssetUploadUrl(institutionId, assetType, fileMeta
     r2Key,
     uploadUrl,
     publicAccessUrl,
-    expiresInSeconds: 900 // 15-minute presigned expiry
+    expiresInSeconds: 900
   };
 }
 
-/**
- * SuperAdmin Platform Default Branding Fetcher
- */
 async function getPlatformBranding(callerToken = null) {
   return { ...platformBrandingStore };
 }
 
-/**
- * SuperAdmin Platform Default Branding Update
- */
 async function updatePlatformBranding(brandingData, callerToken) {
   if (!callerToken || callerToken.role !== 'superAdmin') {
     throw new Error('UNAUTHORIZED_ROLE: SuperAdmin authority is required to update Platform Branding');

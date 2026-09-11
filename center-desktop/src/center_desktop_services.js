@@ -105,6 +105,8 @@ function getTestEnv() {
   return testEnvPromise;
 }
 
+const authContextMap = new Map();
+
 async function getClientFirestoreDb(callerToken) {
   if ((process.env.NODE_ENV === 'test' || process.env.USE_FIRESTORE_EMULATOR === 'true') && process.env.FIRESTORE_EMULATOR_HOST) {
     try {
@@ -113,7 +115,11 @@ async function getClientFirestoreDb(callerToken) {
       const role = callerToken && callerToken.role ? callerToken.role : 'institutionOwner';
       const uid = callerToken && callerToken.uid ? callerToken.uid : 'usr_owner1';
 
-      return testEnv.authenticatedContext(uid, { institutionId: instId, role }).firestore();
+      const key = `${uid}_${instId}_${role}`;
+      if (!authContextMap.has(key)) {
+        authContextMap.set(key, testEnv.authenticatedContext(uid, { institutionId: instId, role }).firestore());
+      }
+      return authContextMap.get(key);
     } catch (e) {}
   }
   return db;
@@ -1267,24 +1273,34 @@ async function getBranding(callerToken, targetInstitutionId) {
   const token = resolveCallerToken(callerToken);
   const instId = targetInstitutionId || token.institutionId;
 
-  // Cloud Firestore is authoritative source for branding
+  // Cloud Firestore document institutions/{instId} is authoritative source for branding
   const clientDb = await getClientFirestoreDb(token);
-  const brandRef = doc(clientDb, 'institution_branding', instId);
-  const snap = await getDoc(brandRef);
+  const instRef = doc(clientDb, 'institutions', instId);
+  const snap = await getDoc(instRef);
 
-  let raw = snap.exists() ? snap.data() : {
+  let raw = {};
+  if (snap.exists()) {
+    const data = snap.data();
+    raw = data.branding || data;
+  }
+
+  const merged = {
     institutionId: instId,
-    centerName: 'سنتر التفوق التعليمي',
-    primaryColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.primary,
-    secondaryColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary,
-    accentColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.accent,
-    backgroundColor: REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral,
-    loginTitle: 'مرحباً بكم في المنظومة التعليمية',
-    loginSubtitle: 'منظومة المتابعة والإدارة',
-    welcomeMessage: 'إدارة أذكى.. تعليم أفضل'
+    centerName: raw.centerName || 'سنتر التفوق التعليمي',
+    primaryColor: raw.primaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.primary,
+    secondaryColor: raw.secondaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary,
+    accentColor: raw.accentColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.accent,
+    backgroundColor: raw.backgroundColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral,
+    logoUrl: raw.logoUrl || null,
+    watermarkUrl: raw.watermarkUrl || null,
+    logoAssetId: raw.logoAssetId || null,
+    watermarkAssetId: raw.watermarkAssetId || null,
+    loginTitle: raw.loginTitle || 'مرحباً بكم في المنظومة التعليمية',
+    loginSubtitle: raw.loginSubtitle || 'منظومة المتابعة والإدارة',
+    welcomeMessage: raw.welcomeMessage || 'إدارة أذكى.. تعليم أفضل'
   };
 
-  return resolveInstitutionTheme(raw);
+  return resolveInstitutionTheme(merged);
 }
 
 async function updateBranding(callerToken, payload = {}) {
@@ -1292,36 +1308,70 @@ async function updateBranding(callerToken, payload = {}) {
   const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
 
   const clientDb = await getClientFirestoreDb(token);
-  const brandRef = doc(clientDb, 'institution_branding', instId);
-  const snap = await getDoc(brandRef);
-  const existing = snap.exists() ? snap.data() : { institutionId: instId };
+  const instRef = doc(clientDb, 'institutions', instId);
+  const snap = await getDoc(instRef);
+  
+  let existingBranding = {};
+  if (snap.exists()) {
+    const data = snap.data();
+    existingBranding = data.branding || data;
+  }
 
-  const primaryColor = payload.primaryColor ? validateHexColor(payload.primaryColor, 'primaryColor') : (existing.primaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.primary);
-  const secondaryColor = payload.secondaryColor ? validateHexColor(payload.secondaryColor, 'secondaryColor') : (existing.secondaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary);
-  const accentColor = payload.accentColor ? validateHexColor(payload.accentColor, 'accentColor') : (existing.accentColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.accent);
-  const backgroundColor = payload.backgroundColor ? validateHexColor(payload.backgroundColor, 'backgroundColor') : (existing.backgroundColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral);
+  const primaryColor = payload.primaryColor ? validateHexColor(payload.primaryColor, 'primaryColor') : (existingBranding.primaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.primary);
+  const secondaryColor = payload.secondaryColor ? validateHexColor(payload.secondaryColor, 'secondaryColor') : (existingBranding.secondaryColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.secondary);
+  const accentColor = payload.accentColor ? validateHexColor(payload.accentColor, 'accentColor') : (existingBranding.accentColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.accent);
+  const backgroundColor = payload.backgroundColor ? validateHexColor(payload.backgroundColor, 'backgroundColor') : (existingBranding.backgroundColor || REMAS_PLATFORM_BRAND_DESKTOP.colors.neutral);
 
-  const updated = {
-    ...existing,
+  const updatedBranding = {
     institutionId: instId,
-    centerName: payload.centerName ? payload.centerName.trim() : (existing.centerName || 'سنتر التفوق التعليمي'),
-    logoAssetId: (payload.logoAssetId !== undefined ? payload.logoAssetId : existing.logoAssetId) || null,
-    watermarkAssetId: (payload.watermarkAssetId !== undefined ? payload.watermarkAssetId : existing.watermarkAssetId) || null,
-    logoUrl: (payload.logoUrl !== undefined ? payload.logoUrl : existing.logoUrl) || null,
-    watermarkUrl: (payload.watermarkUrl !== undefined ? payload.watermarkUrl : existing.watermarkUrl) || null,
+    centerName: payload.centerName ? payload.centerName.trim() : (existingBranding.centerName || 'سنتر التفوق التعليمي'),
+    logoAssetId: (payload.logoAssetId !== undefined ? payload.logoAssetId : existingBranding.logoAssetId) || null,
+    watermarkAssetId: (payload.watermarkAssetId !== undefined ? payload.watermarkAssetId : existingBranding.watermarkAssetId) || null,
+    logoUrl: (payload.logoUrl !== undefined ? payload.logoUrl : existingBranding.logoUrl) || null,
+    watermarkUrl: (payload.watermarkUrl !== undefined ? payload.watermarkUrl : existingBranding.watermarkUrl) || null,
     primaryColor,
     secondaryColor,
     accentColor,
     backgroundColor,
-    loginTitle: payload.loginTitle ? payload.loginTitle.trim() : (existing.loginTitle || 'مرحباً بكم'),
-    loginSubtitle: payload.loginSubtitle ? payload.loginSubtitle.trim() : (existing.loginSubtitle || 'منظومة المتابعة التعليمية'),
-    welcomeMessage: payload.welcomeMessage ? payload.welcomeMessage.trim() : (existing.welcomeMessage || 'إدارة أذكى.. تعليم أفضل'),
+    loginTitle: payload.loginTitle ? payload.loginTitle.trim() : (existingBranding.loginTitle || 'مرحباً بكم'),
+    loginSubtitle: payload.loginSubtitle ? payload.loginSubtitle.trim() : (existingBranding.loginSubtitle || 'منظومة المتابعة التعليمية'),
+    welcomeMessage: payload.welcomeMessage ? payload.welcomeMessage.trim() : (existingBranding.welcomeMessage || 'إدارة أذكى.. تعليم أفضل'),
     updatedAt: new Date().toISOString(),
     updatedBy: token.uid
   };
 
-  await setDoc(brandRef, updated, { merge: true });
-  return resolveInstitutionTheme(updated);
+  // Write branding object to institutions/{instId} document in Firestore
+  if (!snap.exists()) {
+    await setDoc(instRef, {
+      id: instId,
+      institutionId: instId,
+      name: updatedBranding.centerName || 'سنتر التفوق التعليمي',
+      status: 'ACTIVE',
+      createdBy: token.uid,
+      createdAt: new Date().toISOString(),
+      updatedBy: token.uid,
+      updatedAt: new Date().toISOString(),
+      branding: updatedBranding
+    }, { merge: true });
+  } else {
+    await setDoc(instRef, {
+      branding: updatedBranding,
+      updatedAt: new Date().toISOString(),
+      updatedBy: token.uid
+    }, { merge: true });
+  }
+
+  await recordAuditEvent({
+    action: 'UPDATE_BRANDING',
+    actorUid: token.uid,
+    actorRole: token.role,
+    institutionId: instId,
+    targetType: 'BRANDING',
+    targetId: instId,
+    details: { centerName: updatedBranding.centerName }
+  });
+
+  return resolveInstitutionTheme(updatedBranding);
 }
 
 async function uploadBrandingAsset(callerToken, payload = {}) {

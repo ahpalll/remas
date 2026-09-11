@@ -56,7 +56,7 @@ service cloud.firestore {
         && request.resource.data.status in ['ACTIVE', 'SUSPENDED', 'ARCHIVED'];
 
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.updatedBy == request.auth.uid
+        && (!request.resource.data.keys().hasAny(['updatedBy']) || request.resource.data.updatedBy == request.auth.uid)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'id', 'ownerId', 'createdBy', 'createdAt']);
 
       allow delete: if isSuperAdmin();

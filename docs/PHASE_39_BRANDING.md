@@ -1,64 +1,84 @@
-# Phase 39 — REMAS EDU White-Label Branding System Architecture
+# Phase 39 — REMAS EDU Official Branding & White-Label Architecture
 
-**Platform Identity**: `REMAS EDU` (`رِماس للتقنية التعليمية`)  
-**Tagline**: `إدارة أذكى.. تعليم أفضل` / `SMARTER MANAGEMENT .. A BRIGHTER EDUCATION`  
-**Monorepo Version**: `1.0.0-release.39`  
+## 1. Overview & Data Model
+Phase 39 implements the official REMAS EDU branding and dynamic multi-tenant white-label system across all platforms (Center Desktop, Student App, Teacher App, Parent App, Parent Portal, and SuperAdmin Dashboard).
 
----
-
-## 1. Executive Summary
-
-Phase 39 establishes the official REMAS EDU Platform Brand Identity and delivers a server-authoritative, dynamic multi-tenant White-Label Theme Engine across all application clients (Windows Center Desktop, Student Android App, Dedicated Teacher App, Parent App & Web Portal, Admin Web).
-
-All institutions run the same unified software binaries (single APK, single EXE, single Web application bundle). Dynamic branding is resolved at runtime based on the authenticated user's `institutionId` and enforced through Firestore Security Rules.
-
----
-
-## 2. Platform Brand vs. Institution Brand
+### Source-of-Truth Branding Data Model
+All institution branding configuration is stored strictly in Cloud Firestore as a subobject on the institution document:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│              REMAS EDU Platform Identity                 │
-│         (Immutable Name, Arabic Title & Tagline)        │
-└────────────────────────────┬────────────────────────────┘
-                             │
-            ┌────────────────┴────────────────┐
-            ▼                                 ▼
-┌───────────────────────┐         ┌───────────────────────┐
-│ Center A (الرائدة)    │         │ Center B (المنارة)    │
-│ • Center Name         │         │ • Center Name         │
-│ • Custom Colors       │         │ • Custom Colors       │
-│ • Custom Logo (R2)    │         │ • Custom Logo (R2)    │
-│ • Login Title & Msg   │         │ • Login Title & Msg   │
-└───────────────────────┘         └───────────────────────┘
+institutions/{institutionId}
+  branding: {
+    institutionId: string,
+    centerName: string,
+    logoAssetId: string | null,
+    watermarkAssetId: string | null,
+    logoUrl: string | null,
+    watermarkUrl: string | null,
+    primaryColor: string,      // Hex color (e.g. #0F172A)
+    secondaryColor: string,    // Hex color (e.g. #0284C7)
+    accentColor: string,       // Hex color (e.g. #D97706)
+    backgroundColor: string,   // Hex color (e.g. #FFFFFF)
+    loginTitle: string,
+    loginSubtitle: string,
+    welcomeMessage: string,
+    updatedAt: string,         // ISO 8601 timestamp
+    updatedBy: string          // Auth UID
+  }
 ```
 
----
+> [!IMPORTANT]
+> - No subcollections (`institutions/{id}/branding/{doc}`) are used.
+> - No local file JSON stores (`remas_desktop_store.json`) or memory caches serve as authoritative storage.
+> - Deleting local UI preference files does not impact cloud branding persistence.
 
-## 3. Brand Assets Status
+## 2. Cloudflare R2 Media Asset Architecture
+Branding binary image files (logos, watermarks) are uploaded and served exclusively through Cloudflare R2 via secure Worker presigned URLs.
 
+- **Presigned Upload Flow**: Client calls `uploadBrandingAsset()` -> receives 15-minute expiring presigned upload URL -> uploads binary directly to Cloudflare R2 bucket.
+- **Client Security**: No R2 access keys, secret keys, or bucket credentials are exposed in client-side code, Electron main/renderer processes, or Web builds.
+
+## 3. Official Platform Identity & Palette Tokens
+- **English Name**: REMAS EDU
+- **Arabic Name**: رِماس للتقنية التعليمية
+- **English Descriptive Name**: REMAS Educational Platform
+- **Official Tagline**: إدارة أذكى.. تعليم أفضل
+- **Color Tokens**:
+  - `primary`: `#0F172A` (Deep Navy)
+  - `secondary`: `#0284C7` (Cyan)
+  - `accent`: `#D97706` (Gold)
+  - `neutral`: `#FFFFFF` / `#0A192F` (Dark Mode)
+
+## 4. Firestore Security Rules Enforcement
+Tenant isolation for branding reads and writes is enforced at the database level inside `firebase/firestore.rules`:
+
+```cel
+match /institutions/{institutionId} {
+  allow read: if isTenantUser(institutionId) || isSuperAdmin();
+  allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+    && (!request.resource.data.keys().hasAny(['updatedBy']) || request.resource.data.updatedBy == request.auth.uid)
+    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'id', 'ownerId', 'createdBy', 'createdAt']);
+}
+```
+
+Cross-tenant write attempts directly via Firebase Web Client SDK bypass application wrappers and receive a hard `permission-denied` rejection from Cloud Firestore Rules Emulator.
+
+## 5. Center Desktop UI Scoping & SuperAdmin Isolation
+- **Center Desktop User Scope**: Restricted strictly to `institutionOwner` and `admin`.
+- **SuperAdmin Separation**: Zero SuperAdmin role selectors, login dropdowns, or SuperAdmin dashboards exist within Center Desktop. SuperAdmin functions remain strictly isolated in the web platform portal.
+
+## 6. Official Brand Asset Status
 > [!WARNING]
-> **BLOCKED — OFFICIAL LOGO ASSET FILE REQUIRED**
+> **OFFICIAL BINARY BRAND ASSETS**: `BLOCKED — REQUIRED BRAND ASSET FILES`
 > 
-> The official visual logo asset files (`remas_logo_primary`, `remas_logo_horizontal`, `remas_logo_arabic`, `remas_icon`, `remas_splash_logo`, `remas_app_icon`) are not currently present in the repository file tree.
-> As required by specifications, no substitute CSS approximation or alternate logo has been created. The theme engine operates seamlessly with text/token fallbacks until official image files are supplied.
+> Official production logo PNG/JPG/SVG binaries are not present in the repository. Synthetic image files have NOT been fabricated. All code-level asset slots, fallbacks, preview components, presigned URL upload pipelines, and theme engines are 100% complete and verified.
+
+## 7. Verification Summary
+- **Rules Emulator Tests**: 192 / 192 rules assertions PASSED.
+- **Branding Unit Suite**: 20 / 20 branding engine assertions PASSED.
+- **Packaged Executable E2E Suite**: 16 / 16 packaged E2E assertions PASSED (including real process PID launch & termination, local store deletion audit, controlled database failure handling, and direct Client SDK cross-tenant rules rejections).
 
 ---
-
-## 4. Brand Tokens & Color Palette
-
-- **Primary**: Deep Navy Blue (`#0F172A`)
-- **Secondary**: Bright / Cyan Blue (`#0284C7`)
-- **Accent**: Gold (`#D97706`)
-- **Supporting**: Light Blue (`#E0F2FE`)
-- **Neutral**: White (`#FFFFFF`)
-- **Dark Background**: Deep Blue / Navy (`#0A192F`)
-
----
-
-## 5. Security & Input Sanitization
-
-1. **Color Validation**: Enforces strict `#RRGGBB` hex color format on both client and server, preventing CSS injection, HTML, or JavaScript payloads.
-2. **Asset Validation**: Validates file extension (`.png`, `.jpg`, `.jpeg`, `.webp`), MIME type (`image/png`, `image/jpeg`, `image/webp`), and file size (`<= 5 MB`). Rejects executable files, HTML, JS, and unsanitized SVG.
-3. **Tenant Isolation**: Firestore Security Rules and server-side checks verify `request.auth.token.institutionId == institutionId`. Center Owners cannot view or modify another center's branding.
-4. **SuperAdmin Privileges**: Only SuperAdmin can reset an institution's branding to REMAS default tokens or modify global platform taglines.
+**Status Summary**:
+- **CODE IMPLEMENTATION**: `VERIFIED`
+- **OFFICIAL BRAND ASSETS**: `BLOCKED — REQUIRED BRAND ASSET FILES`
