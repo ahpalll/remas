@@ -10,10 +10,19 @@ import 'child_grades_screen.dart';
 import 'child_content_screen.dart';
 import 'notifications_screen.dart';
 
+import '../models/app_branding.dart';
+
 class HomeScreen extends StatefulWidget {
   final ParentAuthService authService;
   final ParentDataService dataService;
-  const HomeScreen({super.key, required this.authService, required this.dataService});
+  final AppBranding? branding;
+
+  const HomeScreen({
+    super.key,
+    required this.authService,
+    required this.dataService,
+    this.branding,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();

@@ -4,19 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0-release.39] - 2026-09-11 (Phase 39: REMAS EDU Official Branding & White-Label Architecture)
+## [1.0.0-release.39] - 2026-09-11 (Phase 39: REMAS EDU Official Branding & White-Label System)
 
 ### Added / Delivered
 - **REMAS EDU Platform Identity & Brand System**: Implemented official brand tokens, color palette (`#0F172A` Deep Navy, `#0284C7` Cyan, `#D97706` Gold), theme resolution engine, hex color validator, and branding metadata schema.
 - **Single Source-of-Truth Branding Data Model**: Consolidated center branding model directly inside `institutions/{institutionId}` Firestore document under subobject `branding`. Zero subcollections (`institutions/{id}/branding/{doc}`) or duplicate local JSON stores are used.
+- **Multi-Client Dynamic Branding Pipeline**:
+  - **Student App (Flutter)**: Integrated `AppBranding` model and `BrandingService`. Renders REMAS EDU splash unauthenticated, updates to center branding post-auth, falls back cleanly on network/cloud error.
+  - **Teacher App (Flutter)**: Integrated `TeacherBrandingService` and dynamic theme engine. Restricts branding resolution to teacher's authorized institution context.
+  - **Parent App (Flutter)**: Integrated `ParentBrandingService`. Resolves branding from authorized child's institution context without accepting arbitrary `institutionId` UI inputs.
+  - **Parent Web Portal (React)**: Integrated `BrandingProvider` and `useBranding()`. Dynamically applies center theme variables post-authentication, falling back to REMAS EDU platform defaults unauthenticated.
+  - **SuperAdmin Platform**: Audited platform branding. SuperAdmin remains isolated in dedicated web console without hidden role switches inside Center Desktop.
 - **Firestore Security Rules Isolation**: Enforced tenant isolation in `firebase/firestore.rules`. Direct cross-tenant writes via standard Web Client SDK are authoritatively rejected by database rules (`permission-denied`).
 - **Cloudflare R2 Media Asset Pipeline**: Integrated presigned upload URL architecture (15-minute expiry). Zero R2 credentials, secret keys, or access tokens are exposed to client binaries.
-- **Center Desktop UI Scoping & SuperAdmin Isolation**: Center Desktop UI is strictly scoped to `institutionOwner` and `admin`. Zero SuperAdmin role selectors, login dropdowns, or SuperAdmin dashboards exist within Center Desktop.
 - **Official Brand Asset Status**: Code implementation is 100% complete and verified. Official binary logo assets are marked as `BLOCKED — REQUIRED BRAND ASSET FILES`.
 - **Verification Suite**:
   - `npm run test:rules`: 192/192 rules tests passed.
-  - `node firebase/phase_39_branding.test.js`: 20/20 branding unit assertions passed.
-  - `node scratch/run_phase_39_full_e2e.js`: 16/16 packaged executable E2E assertions passed (including real process PID restart, local store deletion audit, controlled database failure handling, and direct Client SDK cross-tenant rules rejection).
+  - `node firebase/phase_39_branding.test.js`: 23/23 branding unit & multi-client assertions passed.
+  - `node scratch/run_phase_39_full_e2e.js`: 16/16 packaged executable E2E assertions passed.
+  - `flutter test` (Student App): 32/32 assertions passed.
+  - `flutter test` (Teacher App): 16/16 assertions passed.
+  - `flutter test` (Parent App): 16/16 assertions passed.
+  - **Client Secret & Admin SDK Scan**: 0 secrets, 0 Firebase Admin SDK imports in client apps.
 
 ## [1.0.0-release.38.5] - 2026-09-11 (Phase 38.5: Cloud Firestore as Sole Production Source of Truth)
 

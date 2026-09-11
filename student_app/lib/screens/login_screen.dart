@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../models/app_branding.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final AppBranding branding;
+
+  const LoginScreen({super.key, required this.branding});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -49,12 +52,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final b = widget.branding;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('تسجيل دخول الطالب'),
+          title: Text(b.loginTitle),
           centerTitle: true,
+          backgroundColor: b.primaryColor,
+          foregroundColor: Colors.white,
         ),
         body: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -62,18 +69,21 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.school, size: 64, color: Colors.deepPurple),
+              if (b.logoUrl != null && b.logoUrl!.isNotEmpty)
+                Image.network(b.logoUrl!, height: 80, errorBuilder: (_, __, ___) => Icon(Icons.school, size: 64, color: b.primaryColor))
+              else
+                Icon(Icons.school, size: 64, color: b.primaryColor),
               const SizedBox(height: 16),
-              const Text(
-                'منصة إدارة السناتر التعليمية',
+              Text(
+                b.centerName,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: b.primaryColor),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'تطبيق الطالب (Phase 2 Identity Foundation)',
+              Text(
+                b.welcomeMessage,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
               ),
               const SizedBox(height: 32),
               if (_errorMessage.isNotEmpty)
@@ -115,15 +125,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.deepPurple,
+                  backgroundColor: b.primaryColor,
                   foregroundColor: Colors.white,
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('تسجيل الدخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],

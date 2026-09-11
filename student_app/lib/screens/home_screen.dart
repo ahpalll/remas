@@ -13,18 +13,24 @@ import 'subscription_screen.dart';
 import 'notifications_screen.dart';
 import 'ai_tutor_home_screen.dart';
 
+import '../models/app_branding.dart';
+
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final AppBranding? branding;
+  const HomeScreen({super.key, this.branding});
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final authService = AuthService();
     final aiService = StudentAITutorService();
+    final activeBranding = branding ?? AppBranding.platformDefault();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('منصة الطالب'),
+        title: Text(activeBranding.centerName),
+        backgroundColor: activeBranding.primaryColor,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

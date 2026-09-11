@@ -73,32 +73,33 @@ function validateAssetMetadata(fileMeta) {
  * with REMAS EDU Platform default tokens.
  */
 function resolveInstitutionTheme(institutionBranding = {}) {
-  const primary = institutionBranding.primaryColor 
-    ? validateHexColor(institutionBranding.primaryColor, 'primaryColor')
+  const branding = institutionBranding || {};
+  const primary = branding.primaryColor 
+    ? validateHexColor(branding.primaryColor, 'primaryColor')
     : REMAS_PLATFORM_BRAND.colors.primary;
 
-  const secondary = institutionBranding.secondaryColor 
-    ? validateHexColor(institutionBranding.secondaryColor, 'secondaryColor')
+  const secondary = branding.secondaryColor 
+    ? validateHexColor(branding.secondaryColor, 'secondaryColor')
     : REMAS_PLATFORM_BRAND.colors.secondary;
 
-  const accent = institutionBranding.accentColor 
-    ? validateHexColor(institutionBranding.accentColor, 'accentColor')
+  const accent = branding.accentColor 
+    ? validateHexColor(branding.accentColor, 'accentColor')
     : REMAS_PLATFORM_BRAND.colors.accent;
 
-  const backgroundColor = institutionBranding.backgroundColor 
-    ? validateHexColor(institutionBranding.backgroundColor, 'backgroundColor')
+  const backgroundColor = branding.backgroundColor 
+    ? validateHexColor(branding.backgroundColor, 'backgroundColor')
     : REMAS_PLATFORM_BRAND.colors.neutral;
 
   return {
     platformBrand: REMAS_PLATFORM_BRAND,
-    centerName: institutionBranding.centerName || 'مركز تعليمي معتمد',
-    logoUrl: institutionBranding.logoUrl || null,
-    watermarkUrl: institutionBranding.watermarkUrl || null,
-    logoAssetId: institutionBranding.logoAssetId || null,
-    watermarkAssetId: institutionBranding.watermarkAssetId || null,
-    loginTitle: institutionBranding.loginTitle || `مرحباً بكم في ${institutionBranding.centerName || 'المركز التعليمي'}`,
-    loginSubtitle: institutionBranding.loginSubtitle || 'منظومة المتابعة والإدارة التعليمية',
-    welcomeMessage: institutionBranding.welcomeMessage || 'أهلاً بكم في منصتنا التعليمية',
+    centerName: branding.centerName || 'رِماس للتقنية التعليمية',
+    logoUrl: branding.logoUrl || null,
+    watermarkUrl: branding.watermarkUrl || null,
+    logoAssetId: branding.logoAssetId || null,
+    watermarkAssetId: branding.watermarkAssetId || null,
+    loginTitle: branding.loginTitle || `مرحباً بكم في ${branding.centerName || 'المركز التعليمي'}`,
+    loginSubtitle: branding.loginSubtitle || 'منظومة المتابعة والإدارة التعليمية',
+    welcomeMessage: branding.welcomeMessage || 'إدارة أذكى.. تعليم أفضل',
     colors: {
       primary,
       secondary,
@@ -108,8 +109,8 @@ function resolveInstitutionTheme(institutionBranding = {}) {
       neutral: REMAS_PLATFORM_BRAND.colors.neutral,
       darkBackground: REMAS_PLATFORM_BRAND.colors.darkBackground
     },
-    updatedAt: institutionBranding.updatedAt || new Date().toISOString(),
-    updatedBy: institutionBranding.updatedBy || 'system'
+    updatedAt: branding.updatedAt || new Date().toISOString(),
+    updatedBy: branding.updatedBy || 'system'
   };
 }
 

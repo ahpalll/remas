@@ -22,9 +22,18 @@ export function LoginForm({ onShowReset }: { onShowReset: () => void }) {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '2rem auto', padding: '2rem', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>تسجيل الدخول - لوحة الإدارة</h2>
+    <div style={{ maxWidth: '420px', margin: '3rem auto', padding: '2rem', border: '1px solid #0F172A22', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#FFFFFF' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: '#0F172A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontWeight: 'bold', fontSize: '18px' }}>
+          REMAS
+        </div>
+        <h2 style={{ color: '#0F172A', margin: '0 0 6px 0', fontSize: '1.4rem' }}>رِماس للتقنية التعليمية</h2>
+        <span style={{ fontSize: '0.85rem', color: '#0284C7', fontWeight: 'bold' }}>REMAS Educational Platform</span>
+        <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>إدارة أذكى.. تعليم أفضل</div>
+      </div>
+
       {error && <div style={{ color: '#d32f2f', background: '#ffebee', padding: '0.75rem', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
+
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>البريد الإلكتروني</label>
@@ -49,16 +58,17 @@ export function LoginForm({ onShowReset }: { onShowReset: () => void }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          style={{ width: '100%', padding: '0.75rem', background: '#1976d2', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          style={{ width: '100%', padding: '0.75rem', background: '#0F172A', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
         >
-          {isSubmitting ? 'جاري الدخول...' : 'تسجيل الدخول'}
+          {isSubmitting ? 'جاري الدخول...' : 'تسجيل الدخول - لوحة الإدارة'}
         </button>
       </form>
+
       <div style={{ textAlign: 'center', marginTop: '1rem' }}>
         <button
           type="button"
           onClick={onShowReset}
-          style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline' }}
+          style={{ background: 'none', border: 'none', color: '#0284C7', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline' }}
         >
           نسيت كلمة المرور؟
         </button>

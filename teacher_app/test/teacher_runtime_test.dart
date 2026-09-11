@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teacher_app/models/teacher_models.dart';
+import 'package:teacher_app/models/app_branding.dart';
 import 'package:teacher_app/services/teacher_services.dart';
 
 void main() {
@@ -168,6 +169,22 @@ void main() {
       await authService.logout();
       expect(authService.isAuthenticated, isFalse);
       expect(authService.currentTeacher, isNull);
+    });
+
+    test('Assertion 16: Teacher AppBranding model JSON parsing & platform default fallback', () {
+      final defaultBranding = AppBranding.platformDefault();
+      expect(defaultBranding.centerName, equals('رِماس للتقنية التعليمية'));
+      expect(defaultBranding.isPlatformDefault, isTrue);
+
+      final customBranding = AppBranding.fromJson({
+        'branding': {
+          'centerName': 'أكاديمية المعلمين المتميزة',
+          'primaryColor': '#0F172A',
+        }
+      }, instId: 'inst_A');
+      expect(customBranding.centerName, equals('أكاديمية المعلمين المتميزة'));
+      expect(customBranding.institutionId, equals('inst_A'));
+      expect(customBranding.isPlatformDefault, isFalse);
     });
   });
 }

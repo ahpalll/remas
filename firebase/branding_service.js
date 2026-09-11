@@ -60,9 +60,12 @@ async function getClientFirestoreDb(callerToken) {
   if ((process.env.NODE_ENV === 'test' || process.env.USE_FIRESTORE_EMULATOR === 'true') && process.env.FIRESTORE_EMULATOR_HOST) {
     try {
       const testEnv = await getTestEnv();
-      const instId = callerToken && callerToken.institutionId ? callerToken.institutionId : 'inst_bootstrap_001';
-      const role = callerToken && callerToken.role ? callerToken.role : 'institutionOwner';
-      const uid = callerToken && callerToken.uid ? callerToken.uid : 'usr_owner1';
+      if (!callerToken || !callerToken.uid) {
+        return testEnv.unauthenticatedContext().firestore();
+      }
+      const instId = callerToken.institutionId || 'inst_bootstrap_001';
+      const role = callerToken.role || 'institutionOwner';
+      const uid = callerToken.uid;
       const key = `${uid}_${instId}_${role}`;
       if (!authContextMap.has(key)) {
         authContextMap.set(key, testEnv.authenticatedContext(uid, { institutionId: instId, role }).firestore());
@@ -115,33 +118,21 @@ async function getInstitutionBranding(institutionId, callerToken = null) {
     throw new Error('CROSS_TENANT_VIOLATION: Cannot view branding of another institution');
   }
 
-  const clientDb = await getClientFirestoreDb(callerToken);
-  const instRef = doc(clientDb, 'institutions', institutionId);
-  const snap = await getDoc(instRef);
+  try {
+    const clientDb = await getClientFirestoreDb(callerToken);
+    const instRef = doc(clientDb, 'institutions', institutionId);
+    const snap = await getDoc(instRef);
 
-  let raw = {};
-  if (snap.exists()) {
-    const data = snap.data();
-    raw = data.branding || data;
+    if (snap.exists()) {
+      const data = snap.data();
+      const rawBranding = data.branding || data;
+      return resolveInstitutionTheme(rawBranding);
+    }
+  } catch (err) {
+    return resolveInstitutionTheme(null);
   }
 
-  const merged = {
-    institutionId,
-    centerName: raw.centerName || 'مركز تعليمي معتمد',
-    primaryColor: raw.primaryColor || REMAS_PLATFORM_BRAND.colors.primary,
-    secondaryColor: raw.secondaryColor || REMAS_PLATFORM_BRAND.colors.secondary,
-    accentColor: raw.accentColor || REMAS_PLATFORM_BRAND.colors.accent,
-    backgroundColor: raw.backgroundColor || REMAS_PLATFORM_BRAND.colors.neutral,
-    logoUrl: raw.logoUrl || null,
-    watermarkUrl: raw.watermarkUrl || null,
-    logoAssetId: raw.logoAssetId || null,
-    watermarkAssetId: raw.watermarkAssetId || null,
-    loginTitle: raw.loginTitle || `مرحباً بكم في ${raw.centerName || 'المركز التعليمي'}`,
-    loginSubtitle: raw.loginSubtitle || 'منظومة المتابعة والإدارة التعليمية',
-    welcomeMessage: raw.welcomeMessage || 'أهلاً بكم في منصتنا التعليمية'
-  };
-
-  return resolveInstitutionTheme(merged);
+  return resolveInstitutionTheme(null);
 }
 
 async function updateInstitutionBranding(institutionId, brandingData = {}, callerToken) {

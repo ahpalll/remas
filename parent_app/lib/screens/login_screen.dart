@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../services/parent_auth_service.dart';
 
+import '../models/app_branding.dart';
+
 class LoginScreen extends StatefulWidget {
   final ParentAuthService authService;
-  const LoginScreen({super.key, required this.authService});
+  final AppBranding? branding;
+
+  const LoginScreen({super.key, required this.authService, this.branding});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -15,10 +19,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final b = widget.branding ?? AppBranding.platformDefault();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تسجيل الدخول — بوابة ولي الأمر'),
+        title: Text(b.loginTitle),
         centerTitle: true,
+        backgroundColor: b.primaryColor,
+        foregroundColor: Colors.white,
       ),
       body: Center(
         child: SingleChildScrollView(

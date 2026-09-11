@@ -5,6 +5,7 @@ import 'package:parent_app/models/parent_schedule.dart';
 import 'package:parent_app/models/parent_attendance.dart';
 import 'package:parent_app/models/parent_grade.dart';
 import 'package:parent_app/models/parent_subscription.dart';
+import 'package:parent_app/models/app_branding.dart';
 import 'package:parent_app/services/parent_auth_service.dart';
 import 'package:parent_app/services/parent_data_service.dart';
 
@@ -161,6 +162,22 @@ void main() {
       final presentOrLate = records.where((r) => r.status == AttendanceStatus.present || r.status == AttendanceStatus.late).length;
       final pct = (presentOrLate / records.length) * 100;
       expect(pct.toStringAsFixed(1), equals('66.7'));
+    });
+
+    test('Assertion 16: Parent AppBranding model JSON parsing & platform default fallback', () {
+      final defaultBranding = AppBranding.platformDefault();
+      expect(defaultBranding.centerName, equals('رِماس للتقنية التعليمية'));
+      expect(defaultBranding.isPlatformDefault, isTrue);
+
+      final customBranding = AppBranding.fromJson({
+        'branding': {
+          'centerName': 'سنتر أولياء الأمور',
+          'primaryColor': '#0F172A',
+        }
+      }, instId: 'inst_A');
+      expect(customBranding.centerName, equals('سنتر أولياء الأمور'));
+      expect(customBranding.institutionId, equals('inst_A'));
+      expect(customBranding.isPlatformDefault, isFalse);
     });
   });
 }
