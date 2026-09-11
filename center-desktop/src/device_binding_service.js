@@ -16,6 +16,11 @@ const _auditLogsStore = [];
  * Reset in-memory store (for unit tests)
  */
 function resetStore() {
+  if (process.env.NODE_ENV === 'production') {
+    const err = new Error('UNAUTHORIZED_TEST_METHOD: Test reset operations are disabled in production runtime.');
+    err.code = 'UNAUTHORIZED_TEST_METHOD';
+    throw err;
+  }
   _deviceBindingsStore.clear();
   _auditLogsStore.length = 0;
 }

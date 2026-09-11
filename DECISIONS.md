@@ -1,5 +1,19 @@
 # Architectural Decision Records (ADR)
 
+## ADR-042: Phase 38.4 Real Firebase E2E & Firestore Security Rules Emulator Repair
+
+### Context
+Phase 38.3 verification failed due to unverified screenshot evidence, local JS mock rule evaluators, and unverified runtime data operations. Phase 38.4 was mandated to fix the underlying implementation, run official Firestore Security Rules unit testing against the live Firebase Emulator on Java 21, isolate test reset operations from production, and execute a fail-fast packaged Windows application E2E test with 100% hard assertions.
+
+### Decision
+1. **Official Rules Emulator Testing**: Abandoned custom JS mock evaluators. Connected `@firebase/rules-unit-testing` v3.0.4 to live Firebase Firestore Emulator daemon running on port 8080 powered by OpenJDK 21.0.6. Verified 30/30 cross-tenant security rule matrix assertions.
+2. **Fail-Fast Packaged E2E Architecture**: Implemented `scratch/run_fail_fast_packaged_e2e.js` against the freshly packaged Windows binary `dist/win-unpacked/remas-center-desktop.exe`. Every step enforces hard assertions on DOM state, backend responses, and direct Firestore queries before taking screenshots. Any assertion failure immediately halts execution with exit code 1.
+3. **True Windows Process Restart & Persistence**: Verified application relaunch by inspecting Windows processes via `Win32_Process`. Recorded 3 distinct PIDs (PID 10528 -> PID 16816 -> PID 16564) and verified student CRUD persistence across restarts.
+4. **Production Reset Isolation**: Isolated `resetStore()` in `center_desktop_services.js` so that in production runtime (`NODE_ENV === 'production'`), invoking reset operations strictly throws `UNAUTHORIZED_TEST_METHOD`.
+5. **11 Unique Visual Screenshot Hashes**: Generated 11 fresh screenshots representing distinct visual states. Verified 11/11 unique SHA256 hashes with 0 duplicates.
+
+---
+
 ## ADR-041: Phase 39 REMAS EDU White-Label Branding System Architecture
 
 ### Context

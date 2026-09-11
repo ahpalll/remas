@@ -1,8 +1,13 @@
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 
 let activeSessionToken = null;
 
+const STORE_FILE_PATH = path.join(process.env.APPDATA || process.cwd(), 'remas_desktop_store.json');
+
 let memoryStore = getInitialSeedState();
+loadStoreFromDisk();
 
 function getInitialSeedState() {
   return {
@@ -25,6 +30,45 @@ function getInitialSeedState() {
     branding: new Map(),
     auditLogs: []
   };
+}
+
+function saveStoreToDisk() {
+  try {
+    const data = {
+      institutions: Array.from(memoryStore.institutions.entries()),
+      students: Array.from(memoryStore.students.entries()),
+      teachers: Array.from(memoryStore.teachers.entries()),
+      groups: Array.from(memoryStore.groups.entries()),
+      subjects: Array.from(memoryStore.subjects.entries()),
+      attendanceRecords: Array.from(memoryStore.attendanceRecords.entries()),
+      sessions: Array.from(memoryStore.sessions.entries()),
+      payments: Array.from(memoryStore.payments.entries()),
+      expenses: Array.from(memoryStore.expenses.entries()),
+      branding: Array.from(memoryStore.branding.entries()),
+      auditLogs: memoryStore.auditLogs
+    };
+    fs.writeFileSync(STORE_FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {}
+}
+
+function loadStoreFromDisk() {
+  try {
+    if (fs.existsSync(STORE_FILE_PATH)) {
+      const raw = fs.readFileSync(STORE_FILE_PATH, 'utf8');
+      const data = JSON.parse(raw);
+      if (data.institutions) memoryStore.institutions = new Map(data.institutions);
+      if (data.students) memoryStore.students = new Map(data.students);
+      if (data.teachers) memoryStore.teachers = new Map(data.teachers);
+      if (data.groups) memoryStore.groups = new Map(data.groups);
+      if (data.subjects) memoryStore.subjects = new Map(data.subjects);
+      if (data.attendanceRecords) memoryStore.attendanceRecords = new Map(data.attendanceRecords);
+      if (data.sessions) memoryStore.sessions = new Map(data.sessions);
+      if (data.payments) memoryStore.payments = new Map(data.payments);
+      if (data.expenses) memoryStore.expenses = new Map(data.expenses);
+      if (data.branding) memoryStore.branding = new Map(data.branding);
+      if (data.auditLogs) memoryStore.auditLogs = data.auditLogs;
+    }
+  } catch (err) {}
 }
 
 /**
@@ -393,6 +437,7 @@ function createStudent(callerToken, payload = {}) {
   };
 
   memoryStore.students.set(id, student);
+  saveStoreToDisk();
 
   const db = getFirestoreDb();
   if (db) {
@@ -440,6 +485,7 @@ function updateStudent(callerToken, studentIdOrPayload, payload = {}) {
   };
 
   memoryStore.students.set(sId, updated);
+  saveStoreToDisk();
 
   const db = getFirestoreDb();
   if (db && sId) {
@@ -1636,7 +1682,10 @@ function uploadBrandingAsset(callerToken, payload = {}) {
   });
 }
 
-function resetStore() {
+function resetStore(callerToken) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('UNAUTHORIZED_TEST_METHOD: Test reset operations are disabled in production runtime.');
+  }
   memoryStore = getInitialSeedState();
 }
 

@@ -51,7 +51,7 @@ async function handleLoginSubmit() {
   spinner.style.display = 'block';
 
   try {
-    const session = await callBackend('authenticateUser', null, { email, password });
+    const session = await callBackend('authenticateUser', { email, password });
     currentCallerToken = session;
     activeRole = session.role;
 

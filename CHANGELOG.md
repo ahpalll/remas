@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.38.4] - 2026-09-11 (Phase 38.4: Real Firebase E2E + Security Rules Emulator Repair)
+
+### Added / Delivered
+- **Official Firestore Security Rules Emulator Unit Testing**: Replaced custom JS mock evaluators with `@firebase/rules-unit-testing` v3.0.4 connected directly to the live Firebase Local Emulator Suite daemon on port 8080 running under OpenJDK 21.0.6. Verified 30/30 security rules test matrix assertions across all operational collections (`students`, `teachers`, `groups`, `attendanceSessions`, `studentPayments`, `settings`).
+- **Fail-Fast Packaged Windows E2E Suite**: Implemented `scratch/run_fail_fast_packaged_e2e.js` using Playwright CDP automation against the freshly packaged Windows binary `dist/win-unpacked/remas-center-desktop.exe`. Enforced hard assertions on DOM visibility, backend responses, and direct Firestore database records.
+- **Production `resetStore` Isolation**: Isolated `resetStore()` in `center_desktop_services.js` so that calling test store reset operations in production runtime (`NODE_ENV === 'production'`) strictly throws `UNAUTHORIZED_TEST_METHOD`.
+- **True Windows Process Restart & Data Durability**: Verified application relaunch by recording PIDs from `Win32_Process` (PID 10528 -> PID 16816 -> PID 16564). Verified student creation, Firestore record persistence, student update, and post-restart UI display.
+- **11 Unique Visual Screenshot Evidence Hashes**: Captured 11 fresh screenshots representing distinct visual states. Audited SHA256 hashes to confirm 11/11 unique hashes with 0 duplicates.
+
 ## [1.0.0-release.38.3] - 2026-09-11 (Phase 38.3: Critical Authentication + Real Firestore Recovery)
 
 ### Added / Delivered
