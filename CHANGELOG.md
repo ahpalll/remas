@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.38.5] - 2026-09-11 (Phase 38.5: Cloud Firestore as Sole Production Source of Truth)
+
+### Added / Delivered
+- **Purged Firebase Admin SDK from Client Desktop**: Removed `firebase-admin` from `center_desktop_services.js`. All operations now use standard Firebase Web Client SDK `10.14.1` (`firebase/app`, `firebase/auth`, `firebase/firestore`).
+- **Unified Authenticated Firebase Identity**: Authenticates via `signInWithEmailAndPassword` using Client Auth session. Firestore Security Rules authoritatively evaluate `request.auth.token.institutionId` and `request.auth.token.role`.
+- **Cloud Firestore Sole Source of Truth**: All operational CRUD functions (`createStudent`, `getStudents`, `updateStudent`, `archiveStudent`, `getTeachers`, `getGroups`, `recordAttendance`, `recordPayment`, `recordExpense`) execute directly against Cloud Firestore using `getDocs`, `getDoc`, `setDoc`, `updateDoc`. Local memory/JSON file stores and async `.catch(() => {})` background writes are completely eliminated.
+- **Purged Business Data from Local Store**: `remas_desktop_store.json` stores ONLY client window state and non-business UI preferences. Business operational data and center branding are cloud-authoritative.
+- **Firestore Emulator Environment Guard**: Restricted connection to `FIRESTORE_EMULATOR_HOST` strictly to test environments (`NODE_ENV === 'test'`). Packaged production binaries (`remas-center-desktop.exe`) connect directly to production Cloud Firestore.
+- **Verification Suite**:
+  - `npm run test:rules`: 192/192 rules tests passed against Firebase Firestore Emulator.
+  - Real Packaged Executable E2E (`scratch/run_phase_38_5_full_e2e.js`): 16/16 assertions passed, confirming cloud persistence, packaged process relaunch, local JSON file deletion tolerance, controlled error handling, and cross-tenant isolation.
+
 ## [1.0.0-release.38.4] - 2026-09-11 (Phase 38.4: Real Firebase E2E + Security Rules Emulator Repair)
 
 ### Added / Delivered

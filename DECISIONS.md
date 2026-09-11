@@ -1,6 +1,21 @@
 # Architectural Decision Records (ADR)
 
-## ADR-042: Phase 38.4 Real Firebase E2E & Firestore Security Rules Emulator Repair
+## ADR-044: Phase 38.5 Cloud Firestore as Sole Production Source of Truth for Center Desktop
+
+### Context
+Phase 38.4 audit revealed that Center Desktop CRUD maintained a local file/memory store (`memoryStore` in `center_desktop_services.js` backed by `remas_desktop_store.json`) with async unhandled background writes to Firestore (`.catch(() => {})`). Furthermore, `center_desktop_services.js` relied on `firebase-admin`, bypassing Firestore Security Rules on the client. Phase 38.5 was mandated to establish Cloud Firestore as the single, authoritative production source of truth for all operational CRUD.
+
+### Decision
+1. **Purged Firebase Admin SDK from Client Desktop**: Completely removed `firebase-admin` from `center_desktop_services.js`. All operations now use standard Firebase Web Client SDK `10.14.1` (`firebase/app`, `firebase/auth`, `firebase/firestore`).
+2. **Unified Authenticated Firebase Identity**: Client authentication uses `signInWithEmailAndPassword` via Web Client SDK. Firestore operations use the authenticated Firebase Auth identity, enforcing `firestore.rules` custom claims (`request.auth.token.institutionId` and `request.auth.token.role in ['institutionOwner', 'admin']`).
+3. **No Local File Fallback for Operational Business Data**: Operational CRUD paths (`createStudent`, `getStudents`, `updateStudent`, `archiveStudent`, `getTeachers`, `getGroups`, `recordAttendance`, `recordPayment`, `recordExpense`) execute directly against Cloud Firestore using `getDocs`, `getDoc`, `setDoc`, and `updateDoc`. Unhandled background writes and local JSON fallbacks are completely removed. If a query fails, UI displays a real error.
+4. **Purged Local Store**: `remas_desktop_store.json` stores ONLY non-business UI client settings (e.g. window size, UI preferences). Deleting `remas_desktop_store.json` does NOT remove business data or center branding.
+5. **Firestore Emulator Guard**: Connection to `FIRESTORE_EMULATOR_HOST` is restricted to controlled test environments (`NODE_ENV === 'test'`). Packaged production binaries (`remas-center-desktop.exe`) connect directly to production Cloud Firestore.
+6. **E2E & Rules Verification**: 192/192 rules tests passed against Firebase Firestore Emulator. 16/16 packaged executable E2E assertions passed against real Cloud Firestore, including process relaunch, local JSON deletion, controlled failure reporting, and cross-tenant security enforcement.
+
+---
+
+## ADR-043: Phase 38.4 Real Firebase E2E & Security Rules Emulator Repair
 
 ### Context
 Phase 38.3 verification failed due to unverified screenshot evidence, local JS mock rule evaluators, and unverified runtime data operations. Phase 38.4 was mandated to fix the underlying implementation, run official Firestore Security Rules unit testing against the live Firebase Emulator on Java 21, isolate test reset operations from production, and execute a fail-fast packaged Windows application E2E test with 100% hard assertions.
