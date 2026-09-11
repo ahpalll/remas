@@ -1,4 +1,22 @@
-# Architectural Decision Records (ADR)
+## ADR-046: Phase 40 Production Identity, License & Single Device Binding Architecture
+
+### Context
+Phase 40 mandated building the production identity, cloud-authoritative license management, single-device binding, remote revocation, and SuperAdmin lifecycle operations for REMAS EDU (`1.0.0-release.40`). Phase 40 Micro-Amendments strictly specified hardware fingerprint derivation rules, server-authorized first binding paths, Firestore Security Rules enforcement, zero client Firebase Admin SDK, tamper proofing, and strict status reporting for offline grace.
+
+### Decision
+1. **Cryptographic SHA-256 Device Fingerprint**: Hardware identity is derived deterministically from stable machine characteristics (CPU model, core count, total RAM, OS platform, architecture, static salt) formatted as `win_fp_[a-f0-9]{64}`. Hostname is normalized into a weak supplementary hash and is never used as primary identity. Zero raw serials, MAC addresses, or user PII are stored in Firestore or exposed.
+2. **Server-Authorized First Binding**: Firestore Security Rules strictly deny direct client writes (`create`, `update`, `delete`) to `/licenses/{id}` and `/deviceBindings/{id}` (`allow create, update, delete: if isSuperAdmin();`). First binding must execute through server authorization (`activateCenterLicense`) which validates Auth claims, institutionId, license code, and 1-device limit.
+3. **1-Device Enforcement & Secondary Device Denial**: Re-activating on the bound device returns `ALREADY_ACTIVE_SAME_DEVICE`. Activation attempts from secondary hardware throw `DEVICE_LIMIT_EXCEEDED` and yield status `DEVICE_MISMATCH`.
+4. **SuperAdmin Remote Operations**: `createCenterLicense`, `activateCenterLicense`, `suspendCenterLicense`, `revokeCenterLicense`, `renewCenterLicense`, and `unbindDevice` remain strictly server-side operations. Center Owners have read-only access to their own license status.
+5. **Zero Client Admin SDK & ASAR Secret Scan**: Verified `firebase-admin` is 100% absent from client source code and compiled Electron ASAR binaries (`app.asar`), Student APK, Teacher APK, Parent APK, and Parent Portal.
+6. **Offline Grace Policy Audit**: Hardware TPM / KMS trusted RTC clock is absent in general Windows desktop environments. Per Micro-Amendment 5, offline grace policy is explicitly reported as `OFFLINE GRACE POLICY = UNVERIFIED`, requiring online cloud authorization. Security is never weakened with fake local JSON expiry timestamps.
+7. **Local Store Tamper Proofing**: Modifying local client settings (`remas_desktop_store.json`) produces zero authorization bypass. Cloud Firestore remains the single authoritative source of truth.
+8. **Automated Verification Baseline**:
+   - `firebase/phase_40_license_device.test.js`: 9/9 subtests PASS (100%).
+   - `npm run test:rules`: 192/192 monorepo rules unit tests PASS (100%).
+   - `scratch/run_phase_40_full_e2e.js`: 8/8 packaged executable E2E scenarios PASS (100%).
+
+---
 
 ## ADR-044: Phase 38.5 Cloud Firestore as Sole Production Source of Truth for Center Desktop
 

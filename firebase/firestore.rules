@@ -29,7 +29,7 @@ service cloud.firestore {
     }
     
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.role == "superAdmin";
+      return isAuthenticated() && (request.auth.token.role == "superAdmin" || request.auth.token.role == "superadmin");
     }
 
     function isTenantUser(institutionId) {
@@ -400,6 +400,17 @@ service cloud.firestore {
     match /systemMetadata/{docId} {
       allow read: if isAuthenticated();
       allow create, update, delete: if false;
+    }
+
+    // Phase 40 Production Identity, License & Single Device Binding Rules
+    match /licenses/{licenseId} {
+      allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /deviceBindings/{bindingId} {
+      allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
+      allow create, update, delete: if isSuperAdmin();
     }
   }
 }

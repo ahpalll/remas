@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.40] - 2026-09-11 (Phase 40: Production Identity, License & Single Device Binding)
+
+### Added / Delivered
+- **Cryptographic SHA-256 Device Fingerprint**: SHA-256 derived machine fingerprint format `win_fp_[a-f0-9]{64}` based on platform, arch, CPU model, cores, RAM, and static derivation salt. Hostname is normalized to a 16-character SHA-256 weak supplementary signal and is never used as primary identity. Zero raw serial numbers, MAC addresses, or user PII are stored in Firestore or exposed.
+- **Server-Authorized First Device Binding**: Firestore Security Rules strictly prohibit client writes (`create`, `update`, `delete`) to `/licenses/{id}` and `/deviceBindings/{id}` (`allow create, update, delete: if isSuperAdmin();`). First binding must execute through server authorization (`activateCenterLicense`), verifying authentication UID, institutionId, valid license, and 1-device binding limit.
+- **Single-Device Policy & Secondary Device Denial**: Re-activating on the same device returns `ALREADY_ACTIVE_SAME_DEVICE`. Attempted activation from secondary hardware throws `DEVICE_LIMIT_EXCEEDED` and returns status `DEVICE_MISMATCH`.
+- **SuperAdmin Authoritative Remote Operations**: Server-side lifecycle management for `createCenterLicense`, `activateCenterLicense`, `suspendCenterLicense`, `revokeCenterLicense`, `renewCenterLicense`, and `unbindDevice`. Center Owners retain read-only permission for their institution's license status.
+- **Client Admin SDK & Secret Audit**: 100% verified zero `firebase-admin`, `serviceAccountKey.json`, or private keys in client/renderer bundles, compiled ASAR binary (`app.asar`), Student Flutter APK, Teacher Flutter APK, Parent Flutter APK, or Parent Web Portal.
+- **Offline Grace Policy Declaration**: Reported `OFFLINE GRACE POLICY = UNVERIFIED` due to lack of hardware TPM / KMS trusted RTC clock on standard Windows desktops. Online cloud authorization is strictly required; security is never compromised by editable local JSON expiry timestamps.
+- **Reinstall & Tamper Durability**: Deleting local preferences/store (`remas_desktop_store.json`) leaves cloud binding authoritative. Tampering with local files yields **0 authorization bypass**.
+- **Verification Suite**:
+  - `firebase/phase_40_license_device.test.js`: 9/9 subtests passed (100%).
+  - `npm run test:rules`: 192/192 monorepo rules tests passed (100%).
+  - `scratch/run_phase_40_full_e2e.js`: 8/8 packaged executable E2E scenarios passed (100%).
+
 ## [1.0.0-release.39] - 2026-09-11 (Phase 39: REMAS EDU Official Branding & White-Label System)
 
 ### Added / Delivered

@@ -125,11 +125,11 @@ async function activateCenterLicense({
     throw new Error('SUBSCRIPTION_EXPIRED: License has expired.');
   }
 
-  if (license.status === 'SUSPENDED') {
+  if (license.status === 'SUSPENDED' && role !== 'superadmin') {
     throw new Error('LICENSE_SUSPENDED: License is currently suspended by SuperAdmin.');
   }
 
-  if (license.status === 'REVOKED') {
+  if (license.status === 'REVOKED' && role !== 'superadmin') {
     throw new Error('LICENSE_REVOKED: License has been revoked by SuperAdmin.');
   }
 
@@ -145,6 +145,9 @@ async function activateCenterLicense({
   if (license.deviceBindingStatus === 'BOUND') {
     if (license.deviceFingerprintHash === fp) {
       // Same device reactivation -> PASS
+      if (role === 'superadmin') {
+        license.status = 'ACTIVE';
+      }
       license.lastSeenAt = timestamp;
       license.updatedAt = timestamp;
       _logAuditEvent({
