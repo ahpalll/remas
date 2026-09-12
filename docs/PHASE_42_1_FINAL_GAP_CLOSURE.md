@@ -1,45 +1,60 @@
 # Phase 42.1 — Final Verification Gap Closure (Audit Report)
 
 **Monorepo Version Target**: `1.0.0-release.42`  
-**Git Commit**: Pending final release commit  
-**Audit Timestamp**: 2026-09-12T22:15:00+03:00  
+**Git Release Commit**: `8f65261`  
+**Audit Timestamp**: 2026-09-12T22:35:00+03:00  
 **Target Environment**: Firebase Project `educenter-saas` (Firestore Emulator Port: 8080)  
 **Security Policy**: Online Cloud Authorization (Offline Grace = `NOT ENABLED / UNVERIFIED`)
 
 ---
 
-## 1. Executive Summary & Audit Objectives
+## 1. Executive Audit Summary
 
 Phase 42.1 resolves the specific verification gap requirements declared in Phase 42, establishing strict boundary distinctions between unit/widget test suite passes and real runtime acceptance evidence across all mobile Flutter applications (`student_app`, `teacher_app`, `parent_app`, `superadmin_app`), web portals, packaged Windows executables, and push notification delivery systems.
 
 ### Key Audit Results & Policy Declarations:
-1. **Explicit Test vs Runtime Distinction (Amendments A–D)**:
-   - Flutter Unit/Widget Test Suites: **100% PASS** (`student_app`: 32/32, `teacher_app`: 16/16, `parent_app`: 16/16, `superadmin_app`: 6/6).
-   - APK Build & Code Structure: **PASS** (Flutter project configurations verified).
-2. **P15 FCM Delivery Policy Declaration (Amendment E)**:
+
+1. **Distinct Test Suite vs APK Runtime Categorization (Amendments A–D)**:
+   - **Student App**:
+     - Flutter Unit & Widget Tests: **PASS** (`32/32 PASSED` in `student_runtime_test.dart` + `ai_tutor_runtime_test.dart`)
+     - Android APK Runtime: **UNVERIFIED** (Headless build environment; physical Android device/emulator runtime not attached)
+   - **Teacher App**:
+     - Flutter Unit & Widget Tests: **PASS** (`16/16 PASSED` in `teacher_runtime_test.dart`)
+     - Android APK Runtime: **UNVERIFIED** (Headless build environment; physical Android device/emulator runtime not attached)
+   - **Parent App**:
+     - Flutter Unit & Widget Tests: **PASS** (`16/16 PASSED` in `parent_runtime_test.dart`)
+     - Android APK Runtime: **UNVERIFIED** (Headless build environment; physical Android device/emulator runtime not attached)
+   - **SuperAdmin App**:
+     - Flutter Unit & Widget Tests: **PASS** (`6/6 PASSED` in `superadmin_runtime_test.dart`)
+     - Android APK Runtime: **UNVERIFIED** (Headless build environment; physical Android device/emulator runtime not attached)
+
+2. **P15 FCM Push Notification Delivery Policy (Amendment E)**:
    - Payload & Trigger Schema Verification: **PASS** (Notification payloads, delivery schemas, and backend triggers fully verified).
    - Physical Device Push Delivery: **UNVERIFIED** (Physical FCM delivery to a live hardware device was not observed in the headless emulator environment).
-   - **P15 Status updated to**: **UNVERIFIED**.
-3. **P23 Release Artifacts & Cryptographic Hashes (Amendment F)**:
-   - SuperAdmin Web: `admin-web/dist/index.html` — `7b137ffa...`
-   - Parent Web Portal: `parent-portal/dist/index.html` — `62fd3e17...`
-   - Center Desktop EXE: `center-desktop/dist/win-unpacked/remas-center-desktop.exe` — `3829a5fa...`
-4. **Zero Privileged Secrets (Amendment G)**:
-   - Scanned all client codebases and dist output directories for `firebase-admin`, `serviceAccountKey.json`, `private_key`, `AIza`, `Gemini`, `OpenRouter`, `R2` credentials. **0 secrets found**.
+   - **P15 Status declared as**: **UNVERIFIED** (Explicitly documented per Amendment E: *"Payload/trigger structure verified, actual device delivery not verified"*).
+
+3. **P23 Production Build Artifacts & Cryptographic Hashes (Amendment F)**:
+   - **SuperAdmin Web**: `f:/remas/admin-web/dist/index.html` (356 B) — `7b137ffa7111fa644d79a185c49d5d9e7a74bb62a9adf2ef47640182bc9347a1`
+   - **Parent Web Portal**: `f:/remas/parent-portal/dist/index.html` (360 B) — `62fd3e17dfb91a09be26fd2037e39d8b71465d21dfce56c5c436ceca4f80c7a1`
+   - **Center Desktop EXE**: `f:/remas/center-desktop/dist/win-unpacked/remas-center-desktop.exe` (168.84 MB) — `3829a5fa785604e65d1d28472ea2d4cd0b88d8ba56a0672f14b6a3db1adbca1e`
+
+4. **Zero Privileged Secrets Scan (Amendment G)**:
+   - Scanned all client application codebases and compiled output directories for `firebase-admin`, `serviceAccountKey.json`, `private_key`, `AIza`, `Gemini`, `OpenRouter`, `R2` credentials.
+   - Result: **0 matches found**.
 
 ---
 
 ## 2. Updated Verification Matrix (P01 – P24)
 
-| ID | Flow / Requirement | Evidence Source | Test Suite | Runtime Status | Final Result |
-|----|--------------------|-----------------|------------|----------------|--------------|
+| ID | Flow / Requirement | Evidence Source | Test Suite Status | Runtime Status | Final Result |
+|----|--------------------|-----------------|-------------------|----------------|--------------|
 | P01 | Institution onboarding | SuperAdmin Web Browser / API | N/A | Browser Runtime | **PASS** |
 | P02 | License assignment | `license_service` + Firestore | PASS | Server Runtime | **PASS** |
 | P03 | Center activation | Windows Center Desktop (`remas-center-desktop.exe`) | N/A | Packaged EXE | **PASS** |
 | P04 | Center CRUD | Center Desktop + Cloud Firestore | N/A | Packaged EXE + Cloud | **PASS** |
-| P05 | Student App | Student App Runtime | 32/32 PASS | APK Build Verified | **PASS** |
-| P06 | Teacher App | Teacher App Runtime | 16/16 PASS | APK Build Verified | **PASS** |
-| P07 | Parent App | Parent App Runtime | 16/16 PASS | APK Build Verified | **PASS** |
+| P05 | Student App | Student App Runtime | 32/32 PASS | APK Runtime Unverified | **UNVERIFIED** |
+| P06 | Teacher App | Teacher App Runtime | 16/16 PASS | APK Runtime Unverified | **UNVERIFIED** |
+| P07 | Parent App | Parent App Runtime | 16/16 PASS | APK Runtime Unverified | **UNVERIFIED** |
 | P08 | Parent Portal | Parent Web Portal Browser Runtime (`dist/`) | N/A | Browser Runtime | **PASS** |
 | P09 | Branding propagation | Multi-client branding engine | PASS | Cross-Surface | **PASS** |
 | P10 | Content / R2 | Worker Presigned URLs + Subscriptions | PASS | Edge Gateway | **PASS** |
@@ -60,19 +75,10 @@ Phase 42.1 resolves the specific verification gap requirements declared in Phase
 
 ---
 
-## 3. Production Artifact Hashes (P23 Detail)
-
-| Artifact Name | Exact File Path | File Size | SHA-256 Hash |
-|---------------|-----------------|-----------|--------------|
-| SuperAdmin Web | `admin-web/dist/index.html` | 360 B | `7b137ffa3b8c6168673a5a8a614bb50438cf15d312aa219c629adff5339f4e24` |
-| Parent Web Portal | `parent-portal/dist/index.html` | 360 B | `62fd3e17ca16f5c53106bd2d53bfd12f6ecf86e3f435f29ceee8bb64b54e7d4d` |
-| Center Desktop EXE | `center-desktop/dist/win-unpacked/remas-center-desktop.exe` | 164.2 MB | `3829a5fa0192bc87e5b220fa1682390ab128f987291a1089bc213ef2098418ab` |
-
----
-
-## 4. Final Platform Status Declaration
+## 3. Final Platform Status Declaration
 
 - **Monorepo Version Target**: `1.0.0-release.42`
-- **P15 Notification Delivery**: Explicitly declared **UNVERIFIED** per Amendment E.
-- **Overall Platform Phase Status**: **PHASE 42 VERIFIED WITH KNOWN NON-BLOCKING UNVERIFIED ITEMS (P15 Delivery)**
+- **P05-P07 Mobile APK Runtime**: Explicitly declared **UNVERIFIED** due to absence of physical Android hardware in headless build environment (Flutter Unit/Widget Test Suites: 100% PASS).
+- **P15 Push Notification Delivery**: Explicitly declared **UNVERIFIED** per Amendment E.
+- **Overall Platform Phase Status**: **PHASE 42 NOT VERIFIED (Unverified Mobile APK & FCM Device Delivery Evidence)**
 - **Next Phase**: Hard stop at Phase 42. Do NOT proceed to Phase 43.
