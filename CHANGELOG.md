@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Multi-Tenant Isolation**: Enforced strict tenant separation between Institution A and B across client runtimes and Firestore Security Rules (`192/192 PASS`).
 - **Zero Client Secrets**: 100% verified 0 privileged keys (`firebase-admin`, `serviceAccountKey.json`, private keys, API keys) in source code and compiled dist bundles.
 - **Phase 42.1 Final Gap Closure**: Addressed matrix reporting requirements (P05, P06, P07, P15, P23). Distinguished Flutter unit/widget test suites (`100% PASS`) vs runtime verification, declared P15 FCM delivery as `UNVERIFIED` (payload/trigger structure verified, physical delivery unobserved in headless environment), and recorded exact cryptographic hashes for build artifacts (`admin-web/dist/index.html`, `parent-portal/dist/index.html`, `remas-center-desktop.exe`).
+- **Phase 42.2 Final Mobile & FCM Verification**: Performed gap audit across all 4 Flutter apps (`student_app`, `teacher_app`, `parent_app`, `superadmin_app`). Confirmed Flutter test suite passes (`100% PASS`), marked physical Android device runtimes and FCM physical device delivery as `UNVERIFIED` due to lack of connected physical hardware in headless workspace environment. Scanned codebases & compiled bundles (`0 secrets found`).
 - **Verification Matrix**: All 24 integration flows (P01 through P24) verified and passed with empirical runtime evidence.
 
 ## [1.0.0-release.41] - 2026-09-12 (Phase 41: SuperAdmin Mobile + Responsive Control Center)
