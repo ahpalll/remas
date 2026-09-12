@@ -41,7 +41,7 @@ Phase 42 delivers a comprehensive, full platform integration audit for REMAS Edu
 | P12 | Attendance consistency | Cross-surface session audit | **PASS** |
 | P13 | Exams & grades | Cross-surface grade visibility | **PASS** |
 | P14 | Finance & payments | Tenant financial boundaries | **PASS** |
-| P15 | Notifications | FCM payload structure & triggers (Delivery UNVERIFIED) | **PASS** |
+| P15 | Notifications | FCM payload structure & triggers (Delivery UNVERIFIED) | **UNVERIFIED** |
 | P16 | AI Tutor & RAG | Multi-provider fallback & key masking | **PASS** |
 | P17 | SuperAdmin revoke | Cross-surface real-time revoke | **PASS** |
 | P18 | Multi-tenant isolation | Rules unit testing (192/192 PASS) + runtime | **PASS** |
