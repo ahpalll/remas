@@ -1,4 +1,4 @@
-import 'package:flutter/material';
+import 'package:flutter/material.dart';
 import 'package:superadmin_app/services/superadmin_service.dart';
 import 'package:superadmin_app/screens/dashboard_screen.dart';
 

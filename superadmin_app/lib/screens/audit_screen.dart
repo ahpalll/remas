@@ -1,4 +1,4 @@
-import 'package:flutter/material';
+import 'package:flutter/material.dart';
 
 class AuditScreen extends StatelessWidget {
   const AuditScreen({super.key});

@@ -1,4 +1,4 @@
-import 'package:flutter/material';
+import 'package:flutter/material.dart';
 
 class AIControlScreen extends StatelessWidget {
   const AIControlScreen({super.key});

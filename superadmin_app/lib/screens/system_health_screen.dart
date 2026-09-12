@@ -1,4 +1,4 @@
-import 'package:flutter/material';
+import 'package:flutter/material.dart';
 
 class SystemHealthScreen extends StatelessWidget {
   const SystemHealthScreen({super.key});
