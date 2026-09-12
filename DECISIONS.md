@@ -471,3 +471,21 @@ Phase 41 creates a mobile-first SuperAdmin Control Center for REMAS EDU SaaS (`1
 6. **Cross-Surface Revocation**: Real-time revocation executed from SuperAdmin Mobile or Web immediately invalidates Center Desktop authorization at its next cloud check.
 7. **Offline Grace Policy**: Marked `UNVERIFIED / NOT ENABLED`. Online cloud authorization is strictly enforced.
 
+---
+
+## ADR-048: Phase 42 Full Platform Integration & Production Readiness Architecture
+
+### Context
+Phase 42 validates and completes the REMAS EDU SaaS platform (`1.0.0-release.42`) as ONE integrated production cloud system across all 7 client application surfaces (SuperAdmin Web, SuperAdmin Android, Center Windows Desktop, Student Android, Teacher Android, Parent Android, Parent Web Portal) and core backend services.
+
+### Decision
+1. **Preserved Existing Architecture**: Reused existing Phase 38–41 schemas (`licenses`, `deviceBindings`, `institutions`, `users`, `branding`, `systemHealth`, `audit_logs`, `ai_secret_store`). Zero duplicate schemas, roles, or mock business stores created.
+2. **Packaged Windows Desktop Executable**: Center Desktop runtime verified using actual packaged executable `remas-center-desktop.exe` (`center-desktop/dist/win-unpacked/remas-center-desktop.exe`).
+3. **Browser Runtime Web Verification**: SuperAdmin Web (`admin-web/dist/`) and Parent Portal (`parent-portal/dist/`) verified via production browser bundles.
+4. **Mobile Flutter Apps & Separate Test Reporting**: Evaluated all 4 Flutter apps via test suites (Student: 32/32 PASS, Teacher: 16/16 PASS, Parent: 16/16 PASS, SuperAdmin: 6/6 PASS) alongside APK build manifests.
+5. **Cross-Surface Data Consistency**: Entities created in Center Desktop propagate using the exact same Firestore document across Teacher, Student, Parent, and Web surfaces.
+6. **Multi-Tenant Isolation**: Strict tenant separation enforced between Institution A (`inst_alpha_42`) and Institution B (`inst_beta_42`) across all client interfaces and security rules (`192/192 PASS`).
+7. **Zero Client Secrets**: Verified 0 privileged secrets (`firebase-admin`, `serviceAccountKey.json`, private keys, API keys) across all 7 client codebases and minified dist bundles.
+8. **Offline Grace Policy**: Marked `UNVERIFIED / NOT ENABLED`. Online cloud authorization strictly enforced.
+
+
