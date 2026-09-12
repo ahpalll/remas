@@ -20,6 +20,10 @@ function resetLicenseStore() {
   _auditLogsStore.length = 0;
 }
 
+function _isSuperAdminRole(role) {
+  return role === 'superadmin' || role === 'superAdmin';
+}
+
 /**
  * Creates a new Center License record (SuperAdmin Only)
  */
@@ -33,7 +37,7 @@ async function createCenterLicense({
     throw new Error('UNAUTHENTICATED: Missing authentication token.');
   }
 
-  if (callerToken.role !== 'superadmin') {
+  if (!_isSuperAdminRole(callerToken.role)) {
     throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can create center licenses.');
   }
 
@@ -102,11 +106,11 @@ async function activateCenterLicense({
   }
 
   const role = callerToken.role || 'unprivileged';
-  if (role !== 'superadmin' && role !== 'admin' && role !== 'institutionOwner') {
+  if (!_isSuperAdminRole(role) && role !== 'admin' && role !== 'institutionOwner') {
     throw new Error('UNAUTHORIZED_CALLER_ROLE: Only Institution Admin or SuperAdmin can activate center licenses.');
   }
 
-  if (role !== 'superadmin' && callerToken.institutionId !== institutionId) {
+  if (!_isSuperAdminRole(role) && callerToken.institutionId !== institutionId) {
     throw new Error('CROSS_TENANT_VIOLATION: Cannot activate license for another institution.');
   }
 
@@ -125,11 +129,11 @@ async function activateCenterLicense({
     throw new Error('SUBSCRIPTION_EXPIRED: License has expired.');
   }
 
-  if (license.status === 'SUSPENDED' && role !== 'superadmin') {
+  if (license.status === 'SUSPENDED' && !_isSuperAdminRole(role)) {
     throw new Error('LICENSE_SUSPENDED: License is currently suspended by SuperAdmin.');
   }
 
-  if (license.status === 'REVOKED' && role !== 'superadmin') {
+  if (license.status === 'REVOKED' && !_isSuperAdminRole(role)) {
     throw new Error('LICENSE_REVOKED: License has been revoked by SuperAdmin.');
   }
 
@@ -145,7 +149,7 @@ async function activateCenterLicense({
   if (license.deviceBindingStatus === 'BOUND') {
     if (license.deviceFingerprintHash === fp) {
       // Same device reactivation -> PASS
-      if (role === 'superadmin') {
+      if (_isSuperAdminRole(role)) {
         license.status = 'ACTIVE';
       }
       license.lastSeenAt = timestamp;
@@ -281,7 +285,7 @@ async function getCenterLicense({ institutionId, callerToken } = {}) {
     throw new Error('UNAUTHENTICATED: Missing authentication token.');
   }
 
-  if (callerToken.role !== 'superadmin' && callerToken.institutionId !== institutionId) {
+  if (!_isSuperAdminRole(callerToken.role) && callerToken.institutionId !== institutionId) {
     throw new Error('CROSS_TENANT_VIOLATION: Cannot view license of another institution.');
   }
 
@@ -301,7 +305,7 @@ async function listCenterLicenses({ callerToken } = {}) {
     throw new Error('UNAUTHENTICATED: Missing authentication token.');
   }
 
-  if (callerToken.role !== 'superadmin') {
+  if (!_isSuperAdminRole(callerToken.role)) {
     throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can list center licenses.');
   }
 
@@ -313,7 +317,7 @@ async function listCenterLicenses({ callerToken } = {}) {
  */
 async function suspendCenterLicense({ institutionId, reason = 'Administrative Suspension', callerToken, dryRun = false } = {}) {
   if (!callerToken) throw new Error('UNAUTHENTICATED: Missing authentication token.');
-  if (callerToken.role !== 'superadmin') throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can suspend center licenses.');
+  if (!_isSuperAdminRole(callerToken.role)) throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can suspend center licenses.');
 
   const license = _licensesStore.get(institutionId);
   if (!license) throw new Error('LICENSE_NOT_FOUND: No license found.');
@@ -340,7 +344,7 @@ async function suspendCenterLicense({ institutionId, reason = 'Administrative Su
  */
 async function revokeCenterLicense({ institutionId, reason = 'Revoked by SuperAdmin', callerToken, dryRun = false } = {}) {
   if (!callerToken) throw new Error('UNAUTHENTICATED: Missing authentication token.');
-  if (callerToken.role !== 'superadmin') throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can revoke center licenses.');
+  if (!_isSuperAdminRole(callerToken.role)) throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can revoke center licenses.');
 
   const license = _licensesStore.get(institutionId);
   if (!license) throw new Error('LICENSE_NOT_FOUND: No license found.');
@@ -369,7 +373,7 @@ async function revokeCenterLicense({ institutionId, reason = 'Revoked by SuperAd
  */
 async function renewCenterLicense({ institutionId, extensionDays = 365, callerToken, dryRun = false } = {}) {
   if (!callerToken) throw new Error('UNAUTHENTICATED: Missing authentication token.');
-  if (callerToken.role !== 'superadmin') throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can renew center licenses.');
+  if (!_isSuperAdminRole(callerToken.role)) throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can renew center licenses.');
 
   const license = _licensesStore.get(institutionId);
   if (!license) throw new Error('LICENSE_NOT_FOUND: No license found.');
@@ -399,7 +403,7 @@ async function renewCenterLicense({ institutionId, extensionDays = 365, callerTo
  */
 async function unbindDevice({ institutionId, reason = 'Authorized Hardware Reset', callerToken, dryRun = false } = {}) {
   if (!callerToken) throw new Error('UNAUTHENTICATED: Missing authentication token.');
-  if (callerToken.role !== 'superadmin') throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can unbind center devices.');
+  if (!_isSuperAdminRole(callerToken.role)) throw new Error('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can unbind center devices.');
 
   const license = _licensesStore.get(institutionId);
   if (!license) throw new Error('LICENSE_NOT_FOUND: No license found.');

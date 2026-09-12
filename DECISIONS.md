@@ -454,3 +454,20 @@ Phase 38.3 recovers the authentication architecture, server role authorization, 
    - 12 runtime screenshots captured in artifacts directory
    - Desktop NSIS package built: `remas-center-desktop Setup 1.0.0-release.38.3.exe`
    - Complete audit report written to `docs/AUTH_FIRESTORE_RECOVERY_AUDIT.md`
+
+---
+
+## ADR-047: Phase 41 SuperAdmin Mobile + Responsive Control Center Architecture
+
+### Context
+Phase 41 creates a mobile-first SuperAdmin Control Center for REMAS EDU SaaS (`1.0.0-release.41`), giving the platform owner full mobile management capabilities (Android Flutter App `superadmin_app` + Mobile/Responsive React Web `admin-web`) without needing Center Desktop.
+
+### Decision
+1. **Preserved Existing Architecture**: Reuses existing Phase 40 schemas (`licenses`, `deviceBindings`, `institutions`, `systemHealth`, `audit_logs`). Zero duplicate roles or collections invented.
+2. **Canonical SuperAdmin Role Claims**: `superadmin` and `superAdmin` are recognized as authoritative SuperAdmin claims from Firebase Auth ID tokens. Role selection from UI is strictly prohibited.
+3. **Real Firebase Authentication**: Uses direct `signInWithEmailAndPassword` with real ID tokens. Non-SuperAdmin accounts are strictly rejected.
+4. **Trusted Backend Privileged Operations**: State modifications (`createCenterLicense`, `suspendCenterLicense`, `revokeCenterLicense`, `renewCenterLicense`, `unbindDevice`) remain trusted backend operations (`firebase/license_service.js`).
+5. **Zero Secrets Policy**: 0 privileged keys (`firebase-admin`, `serviceAccountKey.json`, private keys, API keys) inside client APKs or web bundles.
+6. **Cross-Surface Revocation**: Real-time revocation executed from SuperAdmin Mobile or Web immediately invalidates Center Desktop authorization at its next cloud check.
+7. **Offline Grace Policy**: Marked `UNVERIFIED / NOT ENABLED`. Online cloud authorization is strictly enforced.
+

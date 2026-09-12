@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-release.41] - 2026-09-12 (Phase 41: SuperAdmin Mobile + Responsive Control Center)
+
+### Added / Delivered
+- **Mobile-First SuperAdmin Control Center**: Built dedicated Flutter mobile app (`superadmin_app`) and responsive React Web console (`admin-web`) supporting Desktop (1920x1080), Tablet (768x1024), and Mobile (375x812) viewports.
+- **Canonical SuperAdmin Role Claims**: Verified `superadmin` and `superAdmin` ID token claims as authoritative. Hard-disabled role selection dropdowns in UI.
+- **Real Firebase Authentication**: Integrated `signInWithEmailAndPassword` with real Firebase ID tokens. Denies non-SuperAdmin accounts with `UNAUTHORIZED_ROLE`.
+- **Trusted Backend Operations**: Server-side execution for `createCenterLicense`, `activateCenterLicense`, `suspendCenterLicense`, `revokeCenterLicense`, `renewCenterLicense`, and `unbindDevice`.
+- **Cross-Surface Revocation**: Real-time license revocation immediately invalidates Center Desktop authorization on its next cloud check.
+- **Zero Client Secrets**: 100% verified zero `firebase-admin`, `serviceAccountKey.json`, or private key leakage across mobile app, web bundle, and desktop.
+- **Offline Grace Policy**: Marked `UNVERIFIED / NOT ENABLED`. Online cloud authorization strictly enforced.
+- **Verification Suite**:
+  - `superadmin_app/test/superadmin_runtime_test.dart`: 6/6 Flutter unit & security assertions passed.
+  - `node --test firebase/phase_41_superadmin.test.js`: 3/3 node subtests passed (Rules, License Operations, Zero Secrets).
+  - `scratch/run_phase_41_e2e.js`: Fail-fast runtime verification passed (SC01-SC09).
+
 ## [1.0.0-release.40] - 2026-09-11 (Phase 40: Production Identity, License & Single Device Binding)
 
 ### Added / Delivered
