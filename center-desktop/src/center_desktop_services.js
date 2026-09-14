@@ -136,38 +136,77 @@ async function authenticateUser({ email, password }) {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  if (password === 'wrong_password' || password === 'invalid' || password.length < 4) {
-    const err = new Error('INVALID_CREDENTIALS: البريد الإلكتروني أو كلمة المرور غير صحيحة');
-    err.code = 'INVALID_CREDENTIALS';
-    throw err;
+  // Test mode fallback when running rules-unit-testing without live Auth instance
+  if ((process.env.NODE_ENV === 'test' || process.env.USE_MOCK_AUTH === 'true') && password !== 'real_firebase_auth_trigger') {
+    if (password === 'wrong_password' || password === 'invalid' || password.length < 4) {
+      const err = new Error('INVALID_CREDENTIALS: البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+    if (cleanEmail.includes('superadmin')) {
+      const err = new Error('UNAUTHORIZED_ROLE: حساب SuperAdmin غير مسموح به داخل تطبيق السنتر.');
+      err.code = 'UNAUTHORIZED_ROLE';
+      throw err;
+    }
+    let userRole = 'institutionOwner';
+    let institutionId = 'inst_bootstrap_001';
+    if (cleanEmail.includes('centerb')) {
+      institutionId = 'inst_center_b_999';
+    }
+    const uid = `usr_${crypto.createHash('md5').update(cleanEmail).digest('hex').substring(0, 10)}`;
+    const session = {
+      uid,
+      email: cleanEmail,
+      role: userRole,
+      institutionId,
+      idToken: `token_${Date.now()}_${uid}`,
+      expiresAt: Date.now() + 86400000,
+      authenticatedAt: new Date().toISOString()
+    };
+    activeSessionToken = session;
+    return session;
   }
 
-  if (cleanEmail.includes('superadmin')) {
-    const err = new Error('UNAUTHORIZED_ROLE: حساب SuperAdmin غير مسموح به داخل تطبيق السنتر. يجب تسجيل الدخول بحساب مالك السنتر أو المشرف.');
-    err.code = 'UNAUTHORIZED_ROLE';
-    throw err;
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    const user = userCredential.user;
+    const tokenResult = await user.getIdTokenResult(true);
+
+    const role = tokenResult.claims.role || 'institutionOwner';
+    const institutionId = tokenResult.claims.institutionId || 'inst_bootstrap_001';
+
+    if (role === 'superAdmin' || role === 'superadmin') {
+      await signOut(auth);
+      const err = new Error('UNAUTHORIZED_ROLE: حساب SuperAdmin غير مسموح به داخل تطبيق السنتر Desktop. يجب تسجيل الدخول بحساب مالك السنتر أو المشرف.');
+      err.code = 'UNAUTHORIZED_ROLE';
+      throw err;
+    }
+
+    if (!['institutionOwner', 'admin', 'tenant_admin'].includes(role)) {
+      await signOut(auth);
+      const err = new Error('UNAUTHORIZED_ROLE: هذا الحساب غير مصرح له للوصول إلى إدارة السنتر.');
+      err.code = 'UNAUTHORIZED_ROLE';
+      throw err;
+    }
+
+    const session = {
+      uid: user.uid,
+      email: user.email || cleanEmail,
+      role: role,
+      institutionId: institutionId,
+      idToken: tokenResult.token,
+      expiresAt: Date.parse(tokenResult.expirationTime),
+      authenticatedAt: new Date().toISOString()
+    };
+
+    activeSessionToken = session;
+    return session;
+  } catch (err) {
+    if (err.code === 'UNAUTHORIZED_ROLE') throw err;
+    const authErr = new Error(`INVALID_CREDENTIALS: البريد الإلكتروني أو كلمة المرور غير صحيحة (${err.message})`);
+    authErr.code = 'INVALID_CREDENTIALS';
+    throw authErr;
   }
-
-  let userRole = 'institutionOwner';
-  let institutionId = 'inst_bootstrap_001';
-  if (cleanEmail.includes('centerb')) {
-    institutionId = 'inst_center_b_999';
-  }
-
-  const uid = `usr_${crypto.createHash('md5').update(cleanEmail).digest('hex').substring(0, 10)}`;
-
-  const session = {
-    uid,
-    email: cleanEmail,
-    role: userRole,
-    institutionId,
-    idToken: `token_${Date.now()}_${uid}`,
-    expiresAt: Date.now() + 86400000,
-    authenticatedAt: new Date().toISOString()
-  };
-
-  activeSessionToken = session;
-  return session;
 }
 
 async function logoutUser(callerToken) {
@@ -179,6 +218,12 @@ async function logoutUser(callerToken) {
 }
 
 function resolveCallerToken(callerToken) {
+  if (callerToken && typeof callerToken === 'object' && callerToken.uid && callerToken.institutionId) {
+    return callerToken;
+  }
+
+  if (activeSessionToken) return activeSessionToken;
+
   if (auth.currentUser) {
     const instId = activeSessionToken ? activeSessionToken.institutionId : 'inst_bootstrap_001';
     const role = activeSessionToken ? activeSessionToken.role : 'institutionOwner';
@@ -188,12 +233,6 @@ function resolveCallerToken(callerToken) {
       role,
       institutionId: instId
     };
-  }
-
-  if (activeSessionToken) return activeSessionToken;
-
-  if (callerToken && typeof callerToken === 'object' && callerToken.uid && callerToken.institutionId) {
-    return callerToken;
   }
 
   const err = new Error('UNAUTHENTICATED_CALLER: Authentication token required');

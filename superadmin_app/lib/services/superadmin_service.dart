@@ -1,6 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:superadmin_app/models/superadmin_models.dart';
 
 class SuperAdminService {
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
   static SuperAdminUser? currentUser;
 
   static Future<SuperAdminUser> login({
@@ -12,27 +14,64 @@ class SuperAdminService {
       throw Exception('INVALID_CREDENTIALS: البريد الإلكتروني وكلمة المرور مطلوبة');
     }
 
-    if (password == 'wrong' || password.length < 4) {
-      throw Exception('INVALID_CREDENTIALS: بيانات الدخول غير صحيحة');
+    try {
+      final UserCredential credential = await _auth.signInWithEmailAndPassword(
+        email: cleanEmail,
+        password: password,
+      );
+
+      final User? user = credential.user;
+      if (user == null) {
+        throw Exception('INVALID_CREDENTIALS: فشل عملية تسجيل الدخول');
+      }
+
+      // Force ID Token Refresh to get current custom claims
+      final IdTokenResult tokenResult = await user.getIdTokenResult(true);
+      final Map<String, dynamic>? claims = tokenResult.claims;
+      final String? role = claims?['role']?.toString();
+
+      // Enforce strict SuperAdmin Custom Claim Authorization
+      if (role != 'superAdmin' && role != 'superadmin') {
+        await _auth.signOut();
+        currentUser = null;
+        throw Exception('UNAUTHORIZED_ROLE: عذراً، هذا الحساب غير مصرح له كـ SuperAdmin. يرجى تسجيل الدخول بحساب الإدارة العليا.');
+      }
+
+      final superAdminUser = SuperAdminUser(
+        uid: user.uid,
+        email: user.email ?? cleanEmail,
+        role: role ?? 'superAdmin',
+        displayName: user.displayName ?? 'SuperAdmin Operator',
+      );
+
+      currentUser = superAdminUser;
+      return superAdminUser;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = 'بيانات الدخول غير صحيحة. يرجى التأكد من البريد الإلكتروني وكلمة المرور.';
+          break;
+        case 'user-disabled':
+          message = 'تم تعطيل هذا الحساب بقرار إداري. يرجى التواصل مع إدارة النظام.';
+          break;
+        case 'too-many-requests':
+          message = 'تم حظر المحاولات مؤقتاً بسبب تكرار المحاولات الخاطئة.';
+          break;
+        case 'network-request-failed':
+          message = 'تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنيت.';
+          break;
+        default:
+          message = 'خطأ في تسجيل الدخول: ${e.message ?? e.code}';
+      }
+      throw Exception('AUTH_ERROR: $message');
     }
-
-    // Role verification logic
-    if (!cleanEmail.contains('superadmin')) {
-      throw Exception('UNAUTHORIZED_ROLE: عذراً، هذا الحساب غير مصرح له كـ SuperAdmin. يرجى تسجيل الدخول بحساب الإدارة العليا.');
-    }
-
-    final user = SuperAdminUser(
-      uid: 'sa_usr_${DateTime.now().millisecondsSinceEpoch}',
-      email: cleanEmail,
-      role: 'superadmin',
-      displayName: 'SuperAdmin Operator',
-    );
-
-    currentUser = user;
-    return user;
   }
 
-  static void logout() {
+  static Future<void> logout() async {
+    await _auth.signOut();
     currentUser = null;
   }
 

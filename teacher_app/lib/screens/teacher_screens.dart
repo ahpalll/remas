@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/teacher_models.dart';
+import '../models/app_branding.dart';
 import '../services/teacher_services.dart';
+import '../services/branding_service.dart';
 
 /// Arabic RTL Primary Dashboard Screen for Teacher Mobile App
 class TeacherDashboardScreen extends StatefulWidget {
@@ -717,6 +719,124 @@ class TeacherNotificationsScreen extends StatelessWidget {
               },
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Teacher Login Screen
+class TeacherLoginScreen extends StatefulWidget {
+  final TeacherAuthService authService;
+  final TeacherDataService dataService;
+  final TeacherBrandingService brandingService;
+  final Function(AppBranding) onLoginSuccess;
+
+  const TeacherLoginScreen({
+    super.key,
+    required this.authService,
+    required this.dataService,
+    required this.brandingService,
+    required this.onLoginSuccess,
+  });
+
+  @override
+  State<TeacherLoginScreen> createState() => _TeacherLoginScreenState();
+}
+
+class _TeacherLoginScreenState extends State<TeacherLoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+  String? _errorMessage;
+
+  Future<void> _handleLogin() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+
+    final res = await widget.authService.loginWithTeacherCredentials(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      final branding = await widget.brandingService.fetchAuthenticatedBranding();
+      widget.onLoginSuccess(branding);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => TeacherDashboardScreen(
+            authService: widget.authService,
+            dataService: widget.dataService,
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        _errorMessage = res['message'] ?? 'فشل تسجيل الدخول';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.school, size: 64, color: Colors.indigo),
+                const SizedBox(height: 16),
+                const Text('REMAS EDU — منصة المعلم', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 32),
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      if (_errorMessage != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(color: Colors.red.shade900, borderRadius: BorderRadius.circular(8)),
+                          child: Text(_errorMessage!, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        ),
+                      TextField(
+                        controller: _emailController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'البريد الإلكتروني للمعلم', labelStyle: TextStyle(color: Colors.white70)),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'كلمة المرور', labelStyle: TextStyle(color: Colors.white70)),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _loading ? null : _handleLogin,
+                        child: _loading ? const CircularProgressIndicator() : const Text('تسجيل الدخول'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

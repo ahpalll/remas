@@ -1,64 +1,104 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../models/teacher_models.dart';
 
 /// Authentication Service for Teacher Mobile App
 class TeacherAuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   TeacherProfileDTO? _currentTeacher;
   bool _isAuthenticated = false;
 
   bool get isAuthenticated => _isAuthenticated;
   TeacherProfileDTO? get currentTeacher => _currentTeacher;
 
-  /// Simulates teacher authentication & role claim verification
+  /// Authenticates teacher credentials against Firebase Auth & verifies role claims
   Future<Map<String, dynamic>> loginWithTeacherCredentials({
     required String email,
     required String password,
   }) async {
     final String cleanEmail = email.trim().toLowerCase();
-
-    // Reject unauthorized student or parent roles attempting teacher sign-in
-    if (cleanEmail.contains('student')) {
-      return {
-        'success': false,
-        'errorCode': 'UNAUTHORIZED_ROLE',
-        'message': 'البريد الإلكتروني المدخل يخص حساب طالب وليس أستاذ.'
-      };
-    }
-
-    if (cleanEmail.contains('parent')) {
-      return {
-        'success': false,
-        'errorCode': 'UNAUTHORIZED_ROLE',
-        'message': 'البريد الإلكتروني المدخل يخص حساب ولي أمر وليس أستاذ.'
-      };
-    }
-
-    if (!cleanEmail.contains('teacher') && !cleanEmail.contains('prof') && !cleanEmail.contains('remas')) {
+    if (cleanEmail.isEmpty || password.isEmpty) {
       return {
         'success': false,
         'errorCode': 'INVALID_CREDENTIALS',
-        'message': 'فشل تسجيل الدخول: اسم المستخدم أو كلمة المرور غير صحيحة.'
+        'message': 'البريد الإلكتروني وكلمة المرور مطلوبة.'
       };
     }
 
-    _currentTeacher = TeacherProfileDTO(
-      teacherId: 'teacher_001',
-      fullName: 'أ. د. أسامة محمود',
-      email: cleanEmail,
-      phone: '+201001234567',
-      subjects: ['الرياضيات', 'الفيزياء التطبيقية'],
-      institutionId: 'inst_prod_001',
-    );
-    _isAuthenticated = true;
+    try {
+      final UserCredential credential = await _auth.signInWithEmailAndPassword(
+        email: cleanEmail,
+        password: password,
+      );
 
-    return {
-      'success': true,
-      'teacher': _currentTeacher,
-    };
+      final User? user = credential.user;
+      if (user == null) {
+        return {
+          'success': false,
+          'errorCode': 'INVALID_CREDENTIALS',
+          'message': 'فشل عملية تسجيل الدخول.'
+        };
+      }
+
+      // Force ID token refresh to read claims
+      final IdTokenResult tokenResult = await user.getIdTokenResult(true);
+      final String? role = tokenResult.claims?['role']?.toString();
+      final String? institutionId = tokenResult.claims?['institutionId']?.toString();
+
+      if (role != 'teacher' && role != 'superAdmin' && role != 'superadmin') {
+        await _auth.signOut();
+        _currentTeacher = null;
+        _isAuthenticated = false;
+        return {
+          'success': false,
+          'errorCode': 'UNAUTHORIZED_ROLE',
+          'message': 'البريد الإلكتروني المدخل لا يمتلك صلاحية الوصول كمعلم.'
+        };
+      }
+
+      final targetInstId = institutionId ?? 'inst_prod_001';
+
+      _currentTeacher = TeacherProfileDTO(
+        teacherId: 'tch_${user.uid}',
+        fullName: user.displayName ?? 'الأستاذ المعلم',
+        email: user.email ?? cleanEmail,
+        phone: user.phoneNumber ?? '',
+        subjects: ['الرياضيات'],
+        institutionId: targetInstId,
+      );
+      _isAuthenticated = true;
+
+      return {
+        'success': true,
+        'teacher': _currentTeacher,
+      };
+    } on FirebaseAuthException catch (e) {
+      String msg = 'فشل تسجيل الدخول: بيانات غير صحيحة.';
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        msg = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+      } else if (e.code == 'network-request-failed') {
+        msg = 'تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت.';
+      }
+      return {
+        'success': false,
+        'errorCode': e.code,
+        'message': msg
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'errorCode': 'UNKNOWN_ERROR',
+        'message': 'حدث خطأ غير متوقع: ${e.toString()}'
+      };
+    }
   }
 
   /// Sign out and clear active teacher session state
   Future<void> logout() async {
+    await _auth.signOut();
     _currentTeacher = null;
     _isAuthenticated = false;
   }
