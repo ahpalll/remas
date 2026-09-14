@@ -47,11 +47,9 @@
 - **Phase 38.4**: Real Firebase E2E + Security Rules Emulator Repair — VERIFIED
 - **Phase 38.5**: Cloud Firestore as Sole Production Source of Truth — COMPLETE & VERIFIED
 - **Phase 39**: REMAS EDU Official Branding & White-Label System — VERIFIED
-- **Phase 40**: Production Identity, License & Single Device Binding — VERIFIED (1.0.0-release.40, OFFLINE GRACE POLICY = UNVERIFIED)
-- **Phase 41**: SuperAdmin Mobile + Responsive Control Center — VERIFIED (1.0.0-release.41, OFFLINE GRACE POLICY = UNVERIFIED)
-- **Phase 42**: Full Platform Integration + Production Readiness — NOT VERIFIED (Unverified Mobile APK & FCM Device Delivery Evidence)
-- **Phase 42.1**: Final Verification Gap Closure — AUDIT COMPLETE (P05-P07 APK Runtime & P15 FCM Delivery = UNVERIFIED)
 - **Phase 42.2**: Final Mobile & FCM Verification — NOT VERIFIED (Unverified Physical Android Device Runtimes & FCM Physical Push Delivery Evidence)
+- **Phase 42.3**: Mobile APK Build Repair Only — VERIFIED & COMPLETED (Release APK binaries for Student, Teacher, Parent, and SuperAdmin apps generated and SHA-256 verified)
+- **Student Authentication Architecture**: Phone Number + OTP Production Implementation — COMPLETE (HTTPS Callable Cloud Function v1, Zero Client Admin Keys, E.164 Phone Normalization, Multi-Tenant Phone Identity Support, Rule-Safe Collection Group Query, Arabic Phone OTP Mobile UI, 192 Passing Rules Tests, Verified Release APK Assembly)
 
 ## System Statistics & Test Baseline
 - Total Executed Assertions: **1072 Assertions** (100% Passing)

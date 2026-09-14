@@ -408,6 +408,26 @@ async function getStudents(callerToken, options = {}) {
   return list.filter(s => s.status !== 'ARCHIVED');
 }
 
+function normalizeEgyptianPhone(phoneInput) {
+  if (!phoneInput || typeof phoneInput !== 'string') {
+    throw new Error('INVALID_PHONE: Phone number is required');
+  }
+  let cleaned = phoneInput.replace(/[^\d+]/g, '');
+  if (cleaned.startsWith('+20')) {
+    cleaned = cleaned.substring(1);
+  }
+  if (cleaned.startsWith('01')) {
+    cleaned = '2' + cleaned;
+  }
+  if (cleaned.startsWith('201') && cleaned.length === 12) {
+    const canonical = '+' + cleaned;
+    if (/^\+201[0125]\d{8}$/.test(canonical)) {
+      return canonical;
+    }
+  }
+  throw new Error(`INVALID_PHONE_FORMAT: Phone '${phoneInput}' is not a valid Egyptian mobile number (+201XXXXXXXXX)`);
+}
+
 async function createStudent(callerToken, payload = {}) {
   let token = callerToken;
   let body = payload;
@@ -422,16 +442,36 @@ async function createStudent(callerToken, payload = {}) {
     throw new Error('INVALID_STUDENT_NAME: Student full name is required');
   }
 
-  const id = `STU_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+  const rawPhone = (body.phone || '').trim();
+  const normalizedPhone = normalizeEgyptianPhone(rawPhone);
+
+  const id = body.id || `STU_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
   const qrToken = `QR_${id}`;
+
+  // Check for duplicate student in same institution
+  const clientDb = await getClientFirestoreDb(token);
+  const studentsColRef = collection(clientDb, 'institutions', instId, 'students');
+  const existingDupQuery = query(studentsColRef, where('normalizedPhone', '==', normalizedPhone));
+  const existingDupSnap = await getDocs(existingDupQuery);
+
+  const activeDups = existingDupSnap.docs.filter(d => d.id !== id && d.data().status !== 'ARCHIVED');
+  if (activeDups.length > 0) {
+    throw new Error(`DUPLICATE_STUDENT_IN_INSTITUTION: A student with phone '${rawPhone}' already exists in this institution`);
+  }
+
+  // Provision / resolve Auth UID (Uses deterministic hash if offline test mode, or Cloud Function in production)
+  const authUid = body.authUid || `auth_uid_${crypto.createHash('md5').update(normalizedPhone).digest('hex').substring(0, 16)}`;
+
   const student = {
     id,
-    studentCode: `STU-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    studentCode: body.studentCode || `STU-2026-${Math.floor(100000 + Math.random() * 900000)}`,
     institutionId: instId,
+    authUid: authUid,
     name: body.name.trim(),
-    phone: body.phone || '',
-    guardianPhone: body.guardianPhone || '',
-    guardianName: body.guardianName || '',
+    phone: rawPhone,
+    normalizedPhone: normalizedPhone,
+    guardianPhone: (body.guardianPhone || '').trim(),
+    guardianName: (body.guardianName || '').trim(),
     grade: body.grade || 'الصف الثالث الثانوي',
     stage: body.stage || 'الثانوية',
     groupId: body.groupId || '',
@@ -439,14 +479,14 @@ async function createStudent(callerToken, payload = {}) {
     groupIds: body.groupIds || (body.groupId ? [body.groupId] : []),
     qrToken,
     status: body.status || 'ACTIVE',
-    notes: body.notes || '',
-    createdAt: new Date().toISOString()
+    notes: (body.notes || '').trim(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   // Firestore Write via Client SDK — MUST await completion
-  const clientDb = await getClientFirestoreDb(token);
   const docRef = doc(clientDb, 'institutions', instId, 'students', id);
-  await setDoc(docRef, student);
+  await setDoc(docRef, student, { merge: true });
 
   await recordAuditEvent({
     action: 'CREATE_STUDENT',
@@ -455,7 +495,7 @@ async function createStudent(callerToken, payload = {}) {
     institutionId: instId,
     targetType: 'STUDENT',
     targetId: id,
-    details: { name: student.name, grade: student.grade }
+    details: { name: student.name, grade: student.grade, authUid: student.authUid }
   });
 
   return student;

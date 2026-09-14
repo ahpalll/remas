@@ -30,18 +30,21 @@ class StudentService {
     final db = _db;
     if (db != null) {
       try {
-        final tokenResult = await user.getIdTokenResult();
-        final instId = tokenResult.claims?['institutionId'] as String?;
+        final querySnap = await db
+            .collectionGroup('students')
+            .where('authUid', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'ACTIVE')
+            .get();
 
-        if (instId != null && instId.isNotEmpty) {
-          final docSnap = await db.collection('institutions').doc(instId).collection('students').doc(user.uid).get();
-          if (docSnap.exists && docSnap.data() != null) {
-            return StudentProfileDTO.fromJson({
-              ...docSnap.data()!,
-              'id': docSnap.id,
-              'institutionId': instId,
-            });
-          }
+        if (querySnap.docs.isNotEmpty) {
+          final docSnap = querySnap.docs.first;
+          final data = docSnap.data();
+          final instId = (data['institutionId'] as String?) ?? 'inst_dev_center';
+          return StudentProfileDTO.fromJson({
+            ...data,
+            'id': docSnap.id,
+            'institutionId': instId,
+          });
         }
       } catch (_) {
         // Fallback for offline or test mode
@@ -53,9 +56,9 @@ class StudentService {
       id: user.uid,
       institutionId: 'inst_dev_center',
       studentCode: 'STU-100201',
-      fullName: user.email?.split('@').first ?? 'طالب منصة ريماس',
-      email: user.email ?? 'student@educenter.local',
-      phone: '0100000000',
+      fullName: user.phoneNumber ?? 'طالب منصة ريماس',
+      email: '',
+      phone: user.phoneNumber ?? '0100000000',
       stageId: 'stg_secondary_3',
       stageName: 'الصف الثالث الثانوي',
       groupIds: ['grp_math_sec3', 'grp_phys_sec3'],

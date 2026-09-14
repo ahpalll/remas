@@ -33,7 +33,43 @@ class AuthService {
     }
   }
 
-  // Sign in with email and password
+  // Verify Phone Number (SMS OTP)
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required void Function(PhoneAuthCredential) verificationCompleted,
+    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(String verificationId, int? resendToken) codeSent,
+    required void Function(String verificationId) codeAutoRetrievalTimeout,
+  }) async {
+    final auth = _auth;
+    if (auth == null) {
+      verificationFailed(FirebaseAuthException(
+        code: 'auth-not-available',
+        message: 'خدمة التحقق غير متوفرة في بيئة العمل الحالية',
+      ));
+      return;
+    }
+    await auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+    );
+  }
+
+  // Sign in with Phone Auth Credential (Verification ID + SMS Code)
+  Future<UserCredential?> signInWithPhoneCredential(String verificationId, String smsCode) async {
+    final auth = _auth;
+    if (auth == null) return null;
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    return await auth.signInWithCredential(credential);
+  }
+
+  // Sign in with email and password (Legacy / Admin fallback)
   Future<UserCredential?> signInWithEmailAndPassword(String email, String password) async {
     final auth = _auth;
     if (auth == null) return null;

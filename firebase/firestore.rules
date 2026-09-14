@@ -149,9 +149,14 @@ service cloud.firestore {
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
+    // Collection Group rule for Student Profile lookup & post-OTP context resolution
+    match /{path=**}/students/{studentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE');
+    }
+
     // Phase 6 Operational Collection — Students
     match /institutions/{institutionId}/students/{studentId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE');
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
