@@ -124,7 +124,7 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/teachers/{teacherId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid);
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
@@ -156,7 +156,9 @@ service cloud.firestore {
 
     // Phase 6 Operational Collection — Students
     match /institutions/{institutionId}/students/{studentId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE');
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() 
+        || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE')
+        || (isAuthenticated() && (resource.data.parentUid == request.auth.uid || (resource.data.keys().hasAny(['guardianUids']) && resource.data.guardianUids.hasAny([request.auth.uid]))));
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
