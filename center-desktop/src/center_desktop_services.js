@@ -1288,7 +1288,7 @@ const REMAS_PLATFORM_BRAND_DESKTOP = Object.freeze({
   taglineArabic: 'إدارة أذكى.. تعليم أفضل',
   taglineEnglish: 'SMARTER MANAGEMENT .. A BRIGHTER EDUCATION',
   descriptionEnglish: 'REMAS Educational Platform',
-  version: '1.0.0-release.43.3',
+  version: '1.0.0-release.45.0',
   colors: Object.freeze({
     primary: '#0F172A',
     secondary: '#0284C7',

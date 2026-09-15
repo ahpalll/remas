@@ -1,7 +1,7 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Client Renderer Controller
  * Production-Grade Renderer connected to Real Backend & SuperAdmin Platform Console
- * Version: 1.0.0-release.43.3
+ * Version: 1.0.0-release.45.0
  */
 
 let activeRole = null;

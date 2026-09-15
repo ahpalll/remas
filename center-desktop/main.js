@@ -1,7 +1,7 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Application Main Process
  * Target Project: educenter-saas
- * Version: 1.0.0-release.43.3
+ * Version: 1.0.0-release.45.0
  */
 
 const { app, BrowserWindow, ipcMain } = require('electron');
