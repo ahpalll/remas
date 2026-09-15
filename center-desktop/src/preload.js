@@ -1,7 +1,7 @@
 /**
  * Secure IPC Context Bridge Preload Script
  * REMAS Educational Center SaaS — Windows Desktop
- * Version: 1.0.0-release.38
+ * Version: 1.0.0-release.43.3
  */
 
 const { contextBridge, ipcRenderer } = require('electron');

@@ -1,11 +1,12 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Application Main Process
  * Target Project: educenter-saas
- * Version: 1.0.0-release.38
+ * Version: 1.0.0-release.43.3
  */
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const pkg = require('./package.json');
 const { generateHardwareFingerprint, getSystemMetadata } = require('./src/device_fingerprint');
 const { validateDeviceBinding, requestDeviceActivation, heartbeatDevice } = require('./src/device_binding_service');
 const desktopServices = require('./src/center_desktop_services');
@@ -26,7 +27,7 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 720,
-    title: 'REMAS Educational Center SaaS — Windows Desktop Application (v1.0.0-release.38.3)',
+    title: `REMAS Educational Center SaaS — Windows Desktop App (v${pkg.version})`,
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,
@@ -127,7 +128,7 @@ ipcMain.handle('send-heartbeat', async (event, { institutionId, callerToken }) =
   const result = await heartbeatDevice({
     institutionId,
     deviceFingerprint: fingerprint,
-    appVersion: '1.0.0-release.38',
+    appVersion: pkg.version,
     callerToken
   });
   return result;
