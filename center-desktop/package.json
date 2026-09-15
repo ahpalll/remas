@@ -1,6 +1,6 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.43.1",
+  "version": "1.0.0-release.43.2",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
@@ -18,8 +18,26 @@
   "author": "REMAS SaaS Team",
   "license": "UNLICENSED",
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "firebase": "^10.14.1"
+  },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.remas.centerdesktop",
+    "productName": "remas-center-desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
   }
 }
