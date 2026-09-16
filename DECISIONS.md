@@ -1,3 +1,32 @@
+## ADR-048: Phase 47 Real SuperAdmin Bootstrap & First Center End-to-End Operational Verification
+
+### Context
+Phase 47 executes the first real end-to-end operational verification of the REMAS Educational Center SaaS platform across one central Firebase project (`educenter-saas-860c5`), one Cloud Firestore database, and shared client applications without Cloud Functions or fake local databases.
+
+### Decision
+1. **First Real SuperAdmin Bootstrapping**:
+   - Bootstrapped `admin@remas.edu` (Auth UID `QJeEADbpMwP1xBXZzL9zYql4IYR2`) via `scripts/bootstrap_superadmin.js`.
+   - Verified custom claim `{ role: 'superAdmin' }` and user document `/users/QJeEADbpMwP1xBXZzL9zYql4IYR2` (`role: 'superAdmin'`, `status: 'ACTIVE'`).
+   - Verified SuperAdmin mobile Flutter release APK (`app-release.apk`, 50.07 MB, SHA256 `14DC5FC342D7F66FBC28A677DBF95199E58BF96F48E8553046B96BE1959415A2`).
+2. **First Center & Owner Provisioning**:
+   - Provisioned institution `REMAS Test Center` (`inst_remas001`, `REMAS001`) via `scripts/create_first_center.js`.
+   - Bootstrapped owner `owner@remas.edu` (Auth UID `zUoHhVzGskh04r7b6M7m0f5V8a63`) via `scripts/bootstrap_center_owner.js` with tenant-scoped custom claims `{ role: 'institutionOwner', institutionId: 'inst_remas001' }`.
+   - User document created at `/users/zUoHhVzGskh04r7b6M7m0f5V8a63` and `/institutions/inst_remas001/users/zUoHhVzGskh04r7b6M7m0f5V8a63`.
+3. **License Lifecycle Operational Verification**:
+   - Provisioned license `lic_remas001` (`REMAS-REMA-2026-X7Y8Z9`, PRO plan) via `scripts/create_first_license.js`.
+   - Tested real lifecycle status transitions: `ACTIVE` -> `SUSPENDED` -> `REVOKED` -> `ACTIVE` (Expiry `2027-09-16T19:11:54.001Z`).
+4. **Center Desktop Version Bump & Packaging**:
+   - Bumped monorepo and Center Desktop version to `1.0.0-release.47.0`.
+   - Compiled Windows NSIS setup executable `remas-center-desktop Setup 1.0.0-release.47.0.exe` (88.35 MB, SHA256 `ED14FC725584C27894C99803B91187A3903504732FFBC694EDB6AC0F5526385B`).
+5. **Real Student Provisioning & Multi-Tenant Data Isolation**:
+   - Provisioned real student `Test Student 001` (`student_test_001`) under `/institutions/inst_remas001/students/student_test_001`.
+   - Executed Firebase Emulator Security Rules Test Matrix: **12/12 PASS** (`tests/run_phase_46_emulator_matrix.js`).
+6. **Zero Secret Exposure & Operational Security**:
+   - Verified zero service account keys or Admin SDK credentials inside client applications.
+   - All trusted provisioning operations executed exclusively via local Node Admin scripts using external secrets file (`F:\firebase-secrets\...`).
+
+---
+
 ## ADR-047: Phase 46 Real SuperAdmin Center Onboarding Architecture
 
 ### Context
