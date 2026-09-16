@@ -4,10 +4,10 @@
 
 This document outlines the **Trusted Administrative Bootstrap Procedure** for initializing the first SuperAdmin platform account and provisioning Center Owner user identities in REMAS Educational Center SaaS.
 
-Per Phase 44/45 Security Architecture Rules:
-- Zero Firebase Admin SDK credentials, service account JSON files, or private keys are bundled inside client applications (Center Desktop EXE, Student APK, Teacher APK, Parent APK, or Web Portal).
+Per Phase 44/45/46 Security Architecture Rules:
+- Zero Firebase Admin SDK credentials, service account JSON files, or private keys are bundled inside client applications (Center Desktop EXE, SuperAdmin APK, Student APK, Teacher APK, Parent APK, or Web Portal).
 - Authentication for client users is performed directly via Firebase Auth Client SDK (`signInWithEmailAndPassword`, `signInWithPhoneNumber`).
-- Privileged user creation and initial custom claim assignments (`role: superAdmin`, `role: institutionOwner`) are executed securely outside client artifacts via trusted administrative CLI scripts.
+- Privileged user creation and custom claim assignments (`role: superAdmin`, `role: institutionOwner`, `institutionId`) are executed securely outside client artifacts via trusted administrative CLI scripts.
 
 ---
 
@@ -51,9 +51,9 @@ node scripts/bootstrap_superadmin.js --email="admin@remas.edu" --password="SECUR
 
 ---
 
-## 4. Center Owner Provisioning Procedure
+## 4. Center Owner Provisioning & Activation Procedure
 
-### Command Execution
+### Operator Command Execution
 ```bash
 node scripts/bootstrap_center_owner.js --institutionId="inst_cairo_001" --email="owner@cairo-center.com" --name="Ahmed Mahmoud" --phone="+201000000001"
 ```

@@ -29,11 +29,11 @@ service cloud.firestore {
     }
     
     function isSuperAdmin() {
-      return isAuthenticated() && (request.auth.token.role == "superAdmin" || request.auth.token.role == "superadmin");
+      return isAuthenticated() && request.auth.token.keys().hasAny(['role']) && (request.auth.token.role == "superAdmin" || request.auth.token.role == "superadmin");
     }
 
     function isTenantUser(institutionId) {
-      return isAuthenticated() && request.auth.token.institutionId == institutionId;
+      return isAuthenticated() && request.auth.token.keys().hasAny(['institutionId']) && request.auth.token.institutionId == institutionId;
     }
 
     function isSelf(userId, institutionId) {
@@ -42,7 +42,7 @@ service cloud.firestore {
 
     function isTenantAdmin(institutionId) {
       return isTenantUser(institutionId) 
-        && request.auth.token.role in ["institutionOwner", "admin"];
+        && request.auth.token.keys().hasAny(['role']) && request.auth.token.role in ["institutionOwner", "admin"];
     }
 
     // Phase 3 Institution Document Rules
@@ -418,6 +418,27 @@ service cloud.firestore {
     match /deviceBindings/{bindingId} {
       allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Phase 46 Owner Invitations & Global User Identity Rules
+    match /institutions/{institutionId}/invitations/{invitationId} {
+      allow read: if isSuperAdmin() 
+        || (isAuthenticated() && request.auth.token.email == resource.data.email && resource.data.status == 'PENDING' && request.time < resource.data.expiresAt);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /invitations/{invitationId} {
+      allow read: if isSuperAdmin() 
+        || (isAuthenticated() && request.auth.token.email == resource.data.email && resource.data.status == 'PENDING' && request.time < resource.data.expiresAt);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() 
+        || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'institutionId', 'institutionIds']));
+      allow delete: if isSuperAdmin();
     }
   }
 }

@@ -23,11 +23,11 @@ let currentDeviceStatus = {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1360,
-    height: 900,
+    width: 1366,
+    height: 768,
     minWidth: 1100,
     minHeight: 720,
-    title: `REMAS Educational Center SaaS — Windows Desktop App (v${pkg.version})`,
+    title: 'REMAS Educational Center SaaS — Windows Desktop App (v1.0.0-release.46.0)',
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,

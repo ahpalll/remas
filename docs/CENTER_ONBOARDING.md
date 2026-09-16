@@ -1,85 +1,51 @@
-# EDUCATIONAL CENTER ONBOARDING & REAL ONLINE WORKFLOW GUIDE
+# CENTER ONBOARDING PROTOCOL & WORKFLOW
 
-## 1. Onboarding Journey Flowchart
+## 1. Executive Summary
+
+Phase 46 transforms the REMAS Educational Center SaaS platform into a fully functional operational control center. Center onboarding is managed via the **SuperAdmin Mobile Control Panel** (`superadmin_app`) backed directly by Cloud Firestore (`educenter-saas-860c5`) without any Cloud Functions runtime dependency.
+
+---
+
+## 2. Complete Onboarding Flow Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ 1. SuperAdmin Platform Console                          │
-│    - Log into SuperAdmin App / Console                  │
-│    - Create Institution (e.g. Center A, Center B)       │
-│    - Generates Real Institution Document ID             │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. Trusted Owner Provisioning                            │
-│    - Provision Owner Auth & Tenant User Profile         │
-│    - Assign role: institutionOwner & institutionId claim │
-│    - Issue License & Device Hardware Binding Code       │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. Center Desktop Application (Shared Binary)            │
-│    - Center Owner launches Center Desktop 45.0          │
-│    - Enforces Single Device Hardware Binding            │
-│    - Authenticates via Firebase Auth (Email + Password) │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. Dynamic Identity & Tenant Resolution                 │
-│    - Application reads Auth UID & Claims/Firestore      │
-│    - Resolves role = institutionOwner, institutionId    │
-│    - Loads Center A Branding & Tenant-Scoped Dashboard  │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│ 5. Operational Student CRUD (Cloud Firestore)            │
-│    - Center Owner creates Student A                     │
-│    - Writes directly to Cloud Firestore via Client SDK  │
-│    - Security Rules enforce strict tenant isolation     │
-│    - Center B users cannot access Center A data         │
-└─────────────────────────────────────────────────────────┘
+SUPERADMIN LOGIN
+       ↓
+SUPERADMIN MOBILE APP
+       ↓
+ONBOARDING WIZARD (5 STEPS)
+       ↓
+1. Institution Doc Created in Firestore (/institutions/{institutionId})
+2. Pending Owner Invitation Doc Created (/institutions/{institutionId}/invitations/{invitationId})
+3. Active License Doc Created (/licenses/{licenseId})
+       ↓
+OPERATOR EXECUTATION OF TRUSTED BOOTSTRAP (node scripts/bootstrap_center_owner.js)
+       ↓
+Owner Auth Identity Created + Custom Claims Assigned ({ role: 'institutionOwner', institutionId })
+       ↓
+CENTER OWNER LOGIN ON WINDOWS DESKTOP
+       ↓
+AUTOMATIC IDENTITY & DEVICE RESOLUTION
+       ↓
+CENTER DATA CRUD & TENANT ISOLATION
 ```
 
 ---
 
-## 2. Onboarding Steps Detail
+## 3. SuperAdmin 5-Step Onboarding Wizard
 
-### Step 1: Create Institution
-SuperAdmin creates the educational center document in Firestore `/institutions/{institutionId}`:
-- `institutionId`: `inst_cairo_001`
-- `name`: `مركز الرواد التعليمي بالقاهرة`
-- `status`: `ACTIVE`
-- `branding`: Dynamic colors, logo, and title subtitle.
+The SuperAdmin app provides a guided wizard (`OnboardingWizardScreen`):
 
-### Step 2: Provision Center Owner
-Platform administrator provisions owner credentials:
-- `uid`: `usr_owner_cairo_01`
-- `email`: `owner@cairo-center.com`
-- `role`: `institutionOwner`
-- `institutionId`: `inst_cairo_001`
-
-### Step 3: Launch Center Desktop Application
-Owner opens the single shared Windows installer `remas-center-desktop Setup 1.0.0-release.45.0.exe`:
-- Enforces single-device binding hardware fingerprint (`win_fp_...`).
-- Authenticates using `owner@cairo-center.com`.
-
-### Step 4: Tenant Data & Student Operations
-- Dashboard automatically loads `institutions/inst_cairo_001` statistics.
-- Adding Student A writes `/institutions/inst_cairo_001/students/STU_1001`.
-- Tenant isolation is enforced by Firestore Security Rules (`isTenantAdmin(institutionId)`). Cross-tenant queries are blocked.
+- **STEP 1 — Center Information**: Center Name, Type (center/school/academy), Phone, Email, Address, Default Branding.
+- **STEP 2 — Owner Information**: Owner Email, Owner Phone, Display Name. Creates a pending invitation record (`status: PENDING`).
+- **STEP 3 — License Selection**: Plan (Standard / Pro / Enterprise), Duration (30 / 90 / 365 days).
+- **STEP 4 — Review**: Final verification of institution, owner, and license parameters.
+- **STEP 5 — Complete Summary**: Generates real Firestore records and displays exact CLI activation instructions for the platform operator.
 
 ---
 
-## 3. Data Boundaries & Relationships
+## 4. Operational Boundaries & Security Safeguards
 
-| Entity | Path | Key Fields | Access Control |
-|---|---|---|---|
-| **Institution** | `/institutions/{institutionId}` | `institutionId`, `name`, `status`, `branding` | SuperAdmin (Write) / Tenant Admin (Read/Update) |
-| **Center User** | `/institutions/{instId}/users/{uid}` | `uid`, `email`, `role`, `institutionId` | Tenant Admin / Self Read |
-| **Student** | `/institutions/{instId}/students/{sId}` | `id`, `name`, `phone`, `parentUid`, `status` | Tenant Admin / Student (Self) / Parent (Linked) |
-| **License** | `/licenses/{licenseId}` | `institutionId`, `status`, `licenseCode` | SuperAdmin (Write) / Tenant Owner (Read) |
-| **Device Binding** | `/deviceBindings/{bindingId}` | `institutionId`, `deviceFingerprintHash` | SuperAdmin (Write) / Center Desktop (Read) |
+1. **No Embedded Service Account Credentials**: Client APKs and Center Desktop EXEs do NOT contain Admin SDK keys.
+2. **No Unsafe Auth Self-Provisioning**: Firebase Client SDK cannot issue custom claims or create arbitrary accounts without administrative authorization. Account provisioning uses trusted backend script execution.
+3. **Multi-Tenant Isolation**: Security rules strictly restrict access to `/institutions/{institutionId}/*` based on custom claim `request.auth.token.institutionId`.

@@ -1,3 +1,31 @@
+## ADR-047: Phase 46 Real SuperAdmin Center Onboarding Architecture
+
+### Context
+Phase 46 transforms the SuperAdmin panel into the real operational control center for onboarding educational centers. The target operational journey:
+`SUPERADMIN LOGIN -> INSTITUTIONS -> CREATE CENTER -> CREATE/ASSIGN CENTER OWNER -> CREATE LICENSE -> ACTIVATE LICENSE -> DEVICE BINDING -> CENTER OWNER LOGIN -> CENTER DESKTOP -> CENTER DATA`
+without Cloud Functions or embedding Admin SDK keys in client apps.
+
+### Decision
+1. **SuperAdmin Guided 5-Step Onboarding Wizard**: `OnboardingWizardScreen` in `superadmin_app` allows platform operators to provision an institution, pending owner invitation record, and active operational license directly in Cloud Firestore (`educenter-saas-860c5`).
+2. **Pending Owner Invitation Protocol**:
+   - SuperAdmin creates pending invitation doc in Firestore (`/institutions/{institutionId}/invitations/{invitationId}` and `/invitations/{invitationId}`).
+   - Operator runs trusted CLI script (`node scripts/bootstrap_center_owner.js --institutionId=... --email=...`) to provision the Firebase Auth user identity and set tenant-scoped custom claims (`{ role: 'institutionOwner', institutionId }`).
+   - Zero Firebase Admin SDK credentials or passwords exist inside client APKs or Electron binaries.
+3. **Real Firestore Data Operations in SuperAdmin Mobile**:
+   - Replaced static/mock lists with live Firestore queries and mutations for `institutions`, `licenses`, `deviceBindings`, and `invitations`.
+   - Added actions for License Activation, Suspension, Revocation, Extension, and Device Release/Unbind.
+4. **Security Rules & Emulator Matrix**:
+   - Updated `firestore.rules` for `/invitations/{invitationId}`, `/institutions/{institutionId}/invitations/{invitationId}`, and top-level `/users/{userId}`.
+   - Enforced SuperAdmin write permissions on institutions, licenses, device bindings, and user roles.
+   - Created `tests/run_phase_46_emulator_matrix.js` covering F46-01 to F46-12.
+   - Executed against live Firebase Firestore Emulator using OpenJDK 21: **12/12 PASS**.
+5. **Center Desktop Version Bump & Packaging**:
+   - Bumped Center Desktop version across metadata files to `1.0.0-release.46.0`.
+   - Built standalone Windows NSIS installer `remas-center-desktop Setup 1.0.0-release.46.0.exe`.
+6. **No Cloud Functions / No Blaze Requirement**: Solved center onboarding without deploying Cloud Functions or requesting Firebase Blaze billing upgrade.
+
+---
+
 ## ADR-046: Phase 40 Production Identity, License & Single Device Binding Architecture
 
 ### Context

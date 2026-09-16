@@ -6,7 +6,7 @@ const newPath = javaBinDir + path.delimiter + process.env.PATH;
 
 console.log('Setting JAVA_HOME & PATH to JDK 21:', 'C:\\Program Files\\Android\\Android Studio\\jbr');
 
-const res = spawnSync('npx firebase emulators:exec "node tests/run_phase_44_emulator_matrix.js"', {
+const res = spawnSync('npx firebase emulators:exec "node tests/run_phase_46_emulator_matrix.js"', {
   stdio: 'inherit',
   shell: true,
   env: {
