@@ -85,10 +85,24 @@ async function bootstrapSuperAdmin(config = {}) {
   }
 
   // Set Custom Claims for SuperAdmin
-  const superAdminClaims = { role: 'superAdmin' };
+  const superAdminClaims = { role: 'superAdmin', superAdmin: true };
   await auth.setCustomUserClaims(userRecord.uid, superAdminClaims);
 
   const updatedUser = await auth.getUser(userRecord.uid);
+
+  // Write Firestore user document if Firestore is available
+  try {
+    const { getFirestore } = require('firebase-admin/firestore');
+    const db = getFirestore(app);
+    await db.collection('users').doc(updatedUser.uid).set({
+      uid: updatedUser.uid,
+      email: updatedUser.email,
+      role: 'superAdmin',
+      displayName: displayName,
+      status: 'ACTIVE',
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (dbErr) {}
 
   const result = {
     status: createdNew ? 'SUPERADMIN_CREATED' : 'SUPERADMIN_REUSED',

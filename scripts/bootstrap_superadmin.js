@@ -73,9 +73,9 @@ async function bootstrapSuperAdmin() {
     }
   }
 
-  // Set SuperAdmin Custom Claim
-  await auth.setCustomUserClaims(userRecord.uid, { role: 'superAdmin' });
-  console.log(`Set custom claim: { role: 'superAdmin' }`);
+  // Set SuperAdmin Custom Claims
+  await auth.setCustomUserClaims(userRecord.uid, { role: 'superAdmin', superAdmin: true });
+  console.log(`Set custom claim: { role: 'superAdmin', superAdmin: true }`);
 
   // Create global user doc in Firestore /users/{uid}
   const userDoc = {

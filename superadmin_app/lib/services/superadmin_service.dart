@@ -31,9 +31,11 @@ class SuperAdminService {
       final IdTokenResult tokenResult = await user.getIdTokenResult(true);
       final Map<String, dynamic>? claims = tokenResult.claims;
       final String? role = claims?['role']?.toString();
+      final bool isSaClaim = claims?['superAdmin'] == true || claims?['superadmin'] == true;
+      final bool isSaRole = role == 'superAdmin' || role == 'superadmin';
 
       // Enforce strict SuperAdmin Custom Claim Authorization
-      if (role != 'superAdmin' && role != 'superadmin') {
+      if (!isSaRole && !isSaClaim) {
         await _auth.signOut();
         currentUser = null;
         throw Exception('UNAUTHORIZED_ROLE: عذراً، هذا الحساب غير مصرح له كـ SuperAdmin. يرجى تسجيل الدخول بحساب الإدارة العليا.');
