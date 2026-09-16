@@ -220,7 +220,8 @@ exports.provisionCenterOwner = functions.region('us-central1').https.onCall(asyn
   }
 
   const callerRole = context.auth.token.role;
-  if (callerRole !== 'superAdmin' && callerRole !== 'superadmin') {
+  const isSuperAdminClaim = context.auth.token.superAdmin === true;
+  if (callerRole !== 'superAdmin' && callerRole !== 'superadmin' && !isSuperAdminClaim) {
     throw new functions.https.HttpsError('permission-denied', 'PERMISSION_DENIED: Only SuperAdmin can provision Center Owners');
   }
 
