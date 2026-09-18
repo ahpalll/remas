@@ -1,3 +1,27 @@
+## ADR-055: Phase 49.8.1 SuperAdmin Firebase API Key & Production Android Config Fix
+
+### Context
+On physical device launch of `superadmin_app`, attempting to log in as `admin@remas.edu` failed with `AUTH_ERROR: internal error has occurred. [ API key not valid. Please pass a valid API key. ]`. Investigation revealed placeholder strings in `firebase_options.dart`, missing `google-services.json`, missing `INTERNET` permission in `AndroidManifest.xml`, and unregistered Android package `com.example.superadmin_app` in Firebase project `educenter-saas-860c5`.
+
+### Decision
+1. **Firebase Android App Registration & Config Provisioning**:
+   - Registered Android app `com.example.superadmin_app` under Firebase project `educenter-saas-860c5`.
+   - Downloaded and placed production `google-services.json` in `superadmin_app/android/app/google-services.json`.
+   - Updated `superadmin_app/lib/firebase_options.dart` with valid production options (`apiKey: AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY`, `appId: 1:522787600693:android:2416c6c770fb98785f747c`, `messagingSenderId: 522787600693`, `projectId: educenter-saas-860c5`).
+2. **Android Manifest Permission & Build Configuration**:
+   - Added `<uses-permission android:name="android.permission.INTERNET"/>` to `superadmin_app/android/app/src/main/AndroidManifest.xml`.
+   - Updated `superadmin_app/android/app/build.gradle.kts` with `lint { checkReleaseBuilds = false; abortOnError = false }` to avoid release lint hangs.
+   - Bumped `superadmin_app/pubspec.yaml` to `1.0.0-release.49.8.1+4981`.
+3. **Authentication & Authorization Verification**:
+   - Verified Auth REST client sign-in for `admin@remas.edu` with password `Mm4499289` returning ID token length 1018 and refresh token.
+   - Verified Custom Claims `{ role: 'superAdmin', superAdmin: true }` and Firestore document `/users/QJeEADbpMwP1xBXZzL9zYql4IYR2`.
+4. **Release APK Packaging & Hash**:
+   - Compiled fresh release APK (`superadmin_app/build/app/outputs/flutter-apk/app-release.apk`).
+   - File size: **48.28 MB** (50,621,366 bytes), SHA256: `36c18360899e0c265852448002ff4418d52f35d94fbdfd1968832d4f0acd363a`.
+   - Maintained rule: **USER_VERIFIED = 0 (NONE)** until product owner physical device validation.
+
+---
+
 ## ADR-054: Phase 49.8 Real SuperAdmin UI/Runtime Acceptance Preparation & Release Packaging
 
 ### Context

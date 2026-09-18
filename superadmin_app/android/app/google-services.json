@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "522787600693",
+    "project_id": "educenter-saas-860c5",
+    "storage_bucket": "educenter-saas-860c5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:522787600693:android:2416c6c770fb98785f747c",
+        "android_client_info": {
+          "package_name": "com.example.superadmin_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

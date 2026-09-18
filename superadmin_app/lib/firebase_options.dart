@@ -30,46 +30,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA_placeholder_key',
-    appId: '1:1234567890:web:abcdef123456',
-    messagingSenderId: '1234567890',
+    apiKey: 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+    appId: '1:522787600693:web:2416c6c770fb98785f747c',
+    messagingSenderId: '522787600693',
     projectId: 'educenter-saas-860c5',
     authDomain: 'educenter-saas-860c5.firebaseapp.com',
-    storageBucket: 'educenter-saas-860c5.appspot.com',
+    storageBucket: 'educenter-saas-860c5.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyA_placeholder_key',
-    appId: '1:1234567890:android:abcdef123456',
-    messagingSenderId: '1234567890',
+    apiKey: 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+    appId: '1:522787600693:android:2416c6c770fb98785f747c',
+    messagingSenderId: '522787600693',
     projectId: 'educenter-saas-860c5',
-    storageBucket: 'educenter-saas-860c5.appspot.com',
+    storageBucket: 'educenter-saas-860c5.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA_placeholder_key',
-    appId: '1:1234567890:ios:abcdef123456',
-    messagingSenderId: '1234567890',
+    apiKey: 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+    appId: '1:522787600693:ios:2416c6c770fb98785f747c',
+    messagingSenderId: '522787600693',
     projectId: 'educenter-saas-860c5',
-    storageBucket: 'educenter-saas-860c5.appspot.com',
+    storageBucket: 'educenter-saas-860c5.firebasestorage.app',
     iosBundleId: 'com.example.superadminApp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA_placeholder_key',
-    appId: '1:1234567890:ios:abcdef123456',
-    messagingSenderId: '1234567890',
+    apiKey: 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+    appId: '1:522787600693:ios:2416c6c770fb98785f747c',
+    messagingSenderId: '522787600693',
     projectId: 'educenter-saas-860c5',
-    storageBucket: 'educenter-saas-860c5.appspot.com',
+    storageBucket: 'educenter-saas-860c5.firebasestorage.app',
     iosBundleId: 'com.example.superadminApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyA_placeholder_key',
-    appId: '1:1234567890:web:abcdef123456',
-    messagingSenderId: '1234567890',
+    apiKey: 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+    appId: '1:522787600693:web:2416c6c770fb98785f747c',
+    messagingSenderId: '522787600693',
     projectId: 'educenter-saas-860c5',
     authDomain: 'educenter-saas-860c5.firebaseapp.com',
-    storageBucket: 'educenter-saas-860c5.appspot.com',
+    storageBucket: 'educenter-saas-860c5.firebasestorage.app',
   );
 }

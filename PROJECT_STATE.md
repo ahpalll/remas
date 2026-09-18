@@ -56,13 +56,15 @@
 - **Phase 49.6**: Blueprint Depth Audit & Screen Contract Specifications — COMPLETE
 - **Phase 49.7**: Final Blueprint Consistency & Completeness Gate — COMPLETE
 - **Phase 49.8**: Real SuperAdmin UI/Runtime Acceptance Preparation — VERIFIED
+- **Phase 49.8.1**: SuperAdmin Firebase API Key & Production Android Config Fix — VERIFIED
 
 ## System Statistics & Test Baseline
-- SuperAdmin Release APK (`app-release.apk`): **47.75 MB** (50,068,248 bytes), SHA256 `0489B1E7A7F6469484F11B576B825B283DD085387EEC32D63919679EE4A13E5E`, Version `1.0.0-release.49.8+498`
+- SuperAdmin Release APK (`app-release.apk`): **48.28 MB** (50,621,366 bytes), SHA256 `36c18360899e0c265852448002ff4418d52f35d94fbdfd1968832d4f0acd363a`, Version `1.0.0-release.49.8.1+4981`
 - SuperAdmin Mobile Flutter Test Suite: **7/7 PASS** (`superadmin_app/test/superadmin_runtime_test.dart` & `widget_test.dart`)
 - Security Rules Emulator Matrix Phase 49: **10/10 PASS** (`tests/run_phase_49_emulator_matrix.js`)
 - Security Rules Emulator Matrix Phase 46: **12/12 PASS** (`tests/run_phase_46_emulator_matrix.js`)
 - Product Owner Manual Acceptance Status: **USER_VERIFIED = 0 (NONE)** (`docs/MANUAL_SUPERADMIN_TEST_GUIDE.md` & `docs/MANUAL_ACCEPTANCE_MATRIX.md`)
-- Monorepo Version: **1.0.0-release.49.8**
+- Monorepo Version: **1.0.0-release.49.8.1**
 - Target Firebase Project: **educenter-saas-860c5**
 - Operational Status: **PASS**
+
