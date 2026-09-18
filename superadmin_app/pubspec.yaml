@@ -1,7 +1,7 @@
 name: superadmin_app
 description: REMAS EDU — SuperAdmin Mobile Control Center Android App
 publish_to: 'none'
-version: 1.0.0+41
+version: 1.0.0-release.49.8+498
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

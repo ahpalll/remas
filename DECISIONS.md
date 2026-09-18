@@ -1,3 +1,26 @@
+## ADR-054: Phase 49.8 Real SuperAdmin UI/Runtime Acceptance Preparation & Release Packaging
+
+### Context
+Phase 49.8 prepares the SuperAdmin Mobile Control Center Android App (`superadmin_app`) for manual product-owner testing across all 11 SuperAdmin screens (`SA-001` through `SA-011`) without introducing Cloud Functions, new business modules, or fake test verification.
+
+### Decision
+1. **SuperAdmin Screen Audit & Runtime Verification**:
+   - Verified all 11 SuperAdmin screens (`SA-001` through `SA-011`) against real Cloud Firestore architecture (`educenter-saas-860c5`) and Custom Claim RBAC (`{ role: 'superAdmin' }`).
+   - Verified that zero plaintext API keys, service account secrets, or hardcoded fake counts exist in the mobile UI.
+2. **Product Owner Manual Test Guide**:
+   - Published `docs/MANUAL_SUPERADMIN_TEST_GUIDE.md` detailing step-by-step test instructions for `SA-001` through `SA-011` using authorized account `admin@remas.edu`.
+   - Published `docs/PHASE_49_8_SUPERADMIN_BUGS.md` bug tracking log (0 unresolved P0/P1/P2/P3 defects).
+   - Created `docs/MANUAL_ACCEPTANCE_MATRIX.md` maintaining strict rule: **USER_VERIFIED = 0 (NONE)** until physical manual testing by product owner.
+3. **Fresh Android Release Package**:
+   - Bumped `superadmin_app` version to `1.0.0-release.49.8+498`.
+   - Compiled fresh standalone Android release APK (`superadmin_app/build/app/outputs/flutter-apk/app-release.apk`).
+   - File size: **47.75 MB** (50,068,248 bytes), SHA256: `0489B1E7A7F6469484F11B576B825B283DD085387EEC32D63919679EE4A13E5E`.
+4. **Automated & Emulator Test Matrix Verification**:
+   - SuperAdmin Flutter Test Suite: **7/7 PASS** (`superadmin_app/test/superadmin_runtime_test.dart` & `widget_test.dart`).
+   - Security Rules Emulator Matrix: **10/10 PASS** (`tests/run_phase_49_emulator_matrix.js`).
+
+---
+
 ## ADR-050: Phase 49 Center Management Core Implementation & Security Hardening
 
 ### Context
