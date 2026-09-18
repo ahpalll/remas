@@ -674,43 +674,6 @@ async function renderGroupsView(container) {
     `}
   `;
 }
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>كود المجموعة</th>
-              <th>اسم المجموعة</th>
-              <th>المادة</th>
-              <th>المعلم المسؤول</th>
-              <th>السعة القصوى</th>
-              <th>المواعيد والقاعة</th>
-              <th>الرسوم الشهري</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${groups.map(g => `
-              <tr>
-                <td><span class="code-box">${g.id}</span></td>
-                <td><strong>${g.name}</strong></td>
-                <td>${g.subjectName || '-'}</td>
-                <td>${g.teacherName || '-'}</td>
-                <td>${g.maxCapacity} طالب</td>
-                <td>${g.schedule} (${g.room})</td>
-                <td>${g.monthlyFee} ج.م</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    ` : `
-      <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
-        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📚</div>
-        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا توجد مجموعات دراسية مسجلة</h3>
-        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">أنشئ المجموعات وتحديد السعة القصوى لضبط تسجيل الطلاب.</p>
-        <button class="btn btn-success" onclick="openAddGroupModal()">+ إنشاء مجموعة جديدة</button>
-      </div>
-    `}
-  `;
-}
 
 // 5. Attendance View
 async function renderAttendanceView(container) {
