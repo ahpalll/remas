@@ -1,3 +1,28 @@
+## ADR-056: Phase 49.8.2 Production Firestore Security Rules Deployment & Real Device Permission Fix
+
+### Context
+Product-owner testing of `superadmin_app` on a physical Android device revealed that `admin@remas.edu` logged in successfully, but SA-003 (Institutions), SA-005 (Licenses), and SA-006 (Device Bindings) failed with `cloud_firestore/permission-denied`. Investigation revealed that the live production Firebase project `educenter-saas-860c5` was running an outdated default lock-down ruleset created on 2026-09-08 (`match /{document=**} { allow read, write: if false; }`), and `firebase/firestore.rules` had never been deployed to production.
+
+### Decision
+1. **Production Rules Backup & Deployment**:
+   - Saved backup of previous active production ruleset to `scratch/backup_deployed_rules_20260918.rules`.
+   - Deployed `firebase/firestore.rules` to production project `educenter-saas-860c5` using official Firebase Rules Management API (`rulesets/cf2a81d7-6477-4a43-a01a-83ff66d097f7`).
+   - Verified active release `cloud.firestore` updated on 2026-09-18T20:21:56Z, enforcing `isSuperAdmin()` checking `{ role: 'superAdmin', superAdmin: true }`.
+2. **Real SuperAdmin Live Query Verification**:
+   - Tested real client queries against `educenter-saas-860c5` using ID token of `admin@remas.edu`.
+   - Verified HTTP 200 SUCCESS for SA-003 (`/institutions`), SA-005 (`/licenses`), SA-006 (`/deviceBindings`), SA-007 (`/users`), SA-009 (`/systemHealth`), and SA-004 (`/invitations`).
+3. **Dual Security Regression & Multi-Tenant Isolation Verification**:
+   - Verified non-SuperAdmin accounts (`owner.phase48@remas.edu`) receive HTTP 403 PERMISSION_DENIED on all platform collections.
+   - Verified cross-tenant read/write, role escalation, and field tampering attempts are strictly denied.
+4. **Fresh Release Packaging & Hashes**:
+   - Executed `flutter clean`, `flutter pub get`, and `flutter test` (**7/7 PASS**).
+   - Compiled fresh release APK (`superadmin_app/build/app/outputs/flutter-apk/app-release.apk`).
+   - File size: **48.28 MB** (50,621,365 bytes), SHA256: `1da51f8d24b600f4ed09fbe2888811e01d892c019118e9cd7b3aa8d3fd9bc58f`.
+   - VersionName: `1.0.0-release.49.8.2`, VersionCode: `4982`.
+   - Maintained rule: **USER_VERIFIED = 0 (NONE)** until product owner physical device manual acceptance.
+
+---
+
 ## ADR-055: Phase 49.8.1 SuperAdmin Firebase API Key & Production Android Config Fix
 
 ### Context
