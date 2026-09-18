@@ -321,41 +321,204 @@ async function renderDashboardView(container) {
   `;
 }
 
+// 1.5 Academic Structure View (Academic Years, Stages, Subjects)
+let currentAcademicTab = 'stages';
+
+async function renderAcademicView(container) {
+  const years = await callBackend('getAcademicYears', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const stages = await callBackend('getStages', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const subjects = await callBackend('getSubjects', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+
+  container.innerHTML = `
+    <div class="view-title">
+      <span>🏫 الهيكل الأكاديمي للسنتر (المراحل، السنوات، المواد)</span>
+      <div>
+        <button class="btn btn-success" onclick="openAddStageModal()">+ إضافة مرحلة</button>
+        <button class="btn" onclick="openAddAcademicYearModal()">+ إضافة سنة دراسية</button>
+        <button class="btn" style="background:#8b5cf6;" onclick="openAddSubjectModal()">+ إضافة مادة</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem;">
+      <button class="btn ${currentAcademicTab === 'stages' ? 'btn-primary' : ''}" style="background:${currentAcademicTab === 'stages' ? '#0284c7' : '#334155'};" onclick="switchAcademicTab('stages')">🏫 المراحل الدراسية (${stages ? stages.length : 0})</button>
+      <button class="btn ${currentAcademicTab === 'years' ? 'btn-primary' : ''}" style="background:${currentAcademicTab === 'years' ? '#0284c7' : '#334155'};" onclick="switchAcademicTab('years')">📅 السنوات الدراسية (${years ? years.length : 0})</button>
+      <button class="btn ${currentAcademicTab === 'subjects' ? 'btn-primary' : ''}" style="background:${currentAcademicTab === 'subjects' ? '#0284c7' : '#334155'};" onclick="switchAcademicTab('subjects')">📖 المواد الدراسية (${subjects ? subjects.length : 0})</button>
+    </div>
+
+    ${currentAcademicTab === 'stages' ? `
+      <div class="card">
+        <div class="card-title">المراحل الدراسية المسجلة بالسنتر</div>
+        ${stages && stages.length > 0 ? `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>كود المرحلة</th>
+                <th>اسم المرحلة الدراسية</th>
+                <th>الحالة</th>
+                <th>تاريخ الإنشاء</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stages.map(stg => `
+                <tr>
+                  <td><span class="code-box">${stg.code || stg.id}</span></td>
+                  <td><strong>${stg.name}</strong></td>
+                  <td><span class="badge">${stg.status}</span></td>
+                  <td>${stg.createdAt ? stg.createdAt.split('T')[0] : '-'}</td>
+                  <td>
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveStageAction('${stg.id}')">أرشفة</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : `
+          <p style="color:#94a3b8; text-align:center; padding:2rem;">لا توجد مراحل دراسية مسجلة. اضغط على "+ إضافة مرحلة" لإنشاء أول مرحلة.</p>
+        `}
+      </div>
+    ` : ''}
+
+    ${currentAcademicTab === 'years' ? `
+      <div class="card">
+        <div class="card-title">السنوات الدراسية والأكاديمية</div>
+        ${years && years.length > 0 ? `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>معرف السنة</th>
+                <th>اسم السنة الدراسية</th>
+                <th>تاريخ البداية</th>
+                <th>تاريخ النهاية</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${years.map(y => `
+                <tr>
+                  <td><span class="code-box">${y.id}</span></td>
+                  <td><strong>${y.name}</strong></td>
+                  <td>${y.startDate || '-'}</td>
+                  <td>${y.endDate || '-'}</td>
+                  <td><span class="badge">${y.status}</span></td>
+                  <td>
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveAcademicYearAction('${y.id}')">أرشفة</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : `
+          <p style="color:#94a3b8; text-align:center; padding:2rem;">لا توجد سنوات دراسية مسجلة. اضغط على "+ إضافة سنة دراسية".</p>
+        `}
+      </div>
+    ` : ''}
+
+    ${currentAcademicTab === 'subjects' ? `
+      <div class="card">
+        <div class="card-title">المواد الدراسية التخصصية</div>
+        ${subjects && subjects.length > 0 ? `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>كود المادة</th>
+                <th>اسم المادة الدراسية</th>
+                <th>رمز المادة</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${subjects.map(sb => `
+                <tr>
+                  <td><span class="code-box">${sb.id}</span></td>
+                  <td><strong>${sb.name}</strong></td>
+                  <td>${sb.code || 'SUBJ'}</td>
+                  <td><span class="badge">${sb.status || 'ACTIVE'}</span></td>
+                  <td>
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveSubjectAction('${sb.id}')">أرشفة</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : `
+          <p style="color:#94a3b8; text-align:center; padding:2rem;">لا توجد مواد دراسية مسجلة. اضغط على "+ إضافة مادة".</p>
+        `}
+      </div>
+    ` : ''}
+  `;
+}
+
+function switchAcademicTab(tabName) {
+  currentAcademicTab = tabName;
+  const mainView = document.getElementById('mainView');
+  renderAcademicView(mainView);
+}
+
 // 2. Students View
 async function renderStudentsView(container) {
   const students = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const stages = await callBackend('getStages', currentCallerToken, { institutionId: currentCallerToken.institutionId });
 
   container.innerHTML = `
     <div class="view-title">
       <span>🎓 إدارة الطلاب وسجلات التسجيل</span>
       <button class="btn btn-success" onclick="openAddStudentModal()">+ إضافة طالب جديد</button>
     </div>
+
+    <div class="card" style="padding:1rem; margin-bottom:1rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="studentSearchInput" placeholder="🔍 بحث باسم الطالب، الكود أو رقم الموبايل..." style="flex:1; min-width:240px; padding:0.6rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" oninput="filterStudentsTable()">
+      <select id="studentStageFilter" style="padding:0.6rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterStudentsTable()">
+        <option value="">جميع المراحل الدراسية</option>
+        ${stages ? stages.map(stg => `<option value="${stg.name}">${stg.name}</option>`).join('') : ''}
+      </select>
+      <select id="studentStatusFilter" style="padding:0.6rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterStudentsTable()">
+        <option value="">جميع الحالات</option>
+        <option value="ACTIVE">نشط (ACTIVE)</option>
+        <option value="SUSPENDED">موقوف (SUSPENDED)</option>
+        <option value="WITHDRAWN">منسحب (WITHDRAWN)</option>
+        <option value="GRADUATED">متخرج (GRADUATED)</option>
+      </select>
+    </div>
+
     ${students && students.length > 0 ? `
       <div class="card">
-        <table class="data-table">
+        <table class="data-table" id="studentsDataTable">
           <thead>
             <tr>
               <th>كود الطالب</th>
               <th>الاسم الكامل</th>
               <th>رقم الهاتف</th>
               <th>هاتف ولي الأمر</th>
-              <th>الصف الدراسي</th>
+              <th>المرحلة / الصف</th>
+              <th>هوية Auth</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
           </thead>
           <tbody>
             ${students.map(s => `
-              <tr>
+              <tr data-name="${(s.name||'').toLowerCase()}" data-phone="${s.phone||''}" data-code="${(s.studentCode||s.id).toLowerCase()}" data-stage="${s.stage||s.grade||''}" data-status="${s.status||'ACTIVE'}">
                 <td><span class="code-box">${s.studentCode || s.id}</span></td>
                 <td><strong>${s.name}</strong></td>
                 <td>${s.phone || '-'}</td>
                 <td>${s.guardianPhone || '-'}</td>
-                <td>${s.grade}</td>
-                <td><span class="badge">${s.status}</span></td>
+                <td>${s.stage || s.grade || '-'}</td>
                 <td>
-                  <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openEditStudentModal('${s.id}')">تعديل</button>
-                  <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveStudentAction('${s.id}')">أرشفة</button>
+                  ${s.authUid ? `
+                    <span class="badge" style="background:#064e3b; color:#34d399;" title="${s.authUid}">AUTH PROVISIONED 🟢</span>
+                  ` : `
+                    <span class="badge warning" title="Profile created in Firestore only">PROFILE DRAFT 🟡</span>
+                  `}
+                </td>
+                <td><span class="badge">${s.status}</span></td>
+                <td style="display:flex; gap:0.3rem;">
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#8b5cf6;" onclick="viewStudentDetailsModal('${s.id}')">تفاصيل/QR</button>
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="openEditStudentModal('${s.id}')">تعديل</button>
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7;" onclick="openStudentGroupsModal('${s.id}')">المجموعات</button>
+                  <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveStudentAction('${s.id}')">أرشفة</button>
                 </td>
               </tr>
             `).join('')}
@@ -371,6 +534,31 @@ async function renderStudentsView(container) {
       </div>
     `}
   `;
+}
+
+function filterStudentsTable() {
+  const search = (document.getElementById('studentSearchInput')?.value || '').toLowerCase();
+  const stage = document.getElementById('studentStageFilter')?.value || '';
+  const status = document.getElementById('studentStatusFilter')?.value || '';
+
+  const rows = document.querySelectorAll('#studentsDataTable tbody tr');
+  rows.forEach(r => {
+    const name = r.getAttribute('data-name') || '';
+    const phone = r.getAttribute('data-phone') || '';
+    const code = r.getAttribute('data-code') || '';
+    const rStage = r.getAttribute('data-stage') || '';
+    const rStatus = r.getAttribute('data-status') || '';
+
+    const matchesSearch = !search || name.includes(search) || phone.includes(search) || code.includes(search);
+    const matchesStage = !stage || rStage === stage;
+    const matchesStatus = !status || rStatus === status;
+
+    if (matchesSearch && matchesStage && matchesStatus) {
+      r.style.display = '';
+    } else {
+      r.style.display = 'none';
+    }
+  });
 }
 
 // 3. Teachers View
@@ -390,7 +578,9 @@ async function renderTeachersView(container) {
               <th>معرف المعلم</th>
               <th>اسم المعلم</th>
               <th>رقم الهاتف</th>
+              <th>البريد الإلكتروني</th>
               <th>المادة التخصصية</th>
+              <th>هوية Auth</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
@@ -401,10 +591,19 @@ async function renderTeachersView(container) {
                 <td><span class="code-box">${t.id}</span></td>
                 <td><strong>${t.name}</strong></td>
                 <td>${t.phone || '-'}</td>
+                <td>${t.email || '-'}</td>
                 <td>${t.subject}</td>
-                <td><span class="badge">${t.status}</span></td>
                 <td>
-                  <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveTeacherAction('${t.id}')">أرشفة</button>
+                  ${t.authUid ? `
+                    <span class="badge" style="background:#064e3b; color:#34d399;" title="${t.authUid}">AUTH PROVISIONED 🟢</span>
+                  ` : `
+                    <span class="badge warning" title="Profile created in UI; Auth identity created via bootstrap_teacher.js">PROFILE DRAFT 🟡</span>
+                  `}
+                </td>
+                <td><span class="badge">${t.status}</span></td>
+                <td style="display:flex; gap:0.3rem;">
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#8b5cf6;" onclick="viewTeacherDetailsModal('${t.id}')">التفاصيل</button>
+                  <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveTeacherAction('${t.id}')">أرشفة</button>
                 </td>
               </tr>
             `).join('')}
@@ -433,6 +632,48 @@ async function renderGroupsView(container) {
     </div>
     ${groups && groups.length > 0 ? `
       <div class="card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>كود المجموعة</th>
+              <th>اسم المجموعة</th>
+              <th>المادة</th>
+              <th>المعلم المسؤول</th>
+              <th>الطلاب المسجلين / السعة</th>
+              <th>المواعيد والقاعة</th>
+              <th>الرسوم الشهري</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${groups.map(g => `
+              <tr>
+                <td><span class="code-box">${g.id}</span></td>
+                <td><strong>${g.name}</strong></td>
+                <td>${g.subjectName || g.subjectId || '-'}</td>
+                <td>${g.teacherName || g.teacherId || '-'}</td>
+                <td><span class="badge" style="background:#1e293b; color:#38bdf8;">${g.enrolledCount || 0} / ${g.maxCapacity || 30} طالب</span></td>
+                <td>${g.schedule || '-'} (${g.room || 'قاعة 1'})</td>
+                <td>${g.monthlyFee || 0} ج.م</td>
+                <td style="display:flex; gap:0.3rem;">
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7;" onclick="openManageGroupStudentsModal('${g.id}')">إدارة الطلاب</button>
+                  <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveGroupAction('${g.id}')">أرشفة</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card" style="text-align: center; padding: 3.5rem 1rem;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📚</div>
+        <h3 style="color: #f8fafc; margin:0 0 0.5rem 0;">لا توجد مجموعات دراسية</h3>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;">أنشئ المجموعات الدراسية وربط الطلاب والمعلمين بها.</p>
+        <button class="btn btn-success" onclick="openAddGroupModal()">+ إنشاء مجموعة جديدة</button>
+      </div>
+    `}
+  `;
+}
         <table class="data-table">
           <thead>
             <tr>
@@ -1395,5 +1636,348 @@ async function resetInstitutionBrandingAction(instId) {
   } catch (err) {
     showToast(err.message, true);
   }
+}
+
+// ----------------------------------------------------------------------------
+// PHASE 49 ACADEMIC STRUCTURE & MANAGED ENTITIES MODALS
+// ----------------------------------------------------------------------------
+
+function openAddStageModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إضافة مرحلة دراسية جديدة</div>
+        <div class="form-group"><label>اسم المرحلة (مثال: الثانوية العامة) *</label><input type="text" id="mStageName" placeholder="الثانوية العامة"></div>
+        <div class="form-group"><label>كود المرحلة</label><input type="text" id="mStageCode" placeholder="STG-SEC"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitCreateStage()">حفظ المرحلة</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitCreateStage() {
+  const name = document.getElementById('mStageName').value;
+  const code = document.getElementById('mStageCode').value;
+  try {
+    const res = await callBackend('createStage', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      code
+    });
+    closeModal();
+    showToast(`تم إضافة المرحلة (${res.name}) بنجاح!`);
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function archiveStageAction(id) {
+  if (!confirm('أرشفة هذه المرحلة الدراسية؟')) return;
+  try {
+    await callBackend('archiveStage', currentCallerToken, id, currentCallerToken.institutionId);
+    showToast('تمت أرشفة المرحلة');
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+function openAddAcademicYearModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إضافة سنة دراسية جديدة</div>
+        <div class="form-group"><label>اسم السنة الدراسية (مثال: 2025/2026) *</label><input type="text" id="mYearName" placeholder="2025/2026"></div>
+        <div class="form-group"><label>تاريخ البداية</label><input type="date" id="mYearStart"></div>
+        <div class="form-group"><label>تاريخ النهاية</label><input type="date" id="mYearEnd"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitCreateAcademicYear()">حفظ السنة الدراسية</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitCreateAcademicYear() {
+  const name = document.getElementById('mYearName').value;
+  const startDate = document.getElementById('mYearStart').value;
+  const endDate = document.getElementById('mYearEnd').value;
+  try {
+    const res = await callBackend('createAcademicYear', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      startDate,
+      endDate
+    });
+    closeModal();
+    showToast(`تم إضافة السنة الدراسية (${res.name}) بنجاح!`);
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function archiveAcademicYearAction(id) {
+  if (!confirm('أرشفة هذه السنة الدراسية؟')) return;
+  try {
+    await callBackend('archiveAcademicYear', currentCallerToken, id, currentCallerToken.institutionId);
+    showToast('تمت أرشفة السنة الدراسية');
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+function openAddSubjectModal() {
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">+ إضافة مادة دراسية جديدة</div>
+        <div class="form-group"><label>اسم المادة (مثال: الفيزياء الحديثة) *</label><input type="text" id="mSubjName" placeholder="الفيزياء"></div>
+        <div class="form-group"><label>رمز / كود المادة</label><input type="text" id="mSubjCode" placeholder="PHYS"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+          <button class="btn btn-success" onclick="submitCreateSubject()">حفظ المادة</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitCreateSubject() {
+  const name = document.getElementById('mSubjName').value;
+  const code = document.getElementById('mSubjCode').value;
+  try {
+    const res = await callBackend('createSubject', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      name,
+      code
+    });
+    closeModal();
+    showToast(`تم إضافة المادة (${res.name}) بنجاح!`);
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function archiveSubjectAction(id) {
+  if (!confirm('أرشفة هذه المادة؟')) return;
+  try {
+    await callBackend('archiveSubject', currentCallerToken, id, currentCallerToken.institutionId);
+    showToast('تمت أرشفة المادة الدراسية');
+    await renderActiveView('academic');
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function viewStudentDetailsModal(studentId) {
+  const students = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const student = (students || []).find(s => s.id === studentId);
+  if (!student) { showToast('الطالب غير موجود', true); return; }
+
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:520px;">
+        <div class="modal-header">تفاصيل سجل الطالب وكود QR المعياري</div>
+        <div style="text-align:center; padding:1rem; background:#1e293b; border-radius:8px; margin-bottom:1rem;">
+          <div style="font-size:2.5rem; margin-bottom:0.3rem;">📱</div>
+          <div style="font-weight:bold; font-size:1.1rem; color:#38bdf8;">${student.name}</div>
+          <div style="color:#94a3b8; font-size:0.85rem;">كود الطالب: <span class="code-box">${student.studentCode || student.id}</span></div>
+          <div style="margin-top:0.5rem;"><span class="code-box" style="background:#0f172a; border:1px solid #38bdf8; font-family:monospace; padding:0.4rem 0.8rem;">${student.qrToken || ('QR_' + student.id)}</span></div>
+        </div>
+        <p><strong>رقم الهاتف:</strong> ${student.phone || '-'}</p>
+        <p><strong>الهاتف المعياري (E.164):</strong> ${student.normalizedPhone || '-'}</p>
+        <p><strong>ولي الأمر:</strong> ${student.guardianName || '-'} (${student.guardianPhone || '-'})</p>
+        <p><strong>المرحلة / الصف:</strong> ${student.stage || student.grade || '-'}</p>
+        <p><strong>حالة هوية Firebase Auth:</strong> 
+          ${student.authUid ? `
+            <span class="badge" style="background:#064e3b; color:#34d399;">AUTH PROVISIONED (${student.authUid})</span>
+          ` : `
+            <span class="badge warning">PROFILE CREATED (تشغيل bootstrap_student.js لربط هوية الهاتف)</span>
+          `}
+        </p>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+          <button class="btn btn-primary" onclick="closeModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function viewTeacherDetailsModal(teacherId) {
+  const teachers = await callBackend('getTeachers', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const teacher = (teachers || []).find(t => t.id === teacherId);
+  if (!teacher) { showToast('المعلم غير موجود', true); return; }
+
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:500px;">
+        <div class="modal-header">تفاصيل سجل المعلم التخصصي</div>
+        <p><strong>اسم المعلم:</strong> ${teacher.name}</p>
+        <p><strong>رقم الهاتف:</strong> ${teacher.phone || '-'}</p>
+        <p><strong>البريد الإلكتروني:</strong> ${teacher.email || '-'}</p>
+        <p><strong>المادة التخصصية:</strong> ${teacher.subject || '-'}</p>
+        <p><strong>حالة هوية Auth:</strong> 
+          ${teacher.authUid ? `
+            <span class="badge" style="background:#064e3b; color:#34d399;">AUTH PROVISIONED (${teacher.authUid})</span>
+          ` : `
+            <span class="badge warning">PROFILE CREATED (تشغيل bootstrap_teacher.js لإنشاء هوية الدخول)</span>
+          `}
+        </p>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+          <button class="btn btn-primary" onclick="closeModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function openStudentGroupsModal(studentId) {
+  const students = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const student = (students || []).find(s => s.id === studentId);
+  const allGroups = await callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+
+  if (!student) { showToast('الطالب غير موجود', true); return; }
+
+  const enrolledGroupIds = student.groupIds || (student.groupId ? [student.groupId] : []);
+  const enrolledGroups = (allGroups || []).filter(g => enrolledGroupIds.includes(g.id));
+  const availableGroups = (allGroups || []).filter(g => !enrolledGroupIds.includes(g.id));
+
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:550px;">
+        <div class="modal-header">إدارة مجموعات الطالب (${student.name})</div>
+        
+        <div style="margin-bottom:1rem;">
+          <h4 style="margin:0 0 0.5rem 0; color:#38bdf8;">المجموعات المسجل بها حالياً:</h4>
+          ${enrolledGroups.length > 0 ? `
+            <ul style="list-style:none; padding:0; margin:0;">
+              ${enrolledGroups.map(g => `
+                <li style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; padding:0.5rem 0.75rem; border-radius:6px; margin-bottom:0.4rem;">
+                  <span><strong>${g.name}</strong> (${g.subjectName || 'مادة'}) - ${g.teacherName || 'معلم'}</span>
+                  <button class="btn btn-danger" style="padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="removeStudentFromGroupAction('${student.id}', '${g.id}')">إزالة</button>
+                </li>
+              `).join('')}
+            </ul>
+          ` : `
+            <p style="color:#94a3b8; font-size:0.85rem;">الطالب غير مسجل في أي مجموعة حالياً.</p>
+          `}
+        </div>
+
+        ${availableGroups.length > 0 ? `
+          <div class="form-group" style="margin-top:1.5rem;">
+            <label>إضافة الطالب لمجموعة أخرى:</label>
+            <div style="display:flex; gap:0.5rem;">
+              <select id="mAddGroupIdSelect" style="flex:1; padding:0.6rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+                ${availableGroups.map(g => `<option value="${g.id}">${g.name} (${g.subjectName || ''})</option>`).join('')}
+              </select>
+              <button class="btn btn-success" onclick="addStudentToGroupAction('${student.id}')">إضافة للمجموعة</button>
+            </div>
+          </div>
+        ` : ''}
+
+        <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+          <button class="btn btn-primary" onclick="closeModal()">تم والإغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function addStudentToGroupAction(studentId) {
+  const select = document.getElementById('mAddGroupIdSelect');
+  if (!select || !select.value) return;
+  const groupId = select.value;
+  try {
+    await callBackend('addStudentToGroup', currentCallerToken, studentId, groupId, currentCallerToken.institutionId);
+    showToast('تمت إضافة الطالب للمجموعة بنجاح!');
+    openStudentGroupsModal(studentId);
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function removeStudentFromGroupAction(studentId, groupId) {
+  try {
+    await callBackend('removeStudentFromGroup', currentCallerToken, studentId, groupId, currentCallerToken.institutionId);
+    showToast('تمت إزالة الطالب من المجموعة');
+    openStudentGroupsModal(studentId);
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function openManageGroupStudentsModal(groupId) {
+  const allGroups = await callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+  const group = (allGroups || []).find(g => g.id === groupId);
+  const allStudents = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId });
+
+  if (!group) { showToast('المجموعة غير موجودة', true); return; }
+
+  const enrolledStudents = (allStudents || []).filter(s => (s.groupIds || []).includes(groupId) || s.groupId === groupId);
+  const unenrolledStudents = (allStudents || []).filter(s => !(s.groupIds || []).includes(groupId) && s.groupId !== groupId);
+
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:600px;">
+        <div class="modal-header">إدارة طلاب مجموعة (${group.name})</div>
+        <p style="color:#94a3b8; font-size:0.85rem; margin-top:0;">السعة المسجلة: <strong style="color:#38bdf8;">${enrolledStudents.length} / ${group.maxCapacity || 30}</strong> طالب</p>
+
+        <div style="margin-bottom:1rem; max-height:220px; overflow-y:auto;">
+          <h4 style="margin:0 0 0.5rem 0; color:#22c55e;">الطلاب المسجلون حالياً:</h4>
+          ${enrolledStudents.length > 0 ? `
+            <table class="data-table">
+              <thead><tr><th>اسم الطالب</th><th>كود الطالب</th><th>رقم الهاتف</th><th>إجراء</th></tr></thead>
+              <tbody>
+                ${enrolledStudents.map(s => `
+                  <tr>
+                    <td><strong>${s.name}</strong></td>
+                    <td><span class="code-box">${s.studentCode || s.id}</span></td>
+                    <td>${s.phone || '-'}</td>
+                    <td>
+                      <button class="btn btn-danger" style="padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="removeStudentFromGroupInModal('${s.id}', '${group.id}')">إزالة</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<p style="color:#94a3b8;">لا يوجد طلاب مسجلون في هذه المجموعة بعد.</p>'}
+        </div>
+
+        ${unenrolledStudents.length > 0 ? `
+          <div class="form-group" style="margin-top:1.5rem;">
+            <label>إضافة طالب جديد للمجموعة:</label>
+            <div style="display:flex; gap:0.5rem;">
+              <select id="mGroupStudentSelect" style="flex:1; padding:0.6rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+                ${unenrolledStudents.map(s => `<option value="${s.id}">${s.name} (${s.phone || s.studentCode || s.id})</option>`).join('')}
+              </select>
+              <button class="btn btn-success" onclick="addStudentToGroupInModal('${group.id}')">+ إلحاق بالمجموعة</button>
+            </div>
+          </div>
+        ` : ''}
+
+        <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+          <button class="btn btn-primary" onclick="closeModal()">تم والإغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function addStudentToGroupInModal(groupId) {
+  const select = document.getElementById('mGroupStudentSelect');
+  if (!select || !select.value) return;
+  const studentId = select.value;
+  try {
+    await callBackend('addStudentToGroup', currentCallerToken, studentId, groupId, currentCallerToken.institutionId);
+    showToast('تمت إضافة الطالب للمجموعة بنجاح!');
+    openManageGroupStudentsModal(groupId);
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function removeStudentFromGroupInModal(studentId, groupId) {
+  try {
+    await callBackend('removeStudentFromGroup', currentCallerToken, studentId, groupId, currentCallerToken.institutionId);
+    showToast('تمت إزالة الطالب من المجموعة');
+    openManageGroupStudentsModal(groupId);
+  } catch (err) { showToast(err.message, true); }
 }
 

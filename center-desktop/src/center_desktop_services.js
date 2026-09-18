@@ -791,12 +791,202 @@ async function createSubject(callerToken, payload = {}) {
     institutionId: instId,
     name: payload.name || 'مادة تعليمية',
     code: payload.code || 'SUBJ',
-    levelId: payload.levelId || 'LVL_SEC3'
+    stageIds: payload.stageIds || [],
+    levelId: payload.levelId || 'LVL_SEC3',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString()
   };
 
   const clientDb = await getClientFirestoreDb(token);
   await setDoc(doc(clientDb, 'institutions', instId, 'subjects', id), subj);
   return subj;
+}
+
+async function updateSubject(callerToken, id, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const updated = {
+    ...payload,
+    id,
+    institutionId: instId,
+    updatedAt: new Date().toISOString()
+  };
+  const clientDb = await getClientFirestoreDb(token);
+  await setDoc(doc(clientDb, 'institutions', instId, 'subjects', id), updated, { merge: true });
+  return updated;
+}
+
+async function archiveSubject(callerToken, id, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  return await updateSubject(token, id, { institutionId: instId, status: 'ARCHIVED' });
+}
+
+// ----------------------------------------------------------------------------
+// ACADEMIC YEARS & STAGES
+// ----------------------------------------------------------------------------
+
+async function getAcademicYears(callerToken, options = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, options.institutionId || token.institutionId);
+  const clientDb = await getClientFirestoreDb(token);
+  const colRef = collection(clientDb, 'institutions', instId, 'academicYears');
+  const snap = await getDocs(colRef);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(y => y.status !== 'ARCHIVED');
+}
+
+async function createAcademicYear(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  if (!payload.name || payload.name.trim().length === 0) {
+    throw new Error('INVALID_ACADEMIC_YEAR_NAME: Academic year name is required');
+  }
+  const id = `AY_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+  const yearDoc = {
+    id,
+    institutionId: instId,
+    name: payload.name.trim(),
+    startDate: payload.startDate || new Date().toISOString().split('T')[0],
+    endDate: payload.endDate || new Date(Date.now() + 365*24*3600*1000).toISOString().split('T')[0],
+    status: payload.status || 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const clientDb = await getClientFirestoreDb(token);
+  await setDoc(doc(clientDb, 'institutions', instId, 'academicYears', id), yearDoc);
+  return yearDoc;
+}
+
+async function updateAcademicYear(callerToken, id, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const updated = {
+    ...payload,
+    id,
+    institutionId: instId,
+    updatedAt: new Date().toISOString()
+  };
+  const clientDb = await getClientFirestoreDb(token);
+  await setDoc(doc(clientDb, 'institutions', instId, 'academicYears', id), updated, { merge: true });
+  return updated;
+}
+
+async function archiveAcademicYear(callerToken, id, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  return await updateAcademicYear(token, id, { institutionId: instId, status: 'ARCHIVED' });
+}
+
+async function getStages(callerToken, options = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, options.institutionId || token.institutionId);
+  const clientDb = await getClientFirestoreDb(token);
+  const colRef = collection(clientDb, 'institutions', instId, 'stages');
+  const snap = await getDocs(colRef);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.status !== 'ARCHIVED');
+}
+
+async function createStage(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  if (!payload.name || payload.name.trim().length === 0) {
+    throw new Error('INVALID_STAGE_NAME: Stage name is required');
+  }
+  const id = `STG_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+  const stageDoc = {
+    id,
+    institutionId: instId,
+    name: payload.name.trim(),
+    code: payload.code || `STG-${Math.floor(100 + Math.random() * 900)}`,
+    academicYearId: payload.academicYearId || '',
+    status: payload.status || 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const clientDb = await getClientFirestoreDb(token);
+  await setDoc(doc(clientDb, 'institutions', instId, 'stages', id), stageDoc);
+  return stageDoc;
+}
+
+async function updateStage(callerToken, id, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const updated = {
+    ...payload,
+    id,
+    institutionId: instId,
+    updatedAt: new Date().toISOString()
+  };
+  const clientDb = await getClientFirestoreDb(token);
+  await setDoc(doc(clientDb, 'institutions', instId, 'stages', id), updated, { merge: true });
+  return updated;
+}
+
+async function archiveStage(callerToken, id, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  return await updateStage(token, id, { institutionId: instId, status: 'ARCHIVED' });
+}
+
+// Group Student Membership Helpers
+async function addStudentToGroup(callerToken, studentId, groupId, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  const clientDb = await getClientFirestoreDb(token);
+  
+  const studentRef = doc(clientDb, 'institutions', instId, 'students', studentId);
+  const studentSnap = await getDoc(studentRef);
+  if (!studentSnap.exists()) {
+    throw new Error(`STUDENT_NOT_FOUND: Student '${studentId}' does not exist`);
+  }
+  const studentData = studentSnap.data();
+  const currentGroups = studentData.groupIds || [];
+  if (!currentGroups.includes(groupId)) {
+    const updatedGroups = [...currentGroups, groupId];
+    await updateDoc(studentRef, {
+      groupIds: updatedGroups,
+      groupId: groupId,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  const groupRef = doc(clientDb, 'institutions', instId, 'groups', groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (groupSnap.exists()) {
+    const groupData = groupSnap.data();
+    const count = (groupData.enrolledCount || 0) + 1;
+    await updateDoc(groupRef, { enrolledCount: count, updatedAt: new Date().toISOString() });
+  }
+
+  return { success: true, studentId, groupId };
+}
+
+async function removeStudentFromGroup(callerToken, studentId, groupId, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  const clientDb = await getClientFirestoreDb(token);
+
+  const studentRef = doc(clientDb, 'institutions', instId, 'students', studentId);
+  const studentSnap = await getDoc(studentRef);
+  if (studentSnap.exists()) {
+    const studentData = studentSnap.data();
+    const updatedGroups = (studentData.groupIds || []).filter(g => g !== groupId);
+    await updateDoc(studentRef, {
+      groupIds: updatedGroups,
+      groupId: updatedGroups.length > 0 ? updatedGroups[0] : '',
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  const groupRef = doc(clientDb, 'institutions', instId, 'groups', groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (groupSnap.exists()) {
+    const groupData = groupSnap.data();
+    const count = Math.max(0, (groupData.enrolledCount || 1) - 1);
+    await updateDoc(groupRef, { enrolledCount: count, updatedAt: new Date().toISOString() });
+  }
+
+  return { success: true, studentId, groupId };
 }
 
 // ----------------------------------------------------------------------------
@@ -1507,6 +1697,20 @@ module.exports = {
   archiveGroup,
   getSubjects,
   createSubject,
+  updateSubject,
+  archiveSubject,
+  // Academic Years & Stages
+  getAcademicYears,
+  createAcademicYear,
+  updateAcademicYear,
+  archiveAcademicYear,
+  getStages,
+  createStage,
+  updateStage,
+  archiveStage,
+  // Group Memberships
+  addStudentToGroup,
+  removeStudentFromGroup,
   // Attendance
   getAttendanceRecords,
   recordAttendance,

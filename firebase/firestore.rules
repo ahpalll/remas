@@ -79,24 +79,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Phase 5 Server-Only Collections
+    // Phase 5 Server & Operational Collections
     match /institutions/{institutionId}/schedules/{scheduleId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/groups/{groupId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/academicYears/{yearId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/terms/{termId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
@@ -112,23 +112,27 @@ service cloud.firestore {
 
     // Phase 5 Client-Mutable Collections
     match /institutions/{institutionId}/subjects/{subjectId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/stages/{stageId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/rooms/{roomId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/teachers/{teacherId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid);
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid);
+      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
+        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // Phase 6 Server-Only Collections
@@ -162,7 +166,11 @@ service cloud.firestore {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin() 
         || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE')
         || (isAuthenticated() && (resource.data.parentUid == request.auth.uid || (resource.data.keys().hasAny(['guardianUids']) && resource.data.guardianUids.hasAny([request.auth.uid]))));
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
+        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // Phase 7 Attendance System Collections

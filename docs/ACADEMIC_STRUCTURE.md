@@ -1,65 +1,52 @@
-# Academic Structure & Teacher Operations Specification
+# ACADEMIC STRUCTURE SPECIFICATION (PHASE 49)
 
 ## Overview
-This document specifies the academic structure architecture, subject catalog taxonomy, teacher profiles management, and subject/level assignment engine for REMAS Educational Center SaaS.
+This document specifies the academic structure hierarchy, data schemas, multi-tenant boundaries, and permission rules for Academic Years, Stages, and Subjects in the REMAS Educational Center SaaS.
 
 ---
 
-## 1. Architectural Hierarchy
+## 1. Domain Entities & Schemas
 
-```
-Institution (Tenant Boundary)
- │
- ├── Academic Levels / Grades (stages)
- │    ├── Name: e.g., "الصف الأول الثانوي"
- │    ├── Code: e.g., "sec_1"
- │    ├── Order: Integer sort index (1, 2, 3...)
- │    └── Status: ACTIVE | DISABLED | ARCHIVED
- │
- ├── Subjects Catalog (subjects)
- │    ├── Name: e.g., "الفيزياء"
- │    ├── Code: e.g., "physics"
- │    ├── Stage Link: Linked to Level ID or Global (null)
- │    └── Status: ACTIVE | DISABLED | ARCHIVED
- │
- └── Teacher Profiles (teachers)
-      ├── User Link: Linked to Authentication Identity (UID)
-      ├── Email: Teacher email
-      ├── Phone: Phone number
-      ├── Specialization: Academic discipline
-      ├── Subject Assignments: Array of Subject IDs
-      ├── Level Assignments: Array of Level IDs
-      └── Status: ACTIVE | DISABLED | ARCHIVED
-```
+### Academic Year
+- **Firestore Collection**: `/institutions/{institutionId}/academicYears/{id}`
+- **Fields**:
+  - `id`: String (`AY_<timestamp>_<rand>`)
+  - `institutionId`: String
+  - `name`: String (e.g., `2025/2026`)
+  - `startDate`: String (ISO Date `YYYY-MM-DD`)
+  - `endDate`: String (ISO Date `YYYY-MM-DD`)
+  - `status`: String (`ACTIVE` | `ARCHIVED`)
+  - `createdAt`: String (ISO Timestamp)
+  - `updatedAt`: String (ISO Timestamp)
 
----
+### Stage
+- **Firestore Collection**: `/institutions/{institutionId}/stages/{id}`
+- **Fields**:
+  - `id`: String (`STG_<timestamp>_<rand>`)
+  - `institutionId`: String
+  - `name`: String (e.g., `الثانوية العامة`)
+  - `code`: String (e.g., `STG-SEC`)
+  - `academicYearId`: String
+  - `status`: String (`ACTIVE` | `ARCHIVED`)
+  - `createdAt`: String (ISO Timestamp)
+  - `updatedAt`: String (ISO Timestamp)
 
-## 2. Multi-Tenant Authorization & Privilege Matrix
-
-| Operation | SuperAdmin | Tenant Admin (`institutionOwner`, `admin`) | Teacher | Student / Parent |
-| :--- | :---: | :---: | :---: | :---: |
-| **Create / Edit Academic Level** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Disable / Status Level** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Create / Edit Subject** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Disable / Status Subject** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Create / Edit Teacher Profile** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Assign Subjects/Levels to Teacher** | ALL | OWN TENANT ONLY | DENIED | DENIED |
-| **Read Levels / Subjects / Teachers** | ALL | OWN TENANT ONLY | OWN TENANT ONLY | OWN TENANT ONLY |
+### Subject
+- **Firestore Collection**: `/institutions/{institutionId}/subjects/{id}`
+- **Fields**:
+  - `id`: String (`SUBJ_<timestamp>_<rand>`)
+  - `institutionId`: String
+  - `name`: String (e.g., `الفيزياء الحديثة`)
+  - `code`: String (e.g., `PHYS`)
+  - `stageIds`: Array of Strings
+  - `status`: String (`ACTIVE` | `ARCHIVED`)
+  - `createdAt`: String (ISO Timestamp)
+  - `updatedAt`: String (ISO Timestamp)
 
 ---
 
-## 3. Auditable Events & Data Boundary Safety
+## 2. Multi-Tenant Security Rules
 
-All academic structure operations produce structured audit log events:
-- `ACADEMIC_LEVEL_CREATED`
-- `ACADEMIC_LEVEL_UPDATED`
-- `ACADEMIC_LEVEL_STATUS_CHANGED`
-- `SUBJECT_CREATED`
-- `SUBJECT_UPDATED`
-- `SUBJECT_STATUS_CHANGED`
-- `TEACHER_CREATED`
-- `TEACHER_UPDATED`
-- `TEACHER_STATUS_CHANGED`
-- `TEACHER_ASSIGNMENT_CHANGED`
-
-Zero passwords, bearer tokens, or private keys are recorded in log payloads or Firestore document structures.
+- **Read Access**: Granted to authenticated users in the tenant (`isTenantUser(institutionId)`) or SuperAdmin (`isSuperAdmin()`).
+- **Write Access**: Restricted to Tenant Admins (`isTenantAdmin(institutionId)`) or SuperAdmin (`isSuperAdmin()`).
+- **Cross-Tenant Violation**: Attempts to read or mutate academic structure elements across different institution boundaries yield `PERMISSION_DENIED`.

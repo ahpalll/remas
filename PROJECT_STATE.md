@@ -1,6 +1,6 @@
 # Project State - Educational Center SaaS
 
-## Current Accepted Phase: Phase 48 — Production Account Provisioning & Real Device Validation (VERIFIED)
+## Current Accepted Phase: Phase 49 — Center Management Core (VERIFIED)
 
 - **Phase 0**: Architecture & Repo Setup — COMPLETE
 - **Phase 1**: Core Data Schemas & Multi-Tenant Boundaries — COMPLETE
@@ -50,10 +50,12 @@
 - **Phase 45**: Real Center Online Operation Journey — VERIFIED
 - **Phase 46**: Real SuperAdmin Center Onboarding — VERIFIED
 - **Phase 47**: Real SuperAdmin Bootstrap + First Center End-to-End Test — VERIFIED
-- **Phase 48**: Production Account Provisioning & Real Device Validation — VERIFIED (Deterministic live test dataset inst_phase48 provisioned for SuperAdmin, Owner, Teacher, Student, Parent via Trusted CLI; Zero Cloud Functions; docs/ACCOUNT_PROVISIONING.md created; 12/12 Security Rules Matrix PASS)
+- **Phase 48**: Production Account Provisioning & Real Device Validation — VERIFIED
+- **Phase 49**: Center Management Core — VERIFIED (Academic Structure, Student Management with E.164 phone normalization & duplicate protection, Teacher Management, Group Management & Student Enrollment Engine, 10/10 Security Rules Matrix PASS)
 
 ## System Statistics & Test Baseline
-- Security Rules Emulator Matrix: **12/12 PASS** (`tests/run_phase_46_emulator_matrix.js`)
+- Security Rules Emulator Matrix Phase 49: **10/10 PASS** (`tests/run_phase_49_emulator_matrix.js`)
+- Security Rules Emulator Matrix Phase 46: **12/12 PASS** (`tests/run_phase_46_emulator_matrix.js`)
 - SuperAdmin Mobile Flutter Test Suite: **6/6 PASS** (`superadmin_app/test/superadmin_runtime_test.dart`)
 - Monorepo Version: **1.0.0-release.47.0**
 - Target Firebase Project: **educenter-saas-860c5**

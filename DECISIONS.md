@@ -1,3 +1,21 @@
+## ADR-050: Phase 49 Center Management Core Implementation & Security Hardening
+
+### Context
+Phase 49 implements real operational center management across Center Desktop, Student App, Teacher App, Parent App, and Security Rules covering Academic Structure (Academic Years, Stages, Subjects), Teachers Management, Students Management, and Groups Management without introducing Cloud Functions or breaking existing tenant boundaries.
+
+### Decision
+1. **Center Academic Structure Engine**:
+   - Implemented Firestore collections and services for Academic Years (`/institutions/{instId}/academicYears`), Stages (`/institutions/{instId}/stages`), and Subjects (`/institutions/{instId}/subjects`).
+   - Center Desktop provides tabbed navigation and interactive management modals for Academic Years, Stages, and Subjects.
+2. **Student & Teacher Management Hardening**:
+   - Enhanced `createStudent` and `updateStudent` with Egyptian E.164 phone normalization, duplicate phone protection within the same institution, and clear UI badges distinguishing `PROFILE DRAFT` from `AUTH PROVISIONED: <authUid>`.
+   - Security Rules strictly prevent client-side mutation of `authUid`, `institutionId`, and `role` across student and teacher documents.
+3. **Group Management & Enrollment Engine**:
+   - Implemented group CRUD and real-time student group enrollment management (`addStudentToGroup`, `removeStudentFromGroup`), updating group capacity and enrolled student counts.
+4. **Security Rules Emulator Matrix**: Executed 10/10 security test scenarios against OpenJDK 21 Firebase Emulator Suite (**10 PASSED / 0 FAILED**).
+
+---
+
 ## ADR-049: Phase 48 Production Account Provisioning Architecture & Real Device Validation
 
 ### Context

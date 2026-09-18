@@ -15,5 +15,6 @@
 | `Unauthenticated` | Any Collection | **DENY** | Default Deny (`isAuthenticated() == false`) |
 
 ## Rules Verification Execution
-- Test Suite: [firebase/phase_43_auth_rules.test.js](file:///f:/remas/firebase/phase_43_auth_rules.test.js) (12/12 Matrix Tests PASS)
+- Phase 49 Security Matrix: [tests/run_phase_49_emulator_matrix.js](file:///f:/remas/tests/run_phase_49_emulator_matrix.js) (10/10 Matrix Tests PASS)
+- Phase 46 Security Matrix: [tests/run_phase_46_emulator_matrix.js](file:///f:/remas/tests/run_phase_46_emulator_matrix.js) (12/12 Matrix Tests PASS)
 - Monorepo Suite: [firebase/firestore_rules.test.js](file:///f:/remas/firebase/firestore_rules.test.js) (192/192 Rules Tests PASS)
