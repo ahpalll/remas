@@ -1,3 +1,27 @@
+## ADR-049: Phase 48 Production Account Provisioning Architecture & Real Device Validation
+
+### Context
+Phase 48 establishes the official, production-safe account provisioning workflow and documentation for SuperAdmin, Center Owner, Teacher, Student, and Parent roles without introducing Cloud Functions, HTTP backend APIs, or Admin SDK keys in client applications.
+
+### Decision
+1. **Production Account Provisioning Architecture**:
+   - Client Apps use direct Firebase Client SDK + Cloud Firestore + Security Rules.
+   - Privileged Auth user identity creation and Custom Claims assignment are executed exclusively via local Trusted Administrative CLI scripts using Firebase Admin SDK.
+   - Zero Cloud Functions deployed or required. Zero Admin SDK keys or service account credentials inside client applications.
+2. **Deterministic Live Test Dataset (`inst_phase48`)**:
+   - Institution: `inst_phase48` ("REMAS Phase 48 Test Center", code "REMAS48").
+   - SuperAdmin: `admin@remas.edu` (Auth UID `QJeEADbpMwP1xBXZzL9zYql4IYR2`).
+   - Center Owner: `owner.phase48@remas.edu` (Auth UID `0HNS6CGiQtPaPV4TBVHjr3s4F4x1`, claims `{ role: 'institutionOwner', institutionId: 'inst_phase48' }`).
+   - Teacher: `teacher.phase48@remas.edu` (Auth UID `uHnH6mF0cVbrA0eBqZ2GG0EuMNy2`, claims `{ role: 'teacher', institutionId: 'inst_phase48' }`).
+   - Student: Phone `+201048484848` (Auth UID `sUlRSZGr3rM2ocjko8if8gWnjq03`, record `/institutions/inst_phase48/students/student_1789739262686_4hif`).
+   - Parent: `parent.phase48@remas.edu` (Auth UID `U4Phr30j6NeTIk9HVSXihBGLUmj2`, claims `{ role: 'parent', institutionId: 'inst_phase48' }`, linked to student `student_1789739262686_4hif`).
+3. **Comprehensive Documentation**:
+   - Created `docs/ACCOUNT_PROVISIONING.md` detailing exact operational workflows, CLI scripts, environment variables, phone E.164 normalization, and credential safety rules.
+   - Updated `docs/SECURITY.md`, `docs/TESTING.md`, `PROJECT_STATE.md`, and `DECISIONS.md`.
+4. **Security Rules Emulator Matrix**: Executed 12/12 test assertions against OpenJDK 21 Firebase Emulator Suite (**12 PASSED / 0 FAILED**).
+
+---
+
 ## ADR-048: Phase 47 Real SuperAdmin Bootstrap & First Center End-to-End Operational Verification
 
 ### Context
