@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:superadmin_app/firebase_options.dart';
 import 'package:superadmin_app/models/superadmin_models.dart';
 
 class SuperAdminService {
@@ -23,25 +26,29 @@ class SuperAdminService {
     required String ownerEmail,
     required String tempPassword,
   }) async {
-    final appName = 'SecondaryOwnerProvisioner_${DateTime.now().millisecondsSinceEpoch}';
-    FirebaseApp? secondaryApp;
+    final apiKey = DefaultFirebaseOptions.currentPlatform.apiKey;
+    final client = HttpClient();
     try {
-      secondaryApp = await Firebase.initializeApp(
-        name: appName,
-        options: Firebase.app().options,
-      );
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-      final userCred = await secondaryAuth.createUserWithEmailAndPassword(
-        email: ownerEmail.trim().toLowerCase(),
-        password: tempPassword,
-      );
-      final uid = userCred.user!.uid;
-      await secondaryAuth.signOut();
-      return uid;
-    } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
+      final uri = Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey');
+      final req = await client.postUrl(uri);
+      req.headers.set('content-type', 'application/json');
+      final payload = jsonEncode({
+        'email': ownerEmail.trim().toLowerCase(),
+        'password': tempPassword,
+        'returnSecureToken': true,
+      });
+      req.write(payload);
+      final res = await req.close();
+      final bodyStr = await res.transform(utf8.decoder).join();
+      final parsed = jsonDecode(bodyStr) as Map<String, dynamic>;
+      if (res.statusCode == 200 && parsed.containsKey('localId')) {
+        return parsed['localId'] as String;
+      } else {
+        final err = parsed['error']?['message'] ?? 'UNKNOWN_AUTH_ERROR';
+        throw Exception('OWNER_AUTH_PROVISIONING_FAILED [${res.statusCode}]: $err');
       }
+    } finally {
+      client.close();
     }
   }
 

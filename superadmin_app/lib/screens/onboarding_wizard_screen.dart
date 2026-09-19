@@ -48,11 +48,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   Future<void> _submitWizard() async {
     setState(() => _loading = true);
+    final saUid = SuperAdminService.currentUser?.uid ?? 'UNKNOWN';
     try {
       final invCode = SuperAdminService.generateCsprngInvitationCode();
       final tempPassword = SuperAdminService.generateTemporaryPassword();
 
-      // 1. Create Institution with ownerInvitationCode
+      // 1. Create Institution
+      debugPrint('[WRITE START]\noperation=createInstitution\npath=/institutions/AUTO\nuid=$saUid\nrole=superAdmin');
       final inst = await SuperAdminService.createInstitution(
         name: _centerNameCtrl.text,
         type: _centerType,
@@ -62,29 +64,37 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ownerInvitationCode: invCode,
         address: _centerAddressCtrl.text,
       );
+      debugPrint('[WRITE RESULT]\nstatus=PASS\ncode=200\ndocId=${inst.institutionId}');
 
-      // 2. Create Owner Invitation with invitationCode
+      // 2. Create Owner Invitation
+      debugPrint('[WRITE START]\noperation=createOwnerInvitation\npath=/invitations/$invCode\nuid=$saUid\nrole=superAdmin');
       final inv = await SuperAdminService.createOwnerInvitation(
         institutionId: inst.institutionId,
         email: _ownerEmailCtrl.text,
         phone: _ownerPhoneCtrl.text,
         invitationCode: invCode,
       );
+      debugPrint('[WRITE RESULT]\nstatus=PASS\ncode=200');
 
       // 3. Create License
+      debugPrint('[WRITE START]\noperation=createLicense\npath=/licenses/AUTO\nuid=$saUid\nrole=superAdmin');
       final lic = await SuperAdminService.createLicense(
         institutionId: inst.institutionId,
         plan: _licensePlan,
         durationDays: _licenseDays,
       );
+      debugPrint('[WRITE RESULT]\nstatus=PASS\ncode=200\ndocId=${lic.licenseId}');
 
-      // 4. Provision Owner Firebase Auth Account via Secondary Auth instance
+      // 4. Provision Owner Firebase Auth Account via REST API
+      debugPrint('[WRITE START]\noperation=provisionOwnerAuthAccount\nuid=$saUid\nrole=superAdmin');
       final ownerUid = await SuperAdminService.provisionOwnerAuthAccount(
         ownerEmail: _ownerEmailCtrl.text,
         tempPassword: tempPassword,
       );
+      debugPrint('[WRITE RESULT]\nstatus=PASS\nownerUid=$ownerUid');
 
       // 5. Create Owner User Profile & Link Institution
+      debugPrint('[WRITE START]\noperation=createOwnerUserProfile\npath=/users/$ownerUid\nuid=$saUid\nrole=superAdmin');
       await SuperAdminService.createOwnerUserProfile(
         ownerUid: ownerUid,
         ownerEmail: _ownerEmailCtrl.text,
@@ -92,6 +102,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ownerPhone: _ownerPhoneCtrl.text,
         institutionId: inst.institutionId,
       );
+      debugPrint('[WRITE RESULT]\nstatus=PASS\ncode=200');
 
       setState(() {
         _createdInstitution = inst;
@@ -101,6 +112,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         _currentStep = 4; // Move to Complete screen
       });
     } catch (e) {
+      debugPrint('[WRITE RESULT]\nstatus=DENIED/ERROR\nerror=${e.toString()}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('خطأ أثناء تهيئة المركز: ${e.toString()}'), backgroundColor: Colors.red),
       );
