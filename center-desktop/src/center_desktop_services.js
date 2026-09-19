@@ -16,7 +16,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { initializeApp, getApps, getApp } = require('firebase/app');
-const { getAuth, signInWithEmailAndPassword, signOut, connectAuthEmulator } = require('firebase/auth');
+const { getAuth, signInWithEmailAndPassword, updatePassword, signOut, connectAuthEmulator } = require('firebase/auth');
 const {
   getFirestore,
   doc,
@@ -172,8 +172,25 @@ async function authenticateUser({ email, password }) {
     const user = userCredential.user;
     const tokenResult = await user.getIdTokenResult(true);
 
-    const role = tokenResult.claims.role || 'institutionOwner';
-    const institutionId = tokenResult.claims.institutionId || 'inst_bootstrap_001';
+    let role = tokenResult.claims.role;
+    let institutionId = tokenResult.claims.institutionId;
+    let mustChangePassword = false;
+
+    // Fallback to Firestore /users/{uid} document if custom claims not present on token
+    if (!role || !institutionId) {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          role = role || userData.role;
+          institutionId = institutionId || userData.institutionId;
+          mustChangePassword = userData.mustChangePassword === true;
+        }
+      } catch (_) {}
+    }
+
+    role = role || 'institutionOwner';
 
     if (role === 'superAdmin' || role === 'superadmin') {
       await signOut(auth);
@@ -193,7 +210,8 @@ async function authenticateUser({ email, password }) {
       uid: user.uid,
       email: user.email || cleanEmail,
       role: role,
-      institutionId: institutionId,
+      institutionId: institutionId || '',
+      mustChangePassword: mustChangePassword,
       idToken: tokenResult.token,
       expiresAt: Date.parse(tokenResult.expirationTime),
       authenticatedAt: new Date().toISOString()
@@ -207,6 +225,40 @@ async function authenticateUser({ email, password }) {
     authErr.code = 'INVALID_CREDENTIALS';
     throw authErr;
   }
+}
+
+async function changeOwnerPassword({ newPassword }) {
+  if (!auth.currentUser) {
+    const err = new Error('UNAUTHENTICATED: لا يوجد حساب مسجل الدخول حالياً');
+    err.code = 'UNAUTHENTICATED';
+    throw err;
+  }
+  if (!newPassword || newPassword.trim().length < 6) {
+    const err = new Error('INVALID_PASSWORD: يجب أن تتكون كلمة المرور الجديدة من 6 أحرف على الأقل');
+    err.code = 'INVALID_PASSWORD';
+    throw err;
+  }
+
+  const cleanPassword = newPassword.trim();
+  const uid = auth.currentUser.uid;
+
+  // 1. Update Firebase Auth Password
+  await updatePassword(auth.currentUser, cleanPassword);
+
+  // 2. Update Firestore User Profile to clear mustChangePassword flag
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, {
+      mustChangePassword: false,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (_) {}
+
+  if (activeSessionToken) {
+    activeSessionToken.mustChangePassword = false;
+  }
+
+  return { success: true, uid };
 }
 
 async function registerAndClaimOwnerCenter({ invitationCode, email, password }) {

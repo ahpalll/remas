@@ -1,12 +1,96 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:superadmin_app/models/superadmin_models.dart';
 
 class SuperAdminService {
   static FirebaseAuth get _auth => FirebaseAuth.instance;
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
   static SuperAdminUser? currentUser;
+
+  static String generateTemporaryPassword() {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#\$%';
+    final rnd = math.Random.secure();
+    final buffer = StringBuffer('Owner_');
+    for (int i = 0; i < 10; i++) {
+      buffer.write(chars[rnd.nextInt(chars.length)]);
+    }
+    return buffer.toString();
+  }
+
+  static Future<String> provisionOwnerAuthAccount({
+    required String ownerEmail,
+    required String tempPassword,
+  }) async {
+    final appName = 'SecondaryOwnerProvisioner_${DateTime.now().millisecondsSinceEpoch}';
+    FirebaseApp? secondaryApp;
+    try {
+      secondaryApp = await Firebase.initializeApp(
+        name: appName,
+        options: Firebase.app().options,
+      );
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final userCred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: ownerEmail.trim().toLowerCase(),
+        password: tempPassword,
+      );
+      final uid = userCred.user!.uid;
+      await secondaryAuth.signOut();
+      return uid;
+    } finally {
+      if (secondaryApp != null) {
+        await secondaryApp.delete();
+      }
+    }
+  }
+
+  static Future<void> createOwnerUserProfile({
+    required String ownerUid,
+    required String ownerEmail,
+    required String ownerName,
+    required String ownerPhone,
+    required String institutionId,
+  }) async {
+    if (currentUser == null || !currentUser!.isSuperAdmin) {
+      throw Exception('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can create owner profiles.');
+    }
+    final nowISO = DateTime.now().toIso8601String();
+
+    // Global user profile in /users/{uid}
+    await _db.collection('users').doc(ownerUid).set({
+      'uid': ownerUid,
+      'email': ownerEmail.trim().toLowerCase(),
+      'displayName': ownerName.trim().isEmpty ? 'مالك المركز' : ownerName.trim(),
+      'phone': ownerPhone.trim(),
+      'role': 'institutionOwner',
+      'status': 'ACTIVE',
+      'institutionId': institutionId,
+      'institutionIds': [institutionId],
+      'mustChangePassword': true,
+      'createdAt': nowISO,
+      'updatedAt': nowISO,
+    });
+
+    // Tenant user profile in /institutions/{institutionId}/users/{uid}
+    await _db.collection('institutions').doc(institutionId).collection('users').doc(ownerUid).set({
+      'uid': ownerUid,
+      'email': ownerEmail.trim().toLowerCase(),
+      'fullName': ownerName.trim().isEmpty ? 'مالك المركز' : ownerName.trim(),
+      'phone': ownerPhone.trim(),
+      'role': 'institutionOwner',
+      'institutionId': institutionId,
+      'status': 'ACTIVE',
+      'createdAt': nowISO,
+      'updatedAt': nowISO,
+    });
+
+    // Update institution document ownerId reference
+    await _db.collection('institutions').doc(institutionId).update({
+      'ownerId': ownerUid,
+      'updatedAt': nowISO,
+    });
+  }
 
   static Future<SuperAdminUser> login({
     required String email,

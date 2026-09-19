@@ -33,6 +33,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   InstitutionRecord? _createdInstitution;
   OwnerInvitationRecord? _createdInvitation;
   LicenseRecord? _createdLicense;
+  String _tempPassword = '';
 
   @override
   void dispose() {
@@ -49,6 +50,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _loading = true);
     try {
       final invCode = SuperAdminService.generateCsprngInvitationCode();
+      final tempPassword = SuperAdminService.generateTemporaryPassword();
 
       // 1. Create Institution with ownerInvitationCode
       final inst = await SuperAdminService.createInstitution(
@@ -76,10 +78,26 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         durationDays: _licenseDays,
       );
 
+      // 4. Provision Owner Firebase Auth Account via Secondary Auth instance
+      final ownerUid = await SuperAdminService.provisionOwnerAuthAccount(
+        ownerEmail: _ownerEmailCtrl.text,
+        tempPassword: tempPassword,
+      );
+
+      // 5. Create Owner User Profile & Link Institution
+      await SuperAdminService.createOwnerUserProfile(
+        ownerUid: ownerUid,
+        ownerEmail: _ownerEmailCtrl.text,
+        ownerName: _centerNameCtrl.text,
+        ownerPhone: _ownerPhoneCtrl.text,
+        institutionId: inst.institutionId,
+      );
+
       setState(() {
         _createdInstitution = inst;
         _createdInvitation = inv;
         _createdLicense = lic;
+        _tempPassword = tempPassword;
         _currentStep = 4; // Move to Complete screen
       });
     } catch (e) {
@@ -348,6 +366,36 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               Text('كود الترخيص: ${_createdLicense?.licenseCode}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13)),
               Text('حالة الترخيص: ${_createdLicense?.status}', style: const TextStyle(color: Color(0xFF22C55E), fontSize: 13)),
               Text('ربط الجهاز: NOT BOUND (سيتم الربط عند أول دخول للـ Desktop)', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text('🔐 بيانات دخول مالك المركز (Temporary Credentials):', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF10B981)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText('البريد الإلكتروني: ${_createdInvitation?.ownerEmail}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+              const SizedBox(height: 4),
+              SelectableText('كلمة المرور المؤقتة: $_tempPassword', style: const TextStyle(color: Color(0xFF10B981), fontFamily: 'monospace', fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () {
+                  final text = 'بيانات دخول مركز ${_createdInstitution?.name ?? ""}\nالبريد الإلكتروني: ${_createdInvitation?.ownerEmail ?? ""}\nكلمة المرور المؤقتة: $_tempPassword\nكود الدعوة: $invCode';
+                  Clipboard.setData(ClipboardData(text: text));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ بيانات الدخول الحافظة')));
+                },
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('نسخ بيانات الدخول'),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+              ),
             ],
           ),
         ),
