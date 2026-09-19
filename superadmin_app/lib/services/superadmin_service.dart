@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:superadmin_app/models/superadmin_models.dart';
@@ -122,11 +123,23 @@ class SuperAdminService {
     }
   }
 
+  static String generateCsprngInvitationCode() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rnd = math.Random.secure();
+    final buffer = StringBuffer('inv_');
+    for (int i = 0; i < 22; i++) {
+      buffer.write(chars[rnd.nextInt(chars.length)]);
+    }
+    return buffer.toString();
+  }
+
   static Future<InstitutionRecord> createInstitution({
     required String name,
     String type = 'center',
     String phone = '',
     String email = '',
+    String ownerEmail = '',
+    String ownerInvitationCode = '',
     String address = '',
     Map<String, dynamic>? branding,
   }) async {
@@ -157,7 +170,8 @@ class SuperAdminService {
       address: address.trim(),
       branding: defaultBranding,
       ownerId: 'PENDING_OWNER',
-      ownerEmail: '',
+      ownerEmail: ownerEmail.trim().toLowerCase(),
+      ownerInvitationCode: ownerInvitationCode.trim(),
       createdBy: currentUser!.uid,
       createdAt: nowISO,
       updatedAt: nowISO,
@@ -171,19 +185,22 @@ class SuperAdminService {
     required String institutionId,
     required String email,
     required String phone,
+    required String invitationCode,
   }) async {
     if (currentUser == null || !currentUser!.isSuperAdmin) {
       throw Exception('UNAUTHORIZED_CALLER_ROLE: Only SuperAdmin can create owner invitations.');
     }
 
-    final invRef = _db.collection('institutions').doc(institutionId).collection('invitations').doc();
+    final code = invitationCode.trim();
     final now = DateTime.now();
     final expires = now.add(const Duration(days: 7));
 
     final invRecord = OwnerInvitationRecord(
-      invitationId: invRef.id,
+      invitationId: code,
+      invitationCode: code,
       institutionId: institutionId,
       email: email.trim().toLowerCase(),
+      ownerEmail: email.trim().toLowerCase(),
       phone: phone.trim(),
       role: 'institutionOwner',
       status: 'PENDING',
@@ -191,10 +208,10 @@ class SuperAdminService {
       expiresAt: expires.toIso8601String(),
     );
 
-    await invRef.set(invRecord.toFirestore());
-
-    // Also mirror to top-level invitations for rule validation
-    await _db.collection('invitations').doc(invRef.id).set(invRecord.toFirestore());
+    // Save directly to top-level invitations collection with doc ID = invitationCode
+    await _db.collection('invitations').doc(code).set(invRecord.toFirestore());
+    // Also mirror to subcollection if needed
+    await _db.collection('institutions').doc(institutionId).collection('invitations').doc(code).set(invRecord.toFirestore());
 
     return invRecord;
   }

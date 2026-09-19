@@ -209,6 +209,181 @@ async function authenticateUser({ email, password }) {
   }
 }
 
+async function registerAndClaimOwnerCenter({ invitationCode, email, password }) {
+  if (!invitationCode || !email || !password) {
+    const err = new Error('INVALID_INPUT: كود الدعوة والبريد الإلكتروني وكلمة المرور جميعها مطلوبة');
+    err.code = 'INVALID_INPUT';
+    throw err;
+  }
+
+  const cleanCode = invitationCode.trim();
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Fetch Invitation by Document ID directly (Zero Collection Scanning)
+  const invRef = doc(db, 'invitations', cleanCode);
+  const invSnap = await getDoc(invRef);
+  if (!invSnap.exists()) {
+    const err = new Error('NOT_FOUND: كود الدعوة غير صحيح أو غير موجود');
+    err.code = 'NOT_FOUND';
+    throw err;
+  }
+
+  const invData = invSnap.data();
+  if (invData.status !== 'PENDING') {
+    const err = new Error('INVALID_STATUS: كود الدعوة هذا تم استخدامه سابقاً أو ملغى');
+    err.code = 'INVALID_STATUS';
+    throw err;
+  }
+
+  if (invData.ownerEmail && invData.ownerEmail.toLowerCase() !== cleanEmail) {
+    const err = new Error('EMAIL_MISMATCH: البريد الإلكتروني المدخل لا يطابق البريد الإلكتروني المخصص في الدعوة');
+    err.code = 'EMAIL_MISMATCH';
+    throw err;
+  }
+
+  const expiresAtMs = invData.expiresAt ? (typeof invData.expiresAt.toMillis === 'function' ? invData.expiresAt.toMillis() : Date.parse(invData.expiresAt)) : Infinity;
+  if (Date.now() >= expiresAtMs) {
+    const err = new Error('EXPIRED: انتهت صلاحية كود الدعوة هذا. يرجى طلب كود دعوة جديد من الإدارة العليا');
+    err.code = 'EXPIRED';
+    throw err;
+  }
+
+  const institutionId = invData.institutionId;
+
+  // 2. Fetch Institution Document to check ownerId
+  const instRef = doc(db, 'institutions', institutionId);
+  const instSnap = await getDoc(instRef);
+  if (!instSnap.exists()) {
+    const err = new Error('NOT_FOUND: المركز التعليمي غير موجود');
+    err.code = 'NOT_FOUND';
+    throw err;
+  }
+
+  const instData = instSnap.data();
+  if (instData.ownerId !== 'PENDING_OWNER') {
+    const err = new Error('ALREADY_CLAIMED: هذا المركز تم ملكيته وتفعيله سابقاً بواسطة مالك آخر');
+    err.code = 'ALREADY_CLAIMED';
+    throw err;
+  }
+
+  // 3. Create Firebase Auth Account
+  const { createUserWithEmailAndPassword, sendEmailVerification } = require('firebase/auth');
+  let userCredential;
+  try {
+    userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+  } catch (e) {
+    if (e.code === 'auth/email-already-in-use') {
+      const err = new Error('EMAIL_IN_USE: البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول أو إدخال البريد الصحيح');
+      err.code = 'EMAIL_IN_USE';
+      throw err;
+    }
+    throw e;
+  }
+
+  const user = userCredential.user;
+
+  // 4. Send Email Verification
+  await sendEmailVerification(user);
+
+  return {
+    success: true,
+    requiresVerification: true,
+    email: cleanEmail,
+    invitationCode: cleanCode,
+    institutionId: institutionId,
+    uid: user.uid,
+    message: 'تم إنشاء الحساب بنجاح. تم إرسال رابط تأكيد البريد الإلكتروني.'
+  };
+}
+
+async function verifyEmailAndExecuteClaim({ invitationCode }) {
+  if (!auth.currentUser) {
+    const err = new Error('UNAUTHENTICATED: يرجى تسجيل الدخول أولاً لتأكيد البريد والملكية');
+    err.code = 'UNAUTHENTICATED';
+    throw err;
+  }
+
+  // Reload user state & force token refresh to get email_verified == true
+  await auth.currentUser.reload();
+  const tokenResult = await auth.currentUser.getIdTokenResult(true);
+
+  if (!auth.currentUser.emailVerified && !tokenResult.claims.email_verified) {
+    const err = new Error('EMAIL_NOT_VERIFIED: لم يتم تأكيد البريد الإلكتروني بعد. يرجى النقر على الرابط في بريدك أولاً ثم المحاولة مجدداً');
+    err.code = 'EMAIL_NOT_VERIFIED';
+    throw err;
+  }
+
+  const cleanCode = invitationCode.trim();
+  const uid = auth.currentUser.uid;
+  const userEmail = auth.currentUser.email.toLowerCase();
+
+  // Execute Atomic Transaction
+  const { runTransaction } = require('firebase/firestore');
+  await runTransaction(db, async (transaction) => {
+    const invRef = doc(db, 'invitations', cleanCode);
+    const invSnap = await transaction.get(invRef);
+    if (!invSnap.exists()) throw new Error('NOT_FOUND: كود الدعوة غير موجود');
+    const invData = invSnap.data();
+
+    if (invData.status !== 'PENDING') throw new Error('INVALID_STATUS: كود الدعوة تم استخدامه سابقاً');
+    if (invData.ownerEmail.toLowerCase() !== userEmail) throw new Error('EMAIL_MISMATCH: البريد الإلكتروني لا يطابق بريد الدعوة');
+
+    const instRef = doc(db, 'institutions', invData.institutionId);
+    const instSnap = await transaction.get(instRef);
+    if (!instSnap.exists()) throw new Error('NOT_FOUND: المركز غير موجود');
+    const instData = instSnap.data();
+
+    if (instData.ownerId !== 'PENDING_OWNER') throw new Error('ALREADY_CLAIMED: المركز تم تفعيله من جهاز/حساب آخر');
+
+    const userRef = doc(db, 'users', uid);
+
+    // Write User Profile
+    transaction.set(userRef, {
+      uid: uid,
+      email: userEmail,
+      role: 'institutionOwner',
+      institutionId: invData.institutionId,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
+    });
+
+    // Update Institution ownerId
+    transaction.update(instRef, {
+      ownerId: uid,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Update Invitation status
+    transaction.update(invRef, {
+      status: 'ACCEPTED',
+      acceptedAt: new Date().toISOString(),
+      acceptedBy: uid,
+      updatedAt: new Date().toISOString()
+    });
+  });
+
+  const userDocSnap = await getDoc(doc(db, 'users', uid));
+  const claimedInstId = userDocSnap.exists() ? userDocSnap.data().institutionId : 'inst_bootstrap_001';
+
+  const session = {
+    uid: uid,
+    email: userEmail,
+    role: 'institutionOwner',
+    institutionId: claimedInstId,
+    idToken: tokenResult.token,
+    expiresAt: Date.now() + 86400000,
+    authenticatedAt: new Date().toISOString()
+  };
+
+  activeSessionToken = session;
+  return {
+    success: true,
+    claimed: true,
+    session: session,
+    message: 'تم تفعيل وربط ملكية المركز بنجاح!'
+  };
+}
+
 async function logoutUser(callerToken) {
   try {
     await signOut(auth);
@@ -1738,7 +1913,12 @@ module.exports = {
   addExpense,
   getAISettings,
   getCenterAISettings,
-  getLicenseStatus,
+  // Onboarding & Authentication
+  authenticateUser,
+  logoutUser,
+  registerAndClaimOwnerCenter,
+  verifyEmailAndExecuteClaim,
+  // Licenses & Devices
   requestRebind,
   // Branding
   getBranding,

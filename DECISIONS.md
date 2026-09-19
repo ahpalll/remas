@@ -1,3 +1,30 @@
+## ADR-057: Phase 49.9 Zero-CLI Zero-Backend Owner Onboarding Architecture & Master Security Specification
+
+### Context
+Previous center onboarding required running a local trusted Node.js CLI script (`bootstrap_center_owner.js`) with service-account credentials to create the Firebase Auth account and set custom claims for each center owner. Phase 49.9 establishes a 100% Zero-CLI, Zero-Backend, Zero-Cloud-Functions owner onboarding and center claiming architecture operating purely via Firebase Client SDK, Cloud Firestore Security Rules, and atomic client-side transactions.
+
+### Decision
+1. **Zero-CLI / Zero-Backend Architecture**:
+   - SuperAdmin creates center (`/institutions/{institutionId}`) with `ownerId: "PENDING_OWNER"` and a 128-bit+ Base62 CSPRNG unguessable invitation code (`ownerInvitationCode: "inv_..."`) via `superadmin_app`.
+   - SuperAdmin creates invitation document (`/invitations/{invitationCode}`) storing `{ invitationCode, institutionId, ownerEmail, role: "institutionOwner", status: "PENDING", expiresAt }`.
+   - Center Owner enters invitation code in REMAS Center Desktop, creates Firebase Auth account with email/password, verifies email via standard link, and executes an atomic Firestore transaction claiming `/institutions/{institutionId}`, updating `/invitations/{invitationCode}` to `ACCEPTED`, and creating `/users/{authUid}`.
+   - Zero Cloud Functions deployed or required. Zero Admin SDK or service account credentials in client apps.
+
+2. **Mutual Binding & Rules Invariants**:
+   - `/institutions/{id}` contains `ownerInvitationCode: code`.
+   - `/invitations/{code}` contains `institutionId: id`.
+   - Security rules enforce `isEmailVerified()`, direct document ID lookup, matching `ownerEmail == request.auth.token.email`, `getAfter()` atomic transaction verification, and `affectedKeys().hasOnly()`.
+
+3. **Master T01 - T30 Security Test Matrix**:
+   - Executed full 30-scenario test suite (`scratch/test_t01_t30.js`) against live production ruleset `projects/educenter-saas-860c5/rulesets/9873691f-210c-49ee-9077-fcc88b43c3a7`.
+   - **30/30 PASSED (0 FAILED)** covering unverified email denial, wrong email denial, expired invitation denial, single-use enforcement, cross-tenant protection, and simultaneous claim prevention.
+
+4. **Preservation of Existing Systems**:
+   - Preserved existing SuperAdmin mobile app functionality (**7/7 tests PASS**).
+   - Preserved single-device Windows binding and license activation flows (**100% PASS**).
+
+---
+
 ## ADR-056: Phase 49.8.2 Production Firestore Security Rules Deployment & Real Device Permission Fix
 
 ### Context

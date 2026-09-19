@@ -1,23 +1,11 @@
 rules_version = '2';
 
 /*
- * Educational Center SaaS - Firestore Security Rules (Phase 14 Subscription Codes & Content Entitlements - Hardened)
+ * Educational Center SaaS - Firestore Security Rules (Phase 49.9.3 Master Security Specification - Zero-CLI Zero-Backend Owner Onboarding)
  * 1. Default Deny: All unmatched paths are strictly denied.
- * 2. Institution Document Rules (Phase 3): Immutable audit keys, tenant admin/superAdmin access.
- * 3. User Profile Rules (Phase 4): Whitelisted fields, zero physical delete, request.time check.
- * 4. Academic Core Rules (Phase 5): Server-only collections write DENIED; Student/Parent broad read DENIED.
- * 5. Student Domain Rules (Phase 6): Server-only collections write DENIED; Admin-Only Read.
- * 6. Attendance System Rules (Phase 7): Server-only collections write DENIED; Admin-Only Read.
- * 7. Finance System Rules (Phase 8): Server-only collections write DENIED; Admin-Only Read.
- * 8. Books & Inventory Rules (Phase 9): Server-only collections write DENIED; Admin-Only Read.
- * 9. Exams & Grades Rules (Phase 10): Server-only collections write DENIED; Admin-Only Read.
- * 10. Online Exams Runtime Rules (Phase 11): Direct client writes DENIED; Student read own attempt metadata.
- * 11. Educational Content Management Rules (Phase 12): Direct Client Writes DENIED.
- * 12. Cloudflare R2 Media Delivery Rules (Phase 13): Direct Client Writes DENIED.
- * 13. Subscription Codes & Content Entitlements Rules (Phase 14):
- *     - Direct Client Writes DENIED (allow create, update, delete: if false).
- *     - Tenant Admin / SuperAdmin Read Access.
- *     - Student Read Own Entitlements Allowed.
+ * 2. Institution Document Rules: Immutable audit keys, tenant admin/superAdmin access, atomic owner claiming with getAfter().
+ * 3. User Profile Rules: Whitelisted fields, zero physical delete, email_verified atomic creation.
+ * 4. Invitation Rules: Base62 CSPRNG unguessable code, direct lookup only, atomic single-use claim with getAfter().
  */
 
 service cloud.firestore {
@@ -28,6 +16,10 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    function isEmailVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
     function isSuperAdmin() {
       return isAuthenticated() && (
         (request.auth.token.keys().hasAny(['role']) && (request.auth.token.role == "superAdmin" || request.auth.token.role == "superadmin")) ||
@@ -35,20 +27,30 @@ service cloud.firestore {
       );
     }
 
+    function isTenantOwner(institutionId) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/institutions/$(institutionId))
+          && get(/databases/$(database)/documents/institutions/$(institutionId)).data.ownerId == request.auth.uid)
+        ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "institutionOwner"
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.institutionId == institutionId)
+      );
+    }
+
+    function isTenantAdmin(institutionId) {
+      return isTenantOwner(institutionId) || isSuperAdmin();
+    }
+
     function isTenantUser(institutionId) {
-      return isAuthenticated() && request.auth.token.keys().hasAny(['institutionId']) && request.auth.token.institutionId == institutionId;
+      return isTenantAdmin(institutionId);
     }
 
     function isSelf(userId, institutionId) {
       return isAuthenticated() && request.auth.uid == userId && (isTenantUser(institutionId) || isSuperAdmin());
     }
 
-    function isTenantAdmin(institutionId) {
-      return isTenantUser(institutionId) 
-        && request.auth.token.keys().hasAny(['role']) && request.auth.token.role in ["institutionOwner", "admin"];
-    }
-
-    // Phase 3 Institution Document Rules
+    // Phase 49.9.3 Institution Document Rules (Atomic Owner Claiming with getAfter)
     match /institutions/{institutionId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
       
@@ -58,24 +60,91 @@ service cloud.firestore {
         && request.resource.data.name is string && request.resource.data.name.size() > 0
         && request.resource.data.status in ['ACTIVE', 'SUSPENDED', 'ARCHIVED'];
 
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && (!request.resource.data.keys().hasAny(['updatedBy']) || request.resource.data.updatedBy == request.auth.uid)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'id', 'ownerId', 'createdBy', 'createdAt']);
+      // Allow Owner to claim center ONLY as part of valid atomic claim transaction
+      allow update: if isSuperAdmin() || (
+        isEmailVerified()
+        && resource.data.ownerId == "PENDING_OWNER"
+        && request.resource.data.ownerId == request.auth.uid
+        && resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.ownerEmail == request.auth.token.email
+        && resource.data.ownerInvitationCode == resource.data.ownerInvitationCode
+        && request.resource.data.ownerInvitationCode == resource.data.ownerInvitationCode
+        && exists(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode))
+        && get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.institutionId == institutionId
+        && get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.ownerEmail == request.auth.token.email
+        && get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.role == "institutionOwner"
+        && get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.status == "PENDING"
+        && request.time < get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.expiresAt
+        && getAfter(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.status == "ACCEPTED"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerId', 'updatedAt'])
+      );
 
       allow delete: if isSuperAdmin();
     }
 
-    // Phase 4 User Profile Rules
+    // Phase 49.9.3 Invitations Collection Rules
+    match /invitations/{invitationCode} {
+      // Direct lookup ONLY by invitationCode document ID matching ownerEmail
+      allow read: if isSuperAdmin() 
+        || (isEmailVerified() 
+            && request.auth.token.email == resource.data.ownerEmail 
+            && resource.data.status == "PENDING" 
+            && request.time < resource.data.expiresAt
+            && resource.data.invitationCode == invitationCode);
+      allow create: if isSuperAdmin();
+      
+      // Allow Owner to accept invitation ONLY as part of valid atomic claim transaction
+      allow update: if isSuperAdmin() || (
+        isEmailVerified()
+        && resource.data.invitationCode == invitationCode
+        && request.resource.data.invitationCode == invitationCode
+        && resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.ownerEmail == request.auth.token.email
+        && resource.data.role == "institutionOwner"
+        && request.resource.data.role == "institutionOwner"
+        && resource.data.status == "PENDING"
+        && request.resource.data.status == "ACCEPTED"
+        && request.time < resource.data.expiresAt
+        && getAfter(/databases/$(database)/documents/institutions/$(resource.data.institutionId)).data.ownerId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/institutions/$(resource.data.institutionId)).data.ownerEmail == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'acceptedBy', 'updatedAt'])
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // Phase 49.9.3 Global Users Collection Rules
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // Allow Owner to create own user document ONLY matching post-transaction institution owner state
+      allow create: if isSuperAdmin() || (
+        isEmailVerified()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == "institutionOwner"
+        && request.resource.data.status == "ACTIVE"
+        && exists(/databases/$(database)/documents/institutions/$(request.resource.data.institutionId))
+        && getAfter(/databases/$(database)/documents/institutions/$(request.resource.data.institutionId)).data.ownerId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/institutions/$(request.resource.data.institutionId)).data.ownerEmail == request.auth.token.email
+      );
+
+      // Owner CANNOT change role, institutionId, email, or uid
+      allow update: if isSuperAdmin() || (
+        isAuthenticated() && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'institutionId', 'institutionIds', 'uid', 'email'])
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // Phase 4 User Profile Rules (Subcollection)
     match /institutions/{institutionId}/users/{userId} {
       allow read: if isSelf(userId, institutionId) || isTenantAdmin(institutionId) || isSuperAdmin();
-      
-      allow create: if false;
-
+      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'updatedAt', 'updatedBy']);
-      
       allow delete: if false;
     }
 
@@ -429,27 +498,6 @@ service cloud.firestore {
     match /deviceBindings/{bindingId} {
       allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
       allow create, update, delete: if isSuperAdmin();
-    }
-
-    // Phase 46 Owner Invitations & Global User Identity Rules
-    match /institutions/{institutionId}/invitations/{invitationId} {
-      allow read: if isSuperAdmin() 
-        || (isAuthenticated() && request.auth.token.email == resource.data.email && resource.data.status == 'PENDING' && request.time < resource.data.expiresAt);
-      allow create, update, delete: if isSuperAdmin();
-    }
-
-    match /invitations/{invitationId} {
-      allow read: if isSuperAdmin() 
-        || (isAuthenticated() && request.auth.token.email == resource.data.email && resource.data.status == 'PENDING' && request.time < resource.data.expiresAt);
-      allow create, update, delete: if isSuperAdmin();
-    }
-
-    match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
-      allow create: if isSuperAdmin();
-      allow update: if isSuperAdmin() 
-        || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'institutionId', 'institutionIds']));
-      allow delete: if isSuperAdmin();
     }
   }
 }

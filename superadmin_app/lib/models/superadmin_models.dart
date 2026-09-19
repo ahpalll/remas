@@ -32,6 +32,8 @@ class InstitutionRecord {
   final int studentCount;
   final int teacherCount;
 
+  final String ownerInvitationCode;
+
   InstitutionRecord({
     required this.institutionId,
     required this.name,
@@ -43,6 +45,7 @@ class InstitutionRecord {
     this.branding = const {},
     required this.ownerId,
     required this.ownerEmail,
+    this.ownerInvitationCode = '',
     this.createdBy = '',
     required this.createdAt,
     this.updatedAt = '',
@@ -66,6 +69,7 @@ class InstitutionRecord {
       branding: Map<String, dynamic>.from(json['branding'] ?? {}),
       ownerId: json['ownerId'] ?? '',
       ownerEmail: json['ownerEmail'] ?? '',
+      ownerInvitationCode: json['ownerInvitationCode'] ?? '',
       createdBy: json['createdBy'] ?? '',
       createdAt: json['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: json['updatedAt'] ?? '',
@@ -86,6 +90,7 @@ class InstitutionRecord {
       'branding': branding,
       'ownerId': ownerId,
       'ownerEmail': ownerEmail,
+      'ownerInvitationCode': ownerInvitationCode,
       'createdBy': createdBy,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
@@ -200,8 +205,10 @@ class DeviceBindingRecord {
 
 class OwnerInvitationRecord {
   final String invitationId;
+  final String invitationCode;
   final String institutionId;
   final String email;
+  final String ownerEmail;
   final String phone;
   final String role; // institutionOwner
   final String status; // PENDING, ACCEPTED, EXPIRED, REVOKED
@@ -210,8 +217,10 @@ class OwnerInvitationRecord {
 
   OwnerInvitationRecord({
     required this.invitationId,
+    this.invitationCode = '',
     required this.institutionId,
     required this.email,
+    this.ownerEmail = '',
     required this.phone,
     this.role = 'institutionOwner',
     required this.status,
@@ -221,9 +230,11 @@ class OwnerInvitationRecord {
 
   factory OwnerInvitationRecord.fromFirestore(Map<String, dynamic> json, String id) {
     return OwnerInvitationRecord(
-      invitationId: json['invitationId'] ?? id,
+      invitationId: json['invitationId'] ?? json['invitationCode'] ?? id,
+      invitationCode: json['invitationCode'] ?? json['invitationId'] ?? id,
       institutionId: json['institutionId'] ?? '',
-      email: json['email'] ?? '',
+      email: json['ownerEmail'] ?? json['email'] ?? '',
+      ownerEmail: json['ownerEmail'] ?? json['email'] ?? '',
       phone: json['phone'] ?? '',
       role: json['role'] ?? 'institutionOwner',
       status: json['status'] ?? 'PENDING',
@@ -234,9 +245,11 @@ class OwnerInvitationRecord {
 
   Map<String, dynamic> toFirestore() {
     return {
-      'invitationId': invitationId,
+      'invitationId': invitationCode.isNotEmpty ? invitationCode : invitationId,
+      'invitationCode': invitationCode.isNotEmpty ? invitationCode : invitationId,
       'institutionId': institutionId,
-      'email': email,
+      'email': ownerEmail.isNotEmpty ? ownerEmail : email,
+      'ownerEmail': ownerEmail.isNotEmpty ? ownerEmail : email,
       'phone': phone,
       'role': role,
       'status': status,

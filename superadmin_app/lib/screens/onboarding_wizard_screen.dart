@@ -48,20 +48,25 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Future<void> _submitWizard() async {
     setState(() => _loading = true);
     try {
-      // 1. Create Institution
+      final invCode = SuperAdminService.generateCsprngInvitationCode();
+
+      // 1. Create Institution with ownerInvitationCode
       final inst = await SuperAdminService.createInstitution(
         name: _centerNameCtrl.text,
         type: _centerType,
         phone: _centerPhoneCtrl.text,
         email: _centerEmailCtrl.text,
+        ownerEmail: _ownerEmailCtrl.text,
+        ownerInvitationCode: invCode,
         address: _centerAddressCtrl.text,
       );
 
-      // 2. Create Owner Invitation
+      // 2. Create Owner Invitation with invitationCode
       final inv = await SuperAdminService.createOwnerInvitation(
         institutionId: inst.institutionId,
         email: _ownerEmailCtrl.text,
         phone: _ownerPhoneCtrl.text,
+        invitationCode: invCode,
       );
 
       // 3. Create License
@@ -139,7 +144,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           controller: _centerEmailCtrl,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            labelText: 'البريد الإلكتروني للمركز',
+            labelText: 'البريد الإلكتروني الرسمي للمركز',
+            helperText: 'يستخدم كبيانات اتصال ومراسلات رسمية للمركز، وليس بالضرورة بريد تسجيل دخول المالك.',
+            helperStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
             labelStyle: TextStyle(color: Color(0xFF94A3B8)),
             filled: true,
             fillColor: Color(0xFF1E293B),
@@ -172,7 +179,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           controller: _ownerEmailCtrl,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            labelText: 'البريد الإلكتروني للمالك *',
+            labelText: 'البريد الإلكتروني لمالك المركز *',
+            helperText: 'سيُستخدم هذا البريد لاحقاً كحساب تسجيل الدخول الرسمي لمالك المركز في تطبيق Center Desktop.',
+            helperStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
             labelStyle: TextStyle(color: Color(0xFF94A3B8)),
             filled: true,
             fillColor: Color(0xFF1E293B),
@@ -205,7 +214,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'سيتم إنشاء دعوة معلقة (PENDING) للمالك ربطاً ببيانات الاعتماد. تفعيل الحساب يتطلب تشغيل بروتوكول التفعيل الآمن.',
+                  'سيتم إنشاء كود دعوة مشفر وتأسيس المركز تلقائياً (Zero-CLI). يدخل المالك كود الدعوة في تطبيق Center Desktop للتسجيل والتفعيل المباشر.',
                   style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12),
                 ),
               ),
@@ -294,7 +303,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Widget _buildStep5Complete() {
-    final cmd = 'node scripts/bootstrap_center_owner.js --institutionId="${_createdInstitution?.institutionId}" --email="${_createdInvitation?.email}"';
+    final invCode = _createdInvitation?.invitationCode ?? _createdInstitution?.ownerInvitationCode ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -311,7 +320,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'CENTER CREATED — تم إنشاء التهيئة بنجاح في Firestore',
+                  'CENTER CREATED — تم إنشاء المركز وحزمة الدعوة بنجاح (Zero-CLI)',
                   style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -332,8 +341,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               const SizedBox(height: 4),
               SelectableText('Institution ID: ${_createdInstitution?.institutionId}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('بريد المالك: ${_createdInvitation?.email}', style: const TextStyle(color: Colors.white, fontSize: 14)),
-              Text('حالة دعوة المالك: PENDING_OWNER', style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
+              Text('بريد المالك: ${_createdInvitation?.ownerEmail}', style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text('حالة دعوة المالك: PENDING', style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('معرف الترخيص: ${_createdLicense?.licenseId}', style: const TextStyle(color: Colors.white, fontSize: 14)),
               Text('كود الترخيص: ${_createdLicense?.licenseCode}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13)),
@@ -343,27 +352,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        const Text('أمر تفعيل حساب المالك (Operator Procedure):', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        const Text('🔑 كود دعوة المالك لتسجيل الدخول (Owner Invitation Code):', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.black,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: const Color(0xFF38BDF8)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SelectableText(cmd, style: const TextStyle(color: Color(0xFF4ADE80), fontFamily: 'monospace', fontSize: 12)),
+              SelectableText(invCode, style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: cmd));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ أمر التفعيل للحافظة')));
+                  Clipboard.setData(ClipboardData(text: invCode));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ كود الدعوة للحافظة')));
                 },
                 icon: const Icon(Icons.copy, size: 16),
-                label: const Text('نسخ الأمر'),
+                label: const Text('نسخ كود الدعوة'),
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
               ),
             ],
