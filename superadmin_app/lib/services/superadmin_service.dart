@@ -210,8 +210,6 @@ class SuperAdminService {
 
     // Save directly to top-level invitations collection with doc ID = invitationCode
     await _db.collection('invitations').doc(code).set(invRecord.toFirestore());
-    // Also mirror to subcollection if needed
-    await _db.collection('institutions').doc(institutionId).collection('invitations').doc(code).set(invRecord.toFirestore());
 
     return invRecord;
   }
