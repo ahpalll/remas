@@ -1,6 +1,6 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.47.0",
+  "version": "1.0.0-release.49.10",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
@@ -28,11 +28,14 @@
   "build": {
     "appId": "com.remas.centerdesktop",
     "productName": "remas-center-desktop",
+    "asar": false,
     "directories": {
-      "output": "dist"
+      "output": "build_output"
     },
     "win": {
       "target": "nsis",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
       "artifactName": "${productName} Setup ${version}.${ext}"
     },
     "nsis": {

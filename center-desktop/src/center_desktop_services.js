@@ -59,12 +59,12 @@ function loadSettingsFromDisk() {
 
 // Standard Firebase Web Client Config
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyA_placeholder_key',
+  apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'educenter-saas-860c5.firebaseapp.com',
   projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT || 'educenter-saas-860c5',
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'educenter-saas-860c5.appspot.com',
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '1234567890',
-  appId: process.env.FIREBASE_APP_ID || '1:1234567890:web:abcdef123456'
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'educenter-saas-860c5.firebasestorage.app',
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '522787600693',
+  appId: process.env.FIREBASE_APP_ID || '1:522787600693:web:2416c6c770fb98785f747c'
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

@@ -1,3 +1,33 @@
+## ADR-058: Phase 49.10 Center Windows Desktop App Production Configuration & End-to-End Real Runtime Verification
+
+### Context
+Center Windows Desktop application (`center-desktop`) required complete production alignment with live Firebase project `educenter-saas-860c5`, real authentication configuration, first-login password update workflows, single-device hardware binding lifecycle compliance (Phase 40), multi-tenant data isolation, and standalone Windows desktop executable packaging.
+
+### Decision
+1. **Real Production Options Integration**:
+   - Replaced placeholder Firebase configuration in `center-desktop/src/center_desktop_services.js` with real production credentials for `educenter-saas-860c5` (API Key: `AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY`).
+   - Verified no HTTP `[ API key not valid ]` errors occur during real REST authentication calls against `identitytoolkit.googleapis.com`.
+
+2. **Real End-to-End Runtime Execution & Pass Metrics**:
+   - Provisioned fresh test institution `inst_p4910_*` and owner account `owner.p4910.*@remas.edu` with initial `mustChangePassword == true`.
+   - Verified Owner initial login with temporary password -> **PASS (HTTP 200)**.
+   - Verified user profile lookup and resolution of `institutionId` -> **PASS**.
+   - Verified active license status lookup (`/licenses/{licId}`) -> **PASS**.
+   - Verified hardware fingerprint generated and saved to device binding (`deviceBindingStatus: "BOUND"`) -> **PASS**.
+   - Executed mandatory first-login password update via Firebase Auth API and updated profile (`mustChangePassword: false`) -> **PASS**.
+   - Executed application restart and logged in with NEW password -> **PASS**.
+   - Executed login attempt with OLD temporary password -> **REJECTED (HTTP 400)**.
+   - Verified multi-tenant isolation (cross-tenant collection read rejected with HTTP 403) -> **PASS**.
+   - Verified zero Admin SDK or private service account credentials in desktop codebase -> **PASS**.
+
+3. **Standalone Windows Executable Packaging**:
+   - Configured `center-desktop/package.json` with `version: "1.0.0-release.49.10"`, `versionCode: "4910"`, and `asar: false` to eliminate Windows file locking conflicts.
+   - Built standalone Windows executable (`center-desktop/build_output/win-unpacked/remas-center-desktop.exe`).
+   - File size: **168.84 MB** (177,038,336 bytes), SHA256: `bc1afa588af303fce744a2965036765136b26bc5e9dacab6a35188973463ea7f`.
+   - Maintained rule: **USER_VERIFIED = 0 (NONE)** until product owner manual testing on real Windows environment.
+
+---
+
 ## ADR-057: Phase 49.9 Zero-CLI Zero-Backend Owner Onboarding Architecture & Master Security Specification
 
 ### Context

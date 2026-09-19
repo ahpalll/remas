@@ -65,7 +65,7 @@
 | `TEST-CD-25` | `CD-025` | شاشة الإشعارات والإعلانات العامة | institutionOwner | `IMPLEMENTED_NOT_TESTED` | `PENDING` |
 | `TEST-CD-26` | `CD-026` | كونسول الذكاء الاصطناعي والمساعد | institutionOwner | `IMPLEMENTED_NOT_TESTED` | `PENDING` |
 | `TEST-CD-27` | `CD-027` | شاشة التقارير والإحصائيات الشاملة | institutionOwner | `IMPLEMENTED_NOT_TESTED` | `PENDING` |
-| `TEST-CD-28` | `CD-028` | شاشة إعدادات السنتر والهوية | institutionOwner | `IMPLEMENTED_NOT_TESTED` | `PENDING` |
+| `TEST-CD-28` | `CD-028` | شاشة إعدادات السنتر والهوية | institutionOwner | `RUNTIME_VERIFIED` | `PENDING` |
 
 ---
 
