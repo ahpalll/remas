@@ -1,11 +1,12 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.49.10",
+  "version": "1.0.0-release.50.4.0",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "npx electron-builder --win nsis"
+    "check:renderer": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/preload.js && node --check main.js",
+    "build:win": "npm run check:renderer && npx electron-builder --win nsis"
   },
   "keywords": [
     "remas",
@@ -30,8 +31,14 @@
     "productName": "remas-center-desktop",
     "asar": false,
     "directories": {
-      "output": "build_output"
+      "output": "release_50_4_0"
     },
+    "files": [
+      "main.js",
+      "index.html",
+      "src/**/*",
+      "package.json"
+    ],
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false,

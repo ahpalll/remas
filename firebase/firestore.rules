@@ -154,14 +154,31 @@ service cloud.firestore {
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
+    // Batch A (Phase 50.4): groups — IDs are canonical; names are display-only.
+    // Rules enforce tenant isolation + institutionId immutability + basic shape.
+    // Capacity is enforced authoritatively by the service transaction; rules
+    // cannot atomically validate capacity (documented limitation).
     match /institutions/{institutionId}/groups/{groupId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.maxCapacity is int && request.resource.data.maxCapacity > 0
+        && request.resource.data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.maxCapacity is int && request.resource.data.maxCapacity > 0;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/academicYears/{yearId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/terms/{termId} {
@@ -182,32 +199,96 @@ service cloud.firestore {
     // Phase 5 Client-Mutable Collections
     match /institutions/{institutionId}/subjects/{subjectId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/stages/{stageId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/rooms/{roomId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
-    }
-
-    match /institutions/{institutionId}/teachers/{teacherId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authUid);
-      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId;
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
-        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid);
+        && request.resource.data.institutionId == resource.data.institutionId;
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    // Phase 6 Server-Only Collections
+    match /institutions/{institutionId}/teachers/{teacherId} {
+      allow read: if isTenantUser(institutionId) || isSuperAdmin()
+        || (isAuthenticated() && request.auth.uid == resource.data.authUid)
+        || (isAuthenticated() && request.auth.token.keys().hasAny(['phone_number']) && request.auth.token.phone_number == resource.data.normalizedPhone && resource.data.status == 'ACTIVE' && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null));
+      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // Tenant admin update (existing) + narrow ONE-TIME SELF-LINK for Phone OTP first login
+      allow update: if (
+        (isTenantAdmin(institutionId) || isSuperAdmin())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
+        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid)
+      ) || (
+        // Phase 50.2.2 Secure Self-Link: teacher may set authUid exactly once if phone matches and status ACTIVE
+        isAuthenticated()
+        && resource.data.status == 'ACTIVE'
+        && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null)
+        && request.resource.data.authUid == request.auth.uid
+        && request.auth.token.keys().hasAny(['phone_number'])
+        && request.auth.token.phone_number == resource.data.normalizedPhone
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authUid', 'updatedAt', 'updatedBy'])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.teacherCode == resource.data.teacherCode
+        && request.resource.data.status == resource.data.status
+      );
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
+    match /institutions/{institutionId}/teacherSubjects/{assignmentId} {
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.teacherId is string
+        && request.resource.data.subjectId is string;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
+    match /institutions/{institutionId}/teacherStages/{assignmentId} {
+      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.teacherId is string
+        && request.resource.data.stageId is string;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
+    // Batch A (Phase 50.4): enrollments — deterministic id studentId__groupId.
+    // Service transaction is authoritative for capacity/duplicate; rules enforce
+    // tenant isolation + ownership immutability as defense-in-depth.
     match /institutions/{institutionId}/enrollments/{enrollmentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.studentId is string
+        && request.resource.data.groupId is string
+        && request.resource.data.status in ['ENROLLED'];
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.groupId == resource.data.groupId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/guardians/{guardianId} {
@@ -230,15 +311,19 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE');
     }
 
-    // Phase 6 Operational Collection — Students
+    // Phase 6 Operational Collection — Students (Batch A hardened: no weakening)
     match /institutions/{institutionId}/students/{studentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin() 
         || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE')
         || (isAuthenticated() && (resource.data.parentUid == request.auth.uid || (resource.data.keys().hasAny(['guardianUids']) && resource.data.guardianUids.hasAny([request.auth.uid]))));
-      allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.status in ['ACTIVE', 'SUSPENDED', 'WITHDRAWN', 'GRADUATED', 'ARCHIVED', 'INACTIVE'];
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
-        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid);
+        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid)
+        && request.resource.data.institutionId == resource.data.institutionId;
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 

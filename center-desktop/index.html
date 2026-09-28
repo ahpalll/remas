@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>REMAS Educational Center SaaS — Windows Desktop App (v1.0.0-release.49.10)</title>
+  <title>REMAS Educational Center SaaS — Windows Desktop App (v1.0.0-release.50.4.0)</title>
   <style>
     :root {
       --bg-primary: #0f172a;
@@ -18,7 +19,11 @@
       --warning: #f59e0b;
       --border-color: #334155;
     }
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       padding: 0;
@@ -30,6 +35,7 @@
       height: 100vh;
       overflow: hidden;
     }
+
     header {
       background: var(--bg-secondary);
       padding: 0.75rem 1.5rem;
@@ -39,9 +45,25 @@
       border-bottom: 1px solid #334155;
       z-index: 10;
     }
-    .brand { display: flex; align-items: center; gap: 0.75rem; }
-    .brand h1 { margin: 0; font-size: 1.2rem; color: #38bdf8; }
-    .header-badges { display: flex; align-items: center; gap: 0.75rem; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      color: #38bdf8;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
     .badge {
       background: #14532d;
       color: #86efac;
@@ -50,12 +72,33 @@
       font-size: 0.75rem;
       font-weight: bold;
     }
-    .badge.revoked { background: #7f1d1d; color: #fca5a5; }
-    .badge.warning { background: #7c2d12; color: #fdba74; }
-    .badge.net-online { background: #064e3b; color: #34d399; }
-    .badge.net-offline { background: #451a03; color: #fbbf24; }
-    
-    .app-layout { flex: 1; display: flex; overflow: hidden; }
+
+    .badge.revoked {
+      background: #7f1d1d;
+      color: #fca5a5;
+    }
+
+    .badge.warning {
+      background: #7c2d12;
+      color: #fdba74;
+    }
+
+    .badge.net-online {
+      background: #064e3b;
+      color: #34d399;
+    }
+
+    .badge.net-offline {
+      background: #451a03;
+      color: #fbbf24;
+    }
+
+    .app-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
     sidebar {
       width: 270px;
       background: var(--bg-secondary);
@@ -64,6 +107,7 @@
       flex-direction: column;
       overflow-y: auto;
     }
+
     .nav-section-title {
       padding: 0.75rem 1rem 0.25rem 1rem;
       font-size: 0.75rem;
@@ -71,6 +115,7 @@
       color: #64748b;
       text-transform: uppercase;
     }
+
     .nav-list {
       list-style: none;
       margin: 0;
@@ -79,6 +124,7 @@
       flex-direction: column;
       gap: 0.25rem;
     }
+
     .nav-item {
       display: flex;
       align-items: center;
@@ -91,10 +137,25 @@
       font-size: 0.88rem;
       transition: all 0.15s ease;
     }
-    .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-main); }
-    .nav-item.active { background: var(--accent); color: #ffffff; font-weight: bold; }
-    
-    .content-area { flex: 1; padding: 1.5rem; overflow-y: auto; background: var(--bg-primary); }
+
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    .nav-item.active {
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    .content-area {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      background: var(--bg-primary);
+    }
+
     .view-title {
       font-size: 1.4rem;
       font-weight: bold;
@@ -105,21 +166,33 @@
       justify-content: space-between;
       align-items: center;
     }
+
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       margin-bottom: 1.5rem;
     }
+
     .stat-card {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 1.25rem;
     }
-    .stat-card .label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem; }
-    .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--text-main); }
-    
+
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-card .value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--text-main);
+    }
+
     .card {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
@@ -127,6 +200,7 @@
       padding: 1.25rem;
       margin-bottom: 1.25rem;
     }
+
     .card-title {
       font-size: 1.1rem;
       font-weight: bold;
@@ -136,6 +210,7 @@
       border-bottom: 1px solid #334155;
       padding-bottom: 0.5rem;
     }
+
     .btn {
       background: var(--accent);
       color: #fff;
@@ -149,12 +224,27 @@
       align-items: center;
       gap: 0.4rem;
     }
-    .btn:hover { background: var(--accent-hover); }
-    .btn-success { background: var(--success); }
-    .btn-danger { background: var(--danger); }
-    .btn-warning { background: var(--warning); color: #000; }
 
-    input, select, textarea {
+    .btn:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-success {
+      background: var(--success);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      color: #000;
+    }
+
+    input,
+    select,
+    textarea {
       background: #0f172a;
       border: 1px solid #475569;
       color: #f8fafc;
@@ -164,12 +254,35 @@
       width: 100%;
       box-sizing: border-box;
     }
-    input:focus, select:focus { outline: none; border-color: #38bdf8; }
 
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    .data-table th, .data-table td { padding: 0.75rem 1rem; text-align: right; border-bottom: 1px solid #334155; }
-    .data-table th { background: #090d16; color: #94a3b8; font-weight: bold; }
-    .data-table tr:hover { background: rgba(255, 255, 255, 0.02); }
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 0.75rem 1rem;
+      text-align: right;
+      border-bottom: 1px solid #334155;
+    }
+
+    .data-table th {
+      background: #090d16;
+      color: #94a3b8;
+      font-weight: bold;
+    }
+
+    .data-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
 
     .code-box {
       font-family: monospace;
@@ -192,6 +305,7 @@
       align-items: center;
       z-index: 100;
     }
+
     .modal-card {
       background: #1e293b;
       border: 1px solid #475569;
@@ -201,6 +315,7 @@
       padding: 1.75rem;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     }
+
     .modal-header {
       font-size: 1.2rem;
       font-weight: bold;
@@ -209,8 +324,17 @@
       border-bottom: 1px solid #334155;
       padding-bottom: 0.6rem;
     }
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.4rem; }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 0.4rem;
+    }
 
     .lock-screen {
       position: fixed;
@@ -223,6 +347,7 @@
       justify-content: center;
       z-index: 999;
     }
+
     .toast-alert {
       position: fixed;
       bottom: 20px;
@@ -234,21 +359,37 @@
       border: 1px solid #22c55e;
       font-weight: bold;
       z-index: 200;
-      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Fix input focus / drag region — ensure inputs are always interactive */
+    input, select, textarea, button {
+      -webkit-app-region: no-drag;
+      pointer-events: auto;
+    }
+    .lock-screen, .modal-overlay {
+      pointer-events: auto;
+    }
+    .lock-screen[style*="display: none"], .modal-overlay[style*="display: none"] {
+      pointer-events: none;
     }
   </style>
 </head>
+
 <body>
 
   <header>
     <div class="brand">
-      <h1>REMAS EDU | رِماس للتقنية التعليمية</h1>
-      <span style="color:#64748b; font-size:0.85rem;">| إدارة أذكى.. تعليم أفضل (v1.0.0-release.47.0)</span>
+      <h1>REMAS EDU | رماس للتقنية التعليمية</h1>
+      <span style="color:#64748b; font-size:0.85rem;">| إدارة أذكى.. تعليم أفضل (v1.0.0-release.50.4.0)</span>
     </div>
     <div class="header-badges">
-      <span id="userEmailBadge" class="badge" style="background:#1e293b; color:#f8fafc; border:1px solid #3b82f6;">مستخدم غير مسجل</span>
-      <span id="userRoleBadge" class="badge" style="background:#0f172a; color:#38bdf8; border:1px solid #38bdf8;">غير موثق</span>
-      <button id="btnLogout" class="btn btn-warning" style="padding:0.25rem 0.75rem; font-size:0.8rem; display:none;" onclick="logoutAction()">تسجيل الخروج 🚪</button>
+      <span id="userEmailBadge" class="badge"
+        style="background:#1e293b; color:#f8fafc; border:1px solid #3b82f6;">مستخدم غير مسجل</span>
+      <span id="userRoleBadge" class="badge" style="background:#0f172a; color:#38bdf8; border:1px solid #38bdf8;">غير
+        موثق</span>
+      <button id="btnLogout" class="btn btn-warning" style="padding:0.25rem 0.75rem; font-size:0.8rem; display:none;"
+        onclick="logoutAction()">تسجيل الخروج 🚪</button>
       <span id="deviceBindingBadge" class="badge">جهاز مفعل ومربوط 🔒</span>
       <span id="networkBadge" class="badge net-online">ONLINE 🟢</span>
     </div>
@@ -271,34 +412,73 @@
   <div id="toastContainer"></div>
 
   <!-- Real Firebase Authentication Overlay (Mandatory for Fresh Launch) -->
-  <div id="loginScreenOverlay" class="lock-screen" style="display: flex; background: rgba(15, 23, 42, 0.98); z-index: 998;">
-    <div class="modal-card" style="width: 440px; background: #0f172a; border: 2px solid #0284c7; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+  <div id="loginScreenOverlay" class="lock-screen"
+    style="display: flex; background: rgba(15, 23, 42, 0.98); z-index: 998;">
+    <div class="modal-card"
+      style="width: 440px; background: #0f172a; border: 2px solid #0284c7; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
       <div style="text-align: center; margin-bottom: 1.5rem;">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔐</div>
         <h2 style="color: #f8fafc; margin: 0 0 0.4rem 0; font-size: 1.4rem;">تسجيل الدخول — منصة رِماس للسنتر</h2>
-        <p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">أدخل بيانات حسابك الموثق على المنظمة للوصول إلى لوحة الإدارة</p>
+        <p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">أدخل بيانات حسابك الموثق على المنظمة للوصول إلى لوحة
+          الإدارة</p>
       </div>
 
-      <div id="loginAlert" style="display: none; background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; text-align: center;"></div>
+      <div id="loginAlert"
+        style="display: none; background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; text-align: center;">
+      </div>
 
       <form id="loginForm" onsubmit="event.preventDefault(); handleLoginSubmit();">
         <div class="form-group">
           <label style="color: #cbd5e1; font-weight: 600;">البريد الإلكتروني (Email):</label>
-          <input type="email" id="loginEmail" placeholder="admin@center.com" required style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
+          <input type="email" id="loginEmail" placeholder="admin@center.com" required
+            style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
         </div>
 
         <div class="form-group" style="margin-bottom: 1.5rem;">
           <label style="color: #cbd5e1; font-weight: 600;">كلمة المرور (Password):</label>
-          <input type="password" id="loginPassword" placeholder="••••••••" required style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
+          <input type="password" id="loginPassword" placeholder="••••••••" required
+            style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
         </div>
 
-        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: bold; background: #0284c7; border: none; border-radius: 6px; cursor: pointer; color: white;">
+        <button type="submit" id="btnLoginSubmit" class="btn btn-primary"
+          style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: bold; background: #0284c7; border: none; border-radius: 6px; cursor: pointer; color: white;">
           تسجيل الدخول الدخول الآن 🔓
         </button>
       </form>
-      <div id="loginLoadingSpinner" style="display: none; text-align: center; padding: 1rem; color: #38bdf8; font-weight: bold;">
+      <div id="loginLoadingSpinner"
+        style="display: none; text-align: center; padding: 1rem; color: #38bdf8; font-weight: bold;">
         جاري التحقق من الهوية والصلاحيات عبر Firebase Auth... ⏳
       </div>
+    </div>
+  </div>
+
+  <!-- Mandatory First-Login Password Change Overlay (Phase 50.1.3 Security) -->
+  <div id="mandatoryPasswordOverlay" class="lock-screen" style="display: none; background: rgba(15, 23, 42, 0.98); z-index: 997;">
+    <div class="modal-card" style="width: 460px; background: #0f172a; border: 2px solid #f59e0b; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);">
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">🔑</div>
+        <h2 style="color: #fbbf24; margin: 0 0 0.3rem 0; font-size: 1.3rem;">يجب تغيير كلمة المرور</h2>
+        <p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">حسابك يستخدم كلمة مرور مؤقتة. يجب تعيين كلمة مرور جديدة قبل المتابعة للوحة التحكم.</p>
+      </div>
+      <div id="pwdChangeAlert" style="display: none; background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 6px; padding: 0.65rem; font-size: 0.85rem; margin-bottom: 1rem; text-align: center;"></div>
+      <div id="pwdChangeSuccess" style="display: none; background: #14532d; color: #86efac; border: 1px solid #22c55e; border-radius: 6px; padding: 0.65rem; font-size: 0.85rem; margin-bottom: 1rem; text-align: center;"></div>
+      <form id="mandatoryPasswordForm" onsubmit="event.preventDefault(); handleMandatoryPasswordChange();">
+        <div class="form-group">
+          <label style="color: #cbd5e1; font-weight: 600;">كلمة المرور الحالية (المؤقتة) *</label>
+          <input type="password" id="currentPasswordInput" placeholder="أدخل كلمة المرور المؤقتة" required style="width: 100%; padding: 0.7rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
+        </div>
+        <div class="form-group">
+          <label style="color: #cbd5e1; font-weight: 600;">كلمة المرور الجديدة * (6 أحرف على الأقل)</label>
+          <input type="password" id="newPasswordInput" placeholder="أدخل كلمة المرور الجديدة" required style="width: 100%; padding: 0.7rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label style="color: #cbd5e1; font-weight: 600;">تأكيد كلمة المرور الجديدة *</label>
+          <input type="password" id="confirmPasswordInput" placeholder="أعد إدخال كلمة المرور الجديدة" required style="width: 100%; padding: 0.7rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.95rem;">
+        </div>
+        <button type="submit" id="btnChangePassword" class="btn" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: bold; background: #f59e0b; color: #000; border: none; border-radius: 6px; cursor: pointer;">تغيير كلمة المرور 🔐</button>
+      </form>
+      <div id="pwdChangeSpinner" style="display: none; text-align: center; padding: 1rem; color: #fbbf24; font-weight: bold;">جاري تحديث كلمة المرور عبر Firebase Auth... ⏳</div>
+      <p style="color: #64748b; font-size: 0.75rem; text-align: center; margin-top: 0.8rem;">لن تتمكن من الوصول للوحة التحكم حتى يتم تغيير كلمة المرور بنجاح. Firebase Authentication هو مصدر الحقيقة الوحيد لكلمة المرور.</p>
     </div>
   </div>
 
@@ -313,4 +493,5 @@
 
   <script src="src/desktop_app.js"></script>
 </body>
+
 </html>

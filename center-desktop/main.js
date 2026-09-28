@@ -1,7 +1,7 @@
 /**
  * REMAS Educational Center SaaS — Windows Desktop Application Main Process
  * Target Project: educenter-saas
- * Version: 1.0.0-release.49.10
+ * Version: 1.0.0-release.50.4.0 — Batch A Students+Groups+Enrollment
  */
 
 const { app, BrowserWindow, ipcMain } = require('electron');
@@ -27,7 +27,7 @@ function createWindow() {
     height: 768,
     minWidth: 1100,
     minHeight: 720,
-    title: 'REMAS Educational Center SaaS — Windows Desktop App (v1.0.0-release.49.10)',
+    title: 'REMAS Educational Center SaaS — Windows Desktop App (v1.0.0-release.50.4.0)',
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,

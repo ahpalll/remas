@@ -42,6 +42,8 @@
     "test:phase_38_2": "node --test firebase/phase_38_2_desktop_rework.test.js",
     "test:phase_38_3": "node --test firebase/phase_38_3_auth_recovery.test.js",
     "test:phase_39": "node --test firebase/phase_39_branding.test.js",
+    "test:phase_50_1": "node --test firebase/phase_50_1_academic_setup.test.js",
+    "test:phase_50_4": "node --test firebase/phase_50_4_batch_a.test.js",
     "verify:release": "node firebase/deploy_runner.js verify-release",
     "verify:production": "node firebase/deploy_runner.js verify-prod",
     "deploy:staging": "node firebase/deploy_runner.js deploy-staging",
