@@ -1,12 +1,12 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.50.4.0",
+  "version": "1.0.0-release.52.3.0",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "check:renderer": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/preload.js && node --check main.js",
-    "build:win": "npm run check:renderer && npx electron-builder --win nsis"
+    "build:win": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/preload.js && node --check main.js && node scripts/prebuild_clean.js && npx --yes electron-builder --win nsis"
   },
   "keywords": [
     "remas",
@@ -20,6 +20,7 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "bwip-js": "4.11.4",
     "firebase": "^10.14.1"
   },
   "devDependencies": {
@@ -31,17 +32,19 @@
     "productName": "remas-center-desktop",
     "asar": false,
     "directories": {
-      "output": "release_50_4_0"
+      "output": "release_center_pdf_pages"
     },
     "files": [
       "main.js",
       "index.html",
       "src/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false,
+      "icon": "assets/icon.ico",
+      "signExecutable": false,
       "verifyUpdateCodeSignature": false,
       "artifactName": "${productName} Setup ${version}.${ext}"
     },

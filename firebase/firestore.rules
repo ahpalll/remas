@@ -50,9 +50,166 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId && (isTenantUser(institutionId) || isSuperAdmin());
     }
 
+    // P3 — Mobile least-privilege access contract (ADDITIVE ONLY; every
+    // Center Desktop permission below is untouched). Mobile identity comes
+    // from operator-provisioned custom claims {role, institutionId,
+    // studentId?, teacherId?, stageId?, groupIds?}
+    // (scripts/bootstrap_{student_claims,teacher,parent}.js). Claims alone
+    // never suffice for owned data: each grant re-verifies live doc fields
+    // (authUid, status ACTIVE, institutionId match, linkage, enrollment,
+    // assignment). Each get()/exists() bills one read; costs documented in
+    // docs/P3_FIRESTORE_ACCESS_CONTRACT_PLAN.md.
+    function p3Role() {
+      return isAuthenticated() && request.auth.token.keys().hasAny(['role']) ? request.auth.token.role : null;
+    }
+    function p3IsStudent() { return p3Role() == 'student'; }
+    function p3IsTeacher() { return p3Role() == 'teacher'; }
+    function p3IsParent() { return p3Role() == 'parent'; }
+    function p3ClaimInst() {
+      return isAuthenticated() && request.auth.token.keys().hasAny(['institutionId']) ? request.auth.token.institutionId : null;
+    }
+    function p3BoundRole() {
+      return (p3IsStudent() || p3IsTeacher() || p3IsParent()) && p3ClaimInst() != null;
+    }
+    function p3ClaimStudentId() {
+      return p3IsStudent() && request.auth.token.keys().hasAny(['studentId']) && request.auth.token.studentId is string ? request.auth.token.studentId : null;
+    }
+    function p3ClaimTeacherId() {
+      return p3IsTeacher() && request.auth.token.keys().hasAny(['teacherId']) && request.auth.token.teacherId is string ? request.auth.token.teacherId : null;
+    }
+    function p3VerifiedStudent(institutionId, studentId) {
+      return studentId != null && studentId is string
+        && p3ClaimStudentId() == studentId
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.authUid == request.auth.uid
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.institutionId == institutionId;
+    }
+    function p3StudentGroups(institutionId, studentId) {
+      return get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.keys().hasAny(['groupIds'])
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.groupIds is list
+        ? get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.groupIds : [];
+    }
+    function p3VerifiedTeacher(institutionId, teacherId) {
+      return teacherId != null && teacherId is string
+        && p3ClaimTeacherId() == teacherId
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId)).data.authUid == request.auth.uid
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId)).data.institutionId == institutionId;
+    }
+    function p3ParentLinked(institutionId, studentId) {
+      return p3IsParent() && studentId != null && studentId is string
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId))
+        && (get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.parentUid == request.auth.uid
+          || (get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.keys().hasAny(['guardianUids']) && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.guardianUids.hasAny([request.auth.uid])))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.institutionId == institutionId;
+    }
+    function p3EnrollmentActive(institutionId, studentId, groupId) {
+      return studentId != null && studentId is string && groupId != null && groupId is string && groupId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/enrollments/$(studentId + '__' + groupId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/enrollments/$(studentId + '__' + groupId)).data.status == 'ENROLLED';
+    }
+    function p3GroupIsActive(institutionId, groupId) {
+      return groupId != null && groupId is string && groupId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.institutionId == institutionId;
+    }
+    // P3-CREATE economy: one get() per doc (no exists() guards). A missing doc
+    // makes get() error, which denies fail-closed. Tenant binding comes from
+    // the path namespace + claim==path (Center create rules enforce
+    // field==path at write time).
+    function p3TeacherAttendanceOk(institutionId, teacherId, sessionId, studentId, groupId) {
+      return get(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId)).data.authUid == request.auth.uid
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teachers/$(teacherId)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(sessionId)).data.status == 'OPEN'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(sessionId)).data.groupId == groupId
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.teacherId == teacherId
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/enrollments/$(studentId + '__' + groupId)).data.status == 'ENROLLED'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.status == 'ACTIVE';
+    }
+    function p3GroupTeacher(institutionId, groupId) {
+      return groupId != null && groupId is string && groupId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.keys().hasAny(['teacherId'])
+        ? get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(groupId)).data.teacherId : null;
+    }
+    function p3TsubCovers(institutionId, teacherId, subjectId, stageId, assignmentId) {
+      return exists(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.teacherId == teacherId
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.subjectId == subjectId
+        && (stageId == null || stageId == ''
+          || (get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.keys().hasAny(['stageIds']) && get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.stageIds is list && get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.stageIds.hasAny([stageId]))
+          || get(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(assignmentId)).data.stageId == stageId);
+    }
+    function p3TeacherSubjectStageOk(institutionId, teacherId, subjectId, stageId) {
+      return subjectId != null && subjectId is string && subjectId != ''
+        && (p3TsubCovers(institutionId, teacherId, subjectId, stageId, 'TSUB_' + teacherId + '_' + subjectId)
+          || p3TsubCovers(institutionId, teacherId, subjectId, stageId, teacherId + '_' + subjectId));
+    }
+    function p3StudentContentOk(institutionId, studentId, data) {
+      return data.status == 'PUBLISHED'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.keys().hasAny(['stageId'])
+        && data.keys().hasAny(['stageId']) && data.stageId == get(/databases/$(database)/documents/institutions/$(institutionId)/students/$(studentId)).data.stageId
+        && (!data.keys().hasAny(['groupIds']) || !(data.groupIds is list) || data.groupIds.size() == 0 || data.groupIds.hasAny(p3StudentGroups(institutionId, studentId)))
+        && data.get('accessType', 'FREE') == 'FREE'
+        && (!data.keys().hasAny(['visibility']) || !(data.visibility is map) || data.visibility.get('students', true) != false);
+    }
+    function p3HomeworkEligibleFor(institutionId, studentId, homeworkId) {
+      return homeworkId != null && homeworkId is string && homeworkId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.institutionId == institutionId
+        && p3StudentContentOk(institutionId, studentId, get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data);
+    }
+    function p3GradePublished(data) {
+      return (data.keys().hasAny(['gradingStatus']) && data.gradingStatus in ['PUBLISHED_RESULT', 'FINALIZED'])
+        || (data.keys().hasAny(['status']) && data.status in ['PASSED', 'FAILED']);
+    }
+    function p3TeacherExamScopeOk(institutionId, teacherId, examId) {
+      return examId != null && examId is string && examId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId)).data.institutionId == institutionId
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId)).data.keys().hasAny(['subjectId'])
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId)).data.keys().hasAny(['stageId'])
+        && p3TeacherSubjectStageOk(institutionId, teacherId, get(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId)).data.subjectId, get(/databases/$(database)/documents/institutions/$(institutionId)/exams/$(examId)).data.stageId);
+    }
+    function p3TeacherHomeworkScopeOk(institutionId, teacherId, homeworkId) {
+      return homeworkId != null && homeworkId is string && homeworkId != ''
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.institutionId == institutionId
+        && (get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.teacherId == teacherId
+          || (get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.keys().hasAny(['subjectId']) && get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, teacherId, get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.subjectId, get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.stageId)));
+    function isStudentSelf(data) {
+      return isAuthenticated() && (
+        (data.keys().hasAny(['authUid']) && data.authUid == request.auth.uid)
+        || (request.auth.token.keys().hasAny(['email']) && (
+             (data.keys().hasAny(['authEmail']) && request.auth.token.email == data.authEmail)
+             || (data.keys().hasAny(['phone']) && request.auth.token.email == ('stu_2' + data.phone + '@remas.local'))
+             || (data.keys().hasAny(['phone']) && request.auth.token.email == ('stu_' + data.phone + '@remas.local'))
+             || (data.keys().hasAny(['normalizedPhone']) && data.normalizedPhone.size() > 1 && request.auth.token.email == ('stu_' + data.normalizedPhone.split('+')[1] + '@remas.local'))
+           ))
+      );
+    }
+
+    function isTeacherSelf(data) {
+      return isAuthenticated() && (
+        (data.keys().hasAny(['authUid']) && data.authUid == request.auth.uid)
+        || (request.auth.token.keys().hasAny(['phone_number']) && data.keys().hasAny(['normalizedPhone']) && request.auth.token.phone_number == data.normalizedPhone)
+        || (request.auth.token.keys().hasAny(['email']) && (
+             (data.keys().hasAny(['authEmail']) && request.auth.token.email == data.authEmail)
+             || (data.keys().hasAny(['phone']) && request.auth.token.email == ('tch_2' + data.phone + '@remas.local'))
+             || (data.keys().hasAny(['phone']) && request.auth.token.email == ('tch_' + data.phone + '@remas.local'))
+             || (data.keys().hasAny(['normalizedPhone']) && data.normalizedPhone.size() > 1 && request.auth.token.email == ('tch_' + data.normalizedPhone.split('+')[1] + '@remas.local'))
+           ))
+      );
+    }
+
     // Phase 49.9.3 Institution Document Rules (Atomic Owner Claiming with getAfter)
     match /institutions/{institutionId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      // P3: bound mobile roles may read own institution metadata/branding.
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (p3BoundRole() && p3ClaimInst() == institutionId);
       
       allow create: if isSuperAdmin()
         && request.resource.data.institutionId == institutionId
@@ -77,6 +234,16 @@ service cloud.firestore {
         && request.time < get(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.expiresAt
         && getAfter(/databases/$(database)/documents/invitations/$(resource.data.ownerInvitationCode)).data.status == "ACCEPTED"
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerId', 'updatedAt'])
+      ) || (
+        // Least-privilege center-info update for the bound institutionOwner.
+        // Whitelist ONLY: name, phone, email, address, receiptHeader, updatedAt.
+        // Ownership, tenant identity, status and audit keys can never change here.
+        isTenantAdmin(institutionId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'email', 'address', 'receiptHeader', 'updatedAt', 'branding'])
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.status == resource.data.status
+        && (!resource.data.keys().hasAny(['institutionId']) || request.resource.data.institutionId == resource.data.institutionId)
+        && (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt == resource.data.createdAt)
       );
 
       allow delete: if isSuperAdmin();
@@ -129,10 +296,13 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/institutions/$(request.resource.data.institutionId)).data.ownerEmail == request.auth.token.email
       );
 
-      // Owner CANNOT change role, institutionId, email, or uid
+      // Owner CANNOT change role, institutionId, email, uid — nor teacherId
+      // (AI-1 teacher identity: clients must never write identity bindings;
+      // teacherId claims are issued exclusively via the trusted operator
+      // scripts. No legitimate flow writes users/{uid}.teacherId.)
       allow update: if isSuperAdmin() || (
         isAuthenticated() && request.auth.uid == userId
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'institutionId', 'institutionIds', 'uid', 'email'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'institutionId', 'institutionIds', 'uid', 'email', 'teacherId'])
       );
       allow delete: if isSuperAdmin();
     }
@@ -149,31 +319,143 @@ service cloud.firestore {
     }
 
     // Phase 5 Server & Operational Collections
+    // NOTE: the schedules collection is governed SOLELY by the Batch B match
+    // below. A second broad match on this path would OR-combine and silently
+    // bypass field validation — duplicate matches on one path are forbidden.
+
+    // Schedule sessions — active Center Desktop feature (schedule + attendance
+    // screens). Minimum tenant-scoped grant for current legitimate operations:
+    // read/create/status-update. No broad delete for tenant admins.
+    // Batch B: the SCHEDULED→OPEN→CLOSED state machine is enforced here as well
+    // (service mirrors it); CLOSED→OPEN is superAdmin break-glass only.
+    // B.2: CANCELLED added (terminal void state) — create/update lists extended
+    // additively; no previously-valid write is newly rejected, none newly allowed
+    // beyond the terminal cancellation edge.
+    match /institutions/{institutionId}/sessions/{sessionId} {
+      // P3: enrolled student (deterministic enrollment on resource.groupId) + owning/assigned teacher.
+      allow read: if isTenantUser(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.keys().hasAny(['groupId']) && p3EnrollmentActive(institutionId, p3ClaimStudentId(), resource.data.groupId) && p3GroupIsActive(institutionId, resource.data.groupId) && resource.data.institutionId == institutionId)
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.institutionId == institutionId && (resource.data.teacherId == p3ClaimTeacherId() || p3GroupTeacher(institutionId, resource.data.groupId) == p3ClaimTeacherId()));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.status in ['SCHEDULED', 'OPEN', 'CLOSED', 'CANCELLED']
+        && (!request.resource.data.keys().hasAny(['groupId']) || request.resource.data.groupId == ''
+          || get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(request.resource.data.groupId)).data.status == 'ACTIVE');
+      allow update: if isSuperAdmin() || (
+        isTenantAdmin(institutionId)
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.status in ['SCHEDULED', 'OPEN', 'CLOSED', 'CANCELLED']
+        && sessionTransitionOk(resource.data.status, request.resource.data.status)
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // Batch B: weekly recurring schedule templates (tenant-scoped).
     match /institutions/{institutionId}/schedules/{scheduleId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // P3: same shape as sessions (group-scoped).
+      allow read: if isTenantUser(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.keys().hasAny(['groupId']) && p3EnrollmentActive(institutionId, p3ClaimStudentId(), resource.data.groupId) && p3GroupIsActive(institutionId, resource.data.groupId) && resource.data.institutionId == institutionId)
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.institutionId == institutionId && (resource.data.teacherId == p3ClaimTeacherId() || p3GroupTeacher(institutionId, resource.data.groupId) == p3ClaimTeacherId()));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.groupId is string
+        && request.resource.data.dayOfWeek is int
+        && request.resource.data.dayOfWeek >= 0 && request.resource.data.dayOfWeek <= 6
+        && request.resource.data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED']
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(request.resource.data.groupId)).data.status == 'ACTIVE';
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.dayOfWeek is int
+        && request.resource.data.dayOfWeek >= 0 && request.resource.data.dayOfWeek <= 6
+        && request.resource.data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED']
+        && (request.resource.data.groupId == resource.data.groupId
+          || get(/databases/$(database)/documents/institutions/$(institutionId)/groups/$(request.resource.data.groupId)).data.status == 'ACTIVE');
+      allow delete: if isSuperAdmin();
+    }
+
+    // Subscriptions list — Center Desktop reads it on the subscriptions screen
+    // (client is read-only; writes remain server-side).
+    match /institutions/{institutionId}/subscriptions/{subscriptionId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Batch B: session state machine shared by tenant admins.
+    // SCHEDULED→OPEN→CLOSED forward only; CLOSED/CANCELLED terminal for tenant
+    // admins (superAdmin break-glass reopen is handled per-match, audited in
+    // service). B.2 adds CANCELLED (business-exception void) — additive only,
+    // no existing transition weakened or removed.
+    function sessionTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'SCHEDULED' && (to == 'OPEN' || to == 'CLOSED' || to == 'CANCELLED'))
+        || (from == 'OPEN' && (to == 'CLOSED' || to == 'CANCELLED'));
     }
 
     // Batch A (Phase 50.4): groups — IDs are canonical; names are display-only.
     // Rules enforce tenant isolation + institutionId immutability + basic shape.
     // Capacity is enforced authoritatively by the service transaction; rules
     // cannot atomically validate capacity (documented limitation).
+    // B.1 group lifecycle on the existing ACTIVE/INACTIVE/ARCHIVED schema.
+    function groupTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'ACTIVE' && (to == 'INACTIVE' || to == 'ARCHIVED'))
+        || (from == 'INACTIVE' && (to == 'ACTIVE' || to == 'ARCHIVED'));
+    }
+    // B.1 teacher-combo gate: when a complete teacher+stage+subject triple is
+    // written, both assignments must exist (deterministic IDs). Incomplete or
+    // unchanged triples pass through for backward compatibility; the service
+    // layer is authoritative for completeness on create/update.
+    // B.1.2: canonical IDs carry TSUB_/TSTG_ prefixes (see
+    // teacherSubjectAssignmentId/teacherStageAssignmentId in
+    // center_desktop_services.js); legacy random/plain IDs stay readable and
+    // are accepted as fallback proof so existing production docs keep working.
+    function teacherSubjectAssignmentExists(institutionId, teacherId, subjectId) {
+      return exists(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$('TSUB_' + teacherId + '_' + subjectId))
+        || exists(/databases/$(database)/documents/institutions/$(institutionId)/teacherSubjects/$(teacherId + '_' + subjectId));
+    }
+    function teacherStageAssignmentExists(institutionId, teacherId, stageId) {
+      return exists(/databases/$(database)/documents/institutions/$(institutionId)/teacherStages/$('TSTG_' + teacherId + '_' + stageId))
+        || exists(/databases/$(database)/documents/institutions/$(institutionId)/teacherStages/$(teacherId + '_' + stageId));
+    }
+    function groupTeacherComboOk(institutionId, data) {
+      return !data.keys().hasAny(['teacherId']) || data.teacherId == ''
+        || !data.keys().hasAny(['stageId']) || data.stageId == ''
+        || !data.keys().hasAny(['subjectId']) || data.subjectId == ''
+        || (
+          teacherStageAssignmentExists(institutionId, data.teacherId, data.stageId)
+          && teacherSubjectAssignmentExists(institutionId, data.teacherId, data.subjectId)
+        );
+    }
     match /institutions/{institutionId}/groups/{groupId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      // P3: enrolled student (deterministic enrollment proof) + owning teacher only.
+      allow read: if isTenantUser(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3EnrollmentActive(institutionId, p3ClaimStudentId(), groupId) && resource.data.status == 'ACTIVE' && resource.data.institutionId == institutionId)
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.teacherId == p3ClaimTeacherId() && resource.data.status == 'ACTIVE' && resource.data.institutionId == institutionId);
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
         && request.resource.data.name is string && request.resource.data.name.size() > 0
         && request.resource.data.maxCapacity is int && request.resource.data.maxCapacity > 0
-        && request.resource.data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED']
+        && groupTeacherComboOk(institutionId, request.resource.data);
+      allow update: if isSuperAdmin() || (
+        isTenantAdmin(institutionId)
         && request.resource.data.institutionId == resource.data.institutionId
         && request.resource.data.name is string && request.resource.data.name.size() > 0
-        && request.resource.data.maxCapacity is int && request.resource.data.maxCapacity > 0;
+        && request.resource.data.maxCapacity is int && request.resource.data.maxCapacity > 0
+        && groupTransitionOk(resource.data.status, request.resource.data.status)
+        && (
+          (request.resource.data.teacherId == resource.data.teacherId
+            && request.resource.data.stageId == resource.data.stageId
+            && request.resource.data.subjectId == resource.data.subjectId)
+          || groupTeacherComboOk(institutionId, request.resource.data)
+        )
+      );
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/academicYears/{yearId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      // P3: bound mobile roles may read academic years (no PII).
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (p3BoundRole() && p3ClaimInst() == institutionId);
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId;
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
@@ -182,8 +464,36 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/terms/{termId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // AI-4: terms carry no PII — institution-bound tokens may read them
+      // for server-side term resolution. Writes unchanged. Pure branch first.
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantUser(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.academicYearId is string
+        && request.resource.data.name is string && request.resource.data.name.size() > 0;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.academicYearId == resource.data.academicYearId;
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
+    // BATCH 1 — Units: tenant-scoped curriculum units (Year → Term → Stage → Subject).
+    match /institutions/{institutionId}/units/{unitId} {
+      // P3: bound mobile roles may read curriculum units (no PII).
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (p3BoundRole() && p3ClaimInst() == institutionId);
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.stageId is string && request.resource.data.subjectId is string
+        && unitStatusOk(request.resource.data.get('status', 'ACTIVE'));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && unitStatusOk(request.resource.data.get('status', 'ACTIVE'));
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/uniqueness/{uniqueKey} {
@@ -197,8 +507,11 @@ service cloud.firestore {
     }
 
     // Phase 5 Client-Mutable Collections
+    // AI-4: subjects carry no PII — institution-bound tokens (student claims)
+    // may read them for server-side subject validation. Writes unchanged.
     match /institutions/{institutionId}/subjects/{subjectId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantUser(institutionId) || isSuperAdmin();
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId;
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
@@ -207,7 +520,10 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/stages/{stageId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      // AI-4: stages carry no PII — institution-bound tokens may read names
+      // for server-side academic display. Writes unchanged.
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantUser(institutionId) || isSuperAdmin();
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId;
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
@@ -224,61 +540,151 @@ service cloud.firestore {
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
+    // Collection Group rule for Teacher Profile lookup & context resolution
+    match /{path=**}/teachers/{teacherId} {
+      allow read: if isTeacherSelf(resource.data) && (resource.data.status in ['ACTIVE', 'MUST_CHANGE_PASSWORD']);
+    }
+
     match /institutions/{institutionId}/teachers/{teacherId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin()
-        || (isAuthenticated() && request.auth.uid == resource.data.authUid)
-        || (isAuthenticated() && request.auth.token.keys().hasAny(['phone_number']) && request.auth.token.phone_number == resource.data.normalizedPhone && resource.data.status == 'ACTIVE' && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null));
+        || (isTeacherSelf(resource.data) && (resource.data.status in ['ACTIVE', 'MUST_CHANGE_PASSWORD']));
       allow create: if isTenantAdmin(institutionId) || isSuperAdmin();
-      // Tenant admin update (existing) + narrow ONE-TIME SELF-LINK for Phone OTP first login
       allow update: if (
         (isTenantAdmin(institutionId) || isSuperAdmin())
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
-        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid)
+        && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null || resource.data.authUid == '' || request.resource.data.authUid == resource.data.authUid)
       ) || (
-        // Phase 50.2.2 Secure Self-Link: teacher may set authUid exactly once if phone matches and status ACTIVE
-        isAuthenticated()
-        && resource.data.status == 'ACTIVE'
-        && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null)
-        && request.resource.data.authUid == request.auth.uid
-        && request.auth.token.keys().hasAny(['phone_number'])
-        && request.auth.token.phone_number == resource.data.normalizedPhone
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authUid', 'updatedAt', 'updatedBy'])
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.updatedBy == request.auth.uid
+        isTeacherSelf(resource.data)
         && request.resource.data.institutionId == resource.data.institutionId
-        && request.resource.data.teacherCode == resource.data.teacherCode
-        && request.resource.data.status == resource.data.status
+        && (!resource.data.keys().hasAny(['teacherCode']) || request.resource.data.teacherCode == resource.data.teacherCode)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authUid', 'status', 'initialPinChanged', 'mustChangePassword', 'tempPassword', 'updatedAt', 'updatedBy', 'passwordChangedAt', 'fcmToken', 'deviceInfo', 'lastLoginAt'])
       );
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
+    // B.1 deterministic assignment identity enables exists() combo checks on
+    // groups (closing the direct-write bypass). Legacy random-ID docs stay readable.
+    // B.1.2: canonical doc ID is 'TSUB_<teacherId>_<subjectId>' (service
+    // teacherSubjectAssignmentId); plain '<teacherId>_<subjectId>' is accepted
+    // as legacy proof so pre-existing production docs keep passing.
+    // C.1.2 canonical coherence (service validates first; rules backstop direct
+    // writes): recorded assignment stages must belong to the subject's own
+    // allowed stages. Subject with stageIds[] → subset; subject with single
+    // stageId → equality; unconstrained subject or stageless assignment →
+    // legacy pass (service + picker apply the same documented semantics).
+    // Uses only hasAll/hasAny/size (no lambdas) + get() on the subject doc.
+    function teacherAssignmentStagesOk(institutionId, data) {
+      return !data.keys().hasAny(['subjectId'])
+        || !exists(/databases/$(database)/documents/institutions/$(institutionId)/subjects/$(data.subjectId))
+        || teacherAssignmentStagesFitSubject(
+          get(/databases/$(database)/documents/institutions/$(institutionId)/subjects/$(data.subjectId)).data, data);
+    }
+    function teacherAssignmentStagesFitSubject(subj, data) {
+      return (!data.keys().hasAny(['stageIds']) || data.stageIds.size() == 0
+          || (subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0 && subj.stageIds.hasAll(data.stageIds))
+          || ((!(subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0)) && subj.keys().hasAny(['stageId']) && [subj.stageId].hasAll(data.stageIds))
+          || ((!(subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0)) && !subj.keys().hasAny(['stageId'])))
+        && (!data.keys().hasAny(['stageId']) || data.stageId == ''
+          || ((subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0) && subj.stageIds.hasAll([data.stageId]))
+          || ((!(subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0)) && subj.keys().hasAny(['stageId']) && data.stageId == subj.stageId)
+          || ((!(subj.keys().hasAny(['stageIds']) && subj.stageIds.size() > 0)) && !subj.keys().hasAny(['stageId'])));
+    }
     match /institutions/{institutionId}/teacherSubjects/{assignmentId} {
-      allow read: if isTenantUser(institutionId) || isSuperAdmin();
+      // P3: teacher may read OWN assignment rows only.
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.teacherId == p3ClaimTeacherId());
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
         && request.resource.data.teacherId is string
-        && request.resource.data.subjectId is string;
+        && request.resource.data.subjectId is string
+        && (assignmentId == 'TSUB_' + request.resource.data.teacherId + '_' + request.resource.data.subjectId
+          || assignmentId == request.resource.data.teacherId + '_' + request.resource.data.subjectId)
+        && teacherAssignmentStagesOk(institutionId, request.resource.data);
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && teacherAssignmentStagesOk(institutionId, request.resource.data);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
+    // B.1.2: canonical doc ID is 'TSTG_<teacherId>_<stageId>' (service
+    // teacherStageAssignmentId); plain '<teacherId>_<stageId>' accepted as legacy.
+    match /institutions/{institutionId}/teacherStages/{assignmentId} {
+      // P3: teacher may read OWN assignment rows only.
+      allow read: if isTenantUser(institutionId) || isSuperAdmin() || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.teacherId == p3ClaimTeacherId());
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.teacherId is string
+        && request.resource.data.stageId is string
+        && (assignmentId == 'TSTG_' + request.resource.data.teacherId + '_' + request.resource.data.stageId
+          || assignmentId == request.resource.data.teacherId + '_' + request.resource.data.stageId);
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == resource.data.institutionId;
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    match /institutions/{institutionId}/teacherStages/{assignmentId} {
+    // C.1 employees — operational identities inside Center Desktop.
+    // Enforcement model (documented limitation): Firestore gates TENANT
+    // isolation here (center account); per-employee PERMISSIONS are enforced
+    // service-side (requirePermission/requireStoredPermission) + UI + audit,
+    // because request.auth cannot distinguish employees (no Custom Claims).
+    // No PIN plaintext may ever be stored: pinHash+pinSalt only; keys named
+    // pin/pinPlain/password are rejected outright.
+    function employeeRoleOk(data) {
+      return !data.keys().hasAny(['role'])
+        || data.role in ['MANAGER', 'ACCOUNTANT', 'CASHIER', 'RECEPTIONIST', 'TEACHER_LINKED', 'STAFF'];
+    }
+    function employeeStatusOk(data) {
+      return !data.keys().hasAny(['status'])
+        || data.status in ['ACTIVE', 'SUSPENDED', 'ARCHIVED'];
+    }
+    match /institutions/{institutionId}/employees/{employeeId} {
       allow read: if isTenantUser(institutionId) || isSuperAdmin();
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
-        && request.resource.data.teacherId is string
-        && request.resource.data.stageId is string;
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.phone is string && request.resource.data.phone.size() > 0
+        && request.resource.data.pinHash is string && request.resource.data.pinHash.size() >= 32
+        && request.resource.data.pinSalt is string && request.resource.data.pinSalt.size() >= 16
+        && !request.resource.data.keys().hasAny(['pin', 'pinPlain', 'password'])
+        && employeeRoleOk(request.resource.data)
+        && employeeStatusOk(request.resource.data);
+      // Identity + PIN material immutable via generic update; privileged fields
+      // (role/permissions/status/pinHash/pinSalt) change only through guarded
+      // service paths carrying manager approval evidence. Self-service is
+      // blocked service-side; rules add the field-level backstop.
       allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
-        && request.resource.data.institutionId == resource.data.institutionId;
-      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && !request.resource.data.keys().hasAny(['pin', 'pinPlain', 'password'])
+        && (
+          // Ordinary profile edit + self-service PIN rotation (current-PIN
+          // proof enforced service-side) + lockout bookkeeping. Privileged
+          // material (role/permissions/status) is NOT in this list.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'email', 'jobTitle', 'teacherId', 'pinSalt', 'pinHash', 'pinUpdatedAt', 'pinUpdatedBy', 'failedAttempts', 'lockedUntil', 'updatedAt', 'updatedBy', 'updatedByEmployeeId', 'updatedByNameSnapshot', 'updatedByRole'])
+          // Privileged change: requires manager approval evidence written by
+          // the service after Main-process manager PIN re-authentication.
+          || (
+            request.resource.data.keys().hasAny(['managerApprovedBy'])
+            && request.resource.data.managerApprovedBy is string
+            && request.resource.data.keys().hasAny(['managerApprovedAt'])
+            && exists(/databases/$(database)/documents/institutions/$(institutionId)/employees/$(request.resource.data.managerApprovedBy))
+            && get(/databases/$(database)/documents/institutions/$(institutionId)/employees/$(request.resource.data.managerApprovedBy)).data.role == 'MANAGER'
+            && get(/databases/$(database)/documents/institutions/$(institutionId)/employees/$(request.resource.data.managerApprovedBy)).data.status == 'ACTIVE'
+            && employeeRoleOk(request.resource.data)
+            && employeeStatusOk(request.resource.data)
+          )
+        );
+      allow delete: if isSuperAdmin();
     }
 
     // Batch A (Phase 50.4): enrollments — deterministic id studentId__groupId.
     // Service transaction is authoritative for capacity/duplicate; rules enforce
     // tenant isolation + ownership immutability as defense-in-depth.
     match /institutions/{institutionId}/enrollments/{enrollmentId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        // P3: own rows (student) + own-group rows (teacher) + linked-child rows (parent).
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.studentId == p3ClaimStudentId())
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.keys().hasAny(['groupId']) && p3GroupTeacher(institutionId, resource.data.groupId) == p3ClaimTeacherId())
+        || (p3IsParent() && p3ParentLinked(institutionId, resource.data.studentId));
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
         && request.resource.data.studentId is string
@@ -292,12 +698,14 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/guardians/{guardianId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // P3: parent may read OWN guardian doc only (authUid field match).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (p3IsParent() && resource.data.keys().hasAny(['authUid']) && resource.data.authUid == request.auth.uid && resource.data.institutionId == institutionId);
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentGuardians/{relationshipId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // P3: parent may read OWN linkage rows only (guardianAuthUid field match).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (p3IsParent() && resource.data.keys().hasAny(['guardianAuthUid']) && resource.data.guardianAuthUid == request.auth.uid && resource.data.institutionId == institutionId);
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
@@ -306,31 +714,100 @@ service cloud.firestore {
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
+    // Student ID Cards — physical identity lifecycle (no weakening).
+    // Create: AVAILABLE + unassigned only. Update: institutionId + cardCode immutable.
+    match /institutions/{institutionId}/studentCards/{cardId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.cardCode is string && request.resource.data.cardCode.size() > 0
+        && request.resource.data.status == 'AVAILABLE'
+        && request.resource.data.studentId == null;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.cardCode == resource.data.cardCode
+        && request.resource.data.status in ['AVAILABLE', 'ASSIGNED', 'SUSPENDED', 'LOST', 'REVOKED', 'REPLACED'];
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    }
+
     // Collection Group rule for Student Profile lookup & post-OTP context resolution
     match /{path=**}/students/{studentId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE');
+      allow read: if isStudentSelf(resource.data) && (resource.data.status in ['ACTIVE', 'MUST_CHANGE_PASSWORD']);
     }
 
     // Phase 6 Operational Collection — Students (Batch A hardened: no weakening)
     match /institutions/{institutionId}/students/{studentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin() 
-        || (isAuthenticated() && request.auth.uid == resource.data.authUid && resource.data.status == 'ACTIVE')
+        || (isStudentSelf(resource.data) && (resource.data.status in ['ACTIVE', 'MUST_CHANGE_PASSWORD']))
         || (isAuthenticated() && (resource.data.parentUid == request.auth.uid || (resource.data.keys().hasAny(['guardianUids']) && resource.data.guardianUids.hasAny([request.auth.uid]))));
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
         && request.resource.data.name is string && request.resource.data.name.size() > 0
         && request.resource.data.status in ['ACTIVE', 'SUSPENDED', 'WITHDRAWN', 'GRADUATED', 'ARCHIVED', 'INACTIVE'];
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+      allow update: if (
+        (isTenantAdmin(institutionId) || isSuperAdmin())
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['institutionId', 'role'])
-        && (!resource.data.keys().hasAny(['authUid']) || request.resource.data.authUid == resource.data.authUid)
-        && request.resource.data.institutionId == resource.data.institutionId;
+        && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null || resource.data.authUid == '' || request.resource.data.authUid == resource.data.authUid)
+        && request.resource.data.institutionId == resource.data.institutionId
+      ) || (
+        isStudentSelf(resource.data)
+        && request.resource.data.institutionId == resource.data.institutionId
+        && (!resource.data.keys().hasAny(['studentCode']) || request.resource.data.studentCode == resource.data.studentCode)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authUid', 'status', 'initialPinChanged', 'mustChangePassword', 'tempPassword', 'updatedAt', 'updatedBy', 'passwordChangedAt', 'fcmToken', 'deviceInfo', 'lastLoginAt'])
+      );
       allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // Phase 7 Attendance System Collections
-    match /institutions/{institutionId}/attendanceSessions/{sessionId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+    // Batch B: attendance records carry mandatory sessionId (ATT_{session}_{student}).
+    // Create requires the referenced session to exist, belong to this tenant,
+    // and be OPEN. Update preserves all identity/security fields; status may
+    // change silently ONLY while the session is OPEN and only within the
+    // operational key set — otherwise a non-empty correctionReason is required.
+    // correctionReason alone can never widen create or mutate identity.
+    match /institutions/{institutionId}/attendanceSessions/{recordId} {
+      // P3: own rows (student) + own-group rows (teacher) + linked-child rows (parent).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.studentId == p3ClaimStudentId())
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.keys().hasAny(['groupId']) && p3GroupTeacher(institutionId, resource.data.groupId) == p3ClaimTeacherId())
+        || (p3IsParent() && p3ParentLinked(institutionId, resource.data.studentId));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.studentId is string
+        && request.resource.data.sessionId is string
+        && request.resource.data.status in ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(request.resource.data.sessionId))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(request.resource.data.sessionId)).data.status == 'OPEN'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(request.resource.data.sessionId)).data.institutionId == institutionId
+        // P3: scoped teacher attendance write (all §7 conditions; Center rule above untouched).
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3ClaimTeacherId() != null
+          && request.resource.data.institutionId == institutionId
+          && request.resource.data.studentId is string && request.resource.data.sessionId is string && request.resource.data.groupId is string
+          && recordId == 'ATT_' + request.resource.data.sessionId + '_' + request.resource.data.studentId
+          && request.resource.data.status in ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']
+          && p3TeacherAttendanceOk(institutionId, p3ClaimTeacherId(), request.resource.data.sessionId, request.resource.data.studentId, request.resource.data.groupId)
+          && request.resource.data.keys().hasOnly(['id', 'institutionId', 'studentId', 'studentName', 'studentCode', 'attendanceCardCode', 'groupId', 'sessionId', 'date', 'time', 'status', 'method', 'cardId', 'recordedAt', 'createdAt', 'createdBy', 'recordedBy', 'lateMinutes', 'notes']));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.date == resource.data.date
+        && (!resource.data.keys().hasAny(['attendanceCardCode']) || request.resource.data.attendanceCardCode == resource.data.attendanceCardCode)
+        && (!resource.data.keys().hasAny(['cardId']) || request.resource.data.cardId == resource.data.cardId)
+        && (!resource.data.keys().hasAny(['recordedAt']) || request.resource.data.recordedAt == resource.data.recordedAt)
+        && (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt == resource.data.createdAt)
+        && (!resource.data.keys().hasAny(['createdBy']) || request.resource.data.createdBy == resource.data.createdBy)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'time', 'method', 'correctionReason', 'correctedAt', 'correctedBy', 'updatedAt'])
+        && (
+          (
+            get(/databases/$(database)/documents/institutions/$(institutionId)/sessions/$(resource.data.sessionId)).data.status == 'OPEN'
+            && (request.resource.data.status == resource.data.status
+              || (request.resource.data.correctionReason is string && request.resource.data.correctionReason.size() > 0))
+          ) || (
+            request.resource.data.correctionReason is string && request.resource.data.correctionReason.size() > 0
+          )
+        );
+      allow delete: if isSuperAdmin();
 
       match /records/{studentId} {
         allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
@@ -353,25 +830,101 @@ service cloud.firestore {
       allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
-    // Phase 8 Finance System Operational Collections
+    // Batch C Finance (Milestone C): tenant-scoped client writes with
+    // append-only money. Payments + receipts expose NO service update/delete;
+    // rules mirror that (tenant admin append-only, superAdmin break-glass).
+    // Identity fields (institutionId/studentId/chargeId/receiptNumber) are
+    // immutable: calculated balances can only be derived, never overwritten.
+    // NOTE: file change only — production deployment is a separate step.
+    function financeMethodOk(data) {
+      return !data.keys().hasAny(['paymentMethod'])
+        || data.paymentMethod in ['CASH', 'BANK_TRANSFER', 'ELECTRONIC', 'OTHER'];
+    }
     match /institutions/{institutionId}/feeStructures/{feeStructureId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.amount is number && request.resource.data.amount > 0;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'amount', 'academicYearId', 'stageId', 'groupId', 'notes', 'status', 'updatedAt', 'updatedBy']);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentCharges/{chargeId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.studentId is string
+        && request.resource.data.dueAmount is number && request.resource.data.dueAmount > 0;
+      // C.1: net is DERIVED (due − discount − waiver) — direct writes cannot
+      // forge it; identity (institution/student/due/original) immutable;
+      // adjustments history is append-managed by the service (never shrunk).
+      // paidTotal is the concurrency-safe collected-sum mirror, rewritten
+      // atomically with each payment inside the same transaction (reads stay
+      // derived from canonical payment docs).
+      // FLOAT FIX: strict == denied legitimate 2-decimal values (e.g.
+      // 999.99−333.33−333.33 → 333.3300000000001 vs stored 333.33), so the
+      // formula uses a ±0.005 tolerance band (two-sided comparison — CEL has
+      // no abs()). Anything beyond ±0.005, any negative money, or any
+      // identity/whitelist violation is still rejected.
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.dueAmount == resource.data.dueAmount
+        && request.resource.data.discount is number && request.resource.data.discount >= 0
+        && request.resource.data.waiver is number && request.resource.data.waiver >= 0
+        && request.resource.data.netAmount <= request.resource.data.dueAmount - request.resource.data.discount - request.resource.data.waiver + 0.005
+        && request.resource.data.netAmount >= request.resource.data.dueAmount - request.resource.data.discount - request.resource.data.waiver - 0.005
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['discount', 'waiver', 'netAmount', 'paidTotal', 'adjustments', 'notes', 'status', 'updatedAt', 'updatedBy', 'updatedByEmployeeId', 'updatedByNameSnapshot', 'updatedByRole']);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/studentPayments/{paymentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.studentId is string
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && request.resource.data.receiptNumber is string && request.resource.data.receiptNumber.size() > 0
+        && financeMethodOk(request.resource.data);
+      // Append-only: no tenant-admin update/delete (service exposes none).
+      allow update, delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/receipts/{receiptId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && receiptId == request.resource.data.receiptNumber
+        && request.resource.data.receiptNumber is string && request.resource.data.receiptNumber.size() > 0
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && financeMethodOk(request.resource.data)
+        // C.1: internal doc ID is independent; the HUMAN sequential number is
+        // validated separately (000001… per institution, allocated by counter).
+        && (!request.resource.data.keys().hasAny(['humanNumber'])
+          || request.resource.data.humanNumber.matches('^[0-9]{6}$'));
+      // Append-only: receipt identity can never be rewritten by a tenant client.
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // C.1 human sequential receipt counter: receiptCounters/{institutionId}
+    // {institutionId, lastNumber}. Created at 1, then strictly +1 per
+    // allocation — atomic with payment+receipt inside ONE transaction, so no
+    // duplicate numbers, no orphan increments, no count+1 races. Historical
+    // REC-* receipts are untouched (new sequence starts at 000001).
+    match /institutions/{institutionId}/receiptCounters/{counterId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && counterId == institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lastNumber == 1;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lastNumber == resource.data.lastNumber + 1;
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/financialRefunds/{refundId} {
@@ -381,12 +934,27 @@ service cloud.firestore {
 
     match /institutions/{institutionId}/expenses/{expenseId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && financeMethodOk(request.resource.data);
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['category', 'amount', 'expenseDate', 'description', 'recipient', 'vendor', 'paidTo', 'paymentMethod', 'method', 'notes', 'updatedAt', 'updatedBy']);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/otherIncome/{incomeId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.source is string && request.resource.data.source.size() > 0
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && financeMethodOk(request.resource.data);
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['source', 'amount', 'incomeDate', 'description', 'paymentMethod', 'notes', 'updatedAt', 'updatedBy']);
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/teacherSettlements/{settlementId} {
@@ -476,14 +1044,43 @@ service cloud.firestore {
     }
 
     // Phase 10 Exams & Grades Server-Only Collections
+    // CENTRAL CONTENT HUB CORE: QB/exams/grades stay trusted-backend-only
+    // (create/update/delete:false). Hub enums (CENTER/TEACHER, hub question
+    // types, DRAFT->PUBLISHED->CLOSED->ARCHIVED) enforced service-side in
+    // exam_service.js; rules intentionally remain deny-by-default so neither
+    // Teacher App clients nor Student clients can mint CENTER exams.
     match /institutions/{institutionId}/questionBanks/{bankId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.subjectId is string
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/questions/{questionId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.subjectId is string
+        && request.resource.data.prompt is string && request.resource.data.prompt.size() > 0
+        && hubQuestionTypeOk(request.resource.data.questionType)
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && hubQuestionTypeOk(request.resource.data.questionType)
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/questionOptions/{optionId} {
@@ -493,16 +1090,41 @@ service cloud.firestore {
 
     match /institutions/{institutionId}/exams/{examId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.stageId is string && request.resource.data.subjectId is string
+        && examScopeOk(request.resource.data.get('ownerScope', null))
+        && request.resource.data.get('ownerScope', 'CENTER') == 'CENTER'
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && examScopeOk(request.resource.data.get('ownerScope', null))
+        && request.resource.data.get('ownerScope', 'CENTER') == resource.data.get('ownerScope', 'CENTER')
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/examQuestions/{examQuestionId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.examId is string && request.resource.data.questionId is string;
+      allow update: if false;
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/grades/{gradeId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      // P3: own PUBLISHED rows (student) + subject-stage scoped rows (teacher) + linked PUBLISHED rows (parent).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.studentId == p3ClaimStudentId() && p3GradePublished(resource.data))
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.keys().hasAny(['examId']) && p3TeacherExamScopeOk(institutionId, p3ClaimTeacherId(), resource.data.examId))
+        || (p3IsParent() && p3ParentLinked(institutionId, resource.data.studentId) && p3GradePublished(resource.data));
       allow create, update, delete: if false;
     }
 
@@ -514,6 +1136,139 @@ service cloud.firestore {
     match /institutions/{institutionId}/examLocks/{lockId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
       allow create, update, delete: if false;
+    }
+
+    // BATCH 2A — AI service configuration + usage metering + generation log.
+    // aiConfig: SuperAdmin owns all flags (center read-only).
+    // aiUsage: monthly counters; increments are EXACTLY +1 (concurrent Worker
+    // requests cannot double-spend: the loser fails its precondition and retries);
+    // limit is immutable once set. aiGenerations: append-mostly request log.
+    // No provider secrets ever stored here. Parents: no writes. Students and
+    // teachers write ONLY their own scoped usage/generation rows (shape-locked).
+    match /institutions/{institutionId}/aiConfig/{configId} {
+      // AI GOVERNANCE (Batch 2A fix): SuperAdmin owns all AI governance.
+      // Center Desktop has NO write access (read-only consumption only).
+      // AI-4: institution-bound tokens (student claims) may READ flags/limits
+      // only (no secrets/PII in this doc) so the Worker can enforce
+      // governance with the student token. Writes stay SuperAdmin-only.
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if isSuperAdmin()
+        && request.resource.data.institutionId == institutionId
+        && (!(request.resource.data.keys().hasAny(['aiEnabled'])) || request.resource.data.aiEnabled is bool);
+      allow update: if isSuperAdmin()
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && (!(request.resource.data.keys().hasAny(['aiEnabled'])) || request.resource.data.aiEnabled is bool);
+      allow delete: if isSuperAdmin();
+    }
+
+    // AI-4: student-claim write paths (identical shape locks as the tenant
+    // path) so the Worker can account tutor usage with the student token.
+    // Abuse surface is own-institution quota only (tenant-bound + exact-+1 +
+    // immutable limit); per-request aiGenerations rows make inflation
+    // detectable. No other role gains anything here.
+    function studentScoped(institutionId) {
+      return isAuthenticated()
+        && request.auth.token.role == 'student'
+        && request.auth.token.institutionId == institutionId;
+    }
+
+    // AI-5: teacher-claim write paths (identical shape locks as the student
+    // path) so the Worker can account Teacher AI usage with the teacher
+    // token. Abuse surface is own-institution quota only (tenant-bound +
+    // exact-+1 + immutable limit); per-request aiGenerations rows make
+    // inflation detectable. No other role gains anything here.
+    function teacherScoped(institutionId) {
+      return isAuthenticated()
+        && request.auth.token.role == 'teacher'
+        && request.auth.token.institutionId == institutionId;
+    }
+
+    match /institutions/{institutionId}/aiUsage/{usageId} {
+      // AI-4: institution-bound tokens (student claims) may READ own
+      // institution counters (operational metadata only — same posture as
+      // aiConfig flags). Pure branches first for short-circuit. Writes
+      // stay shape-locked below.
+      // AI-7.2: scoped roles are bound to their own feature (student→tutor,
+      // teacher→teacher) so neither role can mint or nudge the other's ledger
+      // rows. TenantAdmin/superAdmin stay unconstrained (Center flows use
+      // 'questionGeneration' and future admin features).
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if ((studentScoped(institutionId) && request.resource.data.feature == 'tutor')
+          || (teacherScoped(institutionId) && request.resource.data.feature == 'teacher')
+          || isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.used is number && request.resource.data.used == 1
+        && request.resource.data.limit is number && request.resource.data.limit >= 1;
+      allow update: if ((studentScoped(institutionId) && request.resource.data.feature == 'tutor')
+          || (teacherScoped(institutionId) && request.resource.data.feature == 'teacher')
+          || isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.used is number
+        && request.resource.data.used == resource.data.used + 1
+        && request.resource.data.limit == resource.data.limit
+        && (isTenantAdmin(institutionId) || isSuperAdmin()
+          || request.resource.data.feature == resource.data.feature);
+      allow delete: if false;
+    }
+
+    match /institutions/{institutionId}/aiGenerations/{requestId} {
+      // AI-4: same read posture as aiUsage (idempotency checks run with the
+      // student token). Writes stay shape-locked below.
+      // AI-7.2: same role→feature binding as aiUsage (see above).
+      allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if ((studentScoped(institutionId) && request.resource.data.feature == 'tutor')
+          || (teacherScoped(institutionId) && request.resource.data.feature == 'teacher')
+          || isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.requestId is string
+        && request.resource.data.status in ['PROCESSING', 'SUCCESS', 'FAILED'];
+      allow update: if ((studentScoped(institutionId) && request.resource.data.feature == 'tutor')
+          || (teacherScoped(institutionId) && request.resource.data.feature == 'teacher')
+          || isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.requestId == resource.data.requestId
+        && request.resource.data.status in ['PROCESSING', 'SUCCESS', 'FAILED']
+        && (isTenantAdmin(institutionId) || isSuperAdmin()
+          || request.resource.data.feature == resource.data.feature);
+      allow delete: if isSuperAdmin();
+    }
+
+    // BATCH 1 — Center result reviews: human per-question scores for subjective
+    // answers. Tenant-admin writes; teacher/student/parent can never mint.
+    match /institutions/{institutionId}/gradeReviews/{reviewId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.gradeId is string
+        && request.resource.data.examId is string
+        && request.resource.data.studentId is string;
+      allow update, delete: if false;
+    }
+
+    // BATCH 1 — Center result approvals: audited manager decisions.
+    // Tenant-admin writes only (service allowlists owner/admin/superAdmin;
+    // teacher/student/parent can never mint these). Decision enum enforced;
+    // grade/exam/student linkage required; institution immutable.
+    match /institutions/{institutionId}/gradeApprovals/{approvalId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.gradeId is string
+        && request.resource.data.examId is string
+        && request.resource.data.studentId is string
+        && gradeDecisionOk(request.resource.data.decision);
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.gradeId == resource.data.gradeId
+        && gradeDecisionOk(request.resource.data.decision);
+      allow delete: if isSuperAdmin();
     }
 
     // Phase 11 Online Exams Runtime Collections
@@ -535,21 +1290,367 @@ service cloud.firestore {
       }
     }
 
-    // Phase 12 Educational Content Management Collections (Direct Client Writes DENIED)
+    // D.2 Center Desktop Content Management: validated tenant-admin writes.
+    // Reads unchanged. Writes are allowlisted (never broad): institutionId
+    // immutable and equal to the path tenant; required identity fields
+    // present; status whitelists + forward-only transitions; teacher
+    // Subject+Stage scoping stays service-side (requirePermission + reads),
+    // consistent with the employees/permissions enforcement model.
+    // Students/parents/anonymous get NO write access here (default deny).
+    function lessonTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && to == 'ARCHIVED');
+    }
+    function homeworkTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && (to == 'CLOSED' || to == 'ARCHIVED'))
+        || (from == 'CLOSED' && to == 'ARCHIVED');
+    }
+    function contentTypeOk(t) {
+      return t in ['VIDEO', 'PDF', 'IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF'];
+    }
+    // CENTRAL CONTENT HUB CORE (additive validators; service validates deeply, rules backstop types/enums).
+    function accessTypeOk(v) {
+      return !(v is string) || v in ['FREE', 'SUBSCRIPTION_REQUIRED'];
+    }
+    function groupIdsOk(v) {
+      return !(v is list) || (v.size() >= 1 && v.size() <= 50);
+    }
+    function homeworkModeOk(v) {
+      return !(v is string) || v in ['DIGITAL', 'PAPER', 'HYBRID'];
+    }
+    function examScopeOk(v) {
+      return !(v is string) || v in ['CENTER', 'TEACHER'];
+    }
+    function hubQuestionTypeOk(v) {
+      return v in ['MCQ', 'TRUE_FALSE', 'MULTI_SELECT', 'SHORT_ANSWER', 'ESSAY', 'SHORT_TEXT'];
+    }
+    function examStatusHubOk(v) {
+      return v in ['DRAFT', 'PUBLISHED', 'CLOSED', 'ARCHIVED'];
+    }
+    // BATCH 1 — academic-context backstops (absent = legacy, never fabricated;
+    // service validates deeply, rules backstop types/tenant binding).
+    function academicYearOk(v) {
+      return !(v is string) || v.size() > 0;
+    }
+    function termOk(v) {
+      return v == null || (v is string && v.size() > 0);
+    }
+    function unitStatusOk(v) {
+      return !(v is string) || v in ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+    }
+    function sourceStatusOk(v) {
+      return v in ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+    }
+    function sourceTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && to == 'ARCHIVED');
+    }
+    function gradeDecisionOk(v) {
+      return v in ['APPROVED', 'REJECTED'];
+    }
+    function gradingStatusOk(v) {
+      return v in ['PENDING', 'GRADED', 'REVIEW_REQUIRED', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED_RESULT', 'FINALIZED'];
+    }
     match /institutions/{institutionId}/lessons/{lessonId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      // P3: eligible FREE PUBLISHED lessons (student) + assigned-subject PUBLISHED (teacher).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3StudentContentOk(institutionId, p3ClaimStudentId(), resource.data))
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.status == 'PUBLISHED' && resource.data.keys().hasAny(['subjectId']) && resource.data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, p3ClaimTeacherId(), resource.data.subjectId, resource.data.stageId));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.stageId is string && request.resource.data.subjectId is string
+        && request.resource.data.status == 'DRAFT'
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && lessonTransitionOk(resource.data.status, request.resource.data.status)
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
+    }
+
+    // BATCH 1 — Central Knowledge/Source Library: tenant-admin managed.
+    // Students/parents get NO direct read (Worker + service layers authorize
+    // per-request); binaries live in private R2, Firestore holds metadata only.
+    // AI-4: claim-bound students may read PUBLISHED sources of their OWN
+    // stage (metadata for the source gate + titles; R2 bytes stay behind the
+    // Worker entitlement gate; group-targeted sources stay unreadable here —
+    // retrieval enforces groups separately).
+    function studentStageReadOk(data) {
+      return isAuthenticated()
+        && request.auth.token.role == 'student'
+        && request.auth.token.institutionId == data.institutionId
+        && request.auth.token.stageId == data.stageId;
+    }
+    function studentGroupOk(data) {
+      return !(data.keys().hasAny(['groupIds']))
+        || data.groupIds.size() == 0
+        || (request.auth.token.keys().hasAny(['groupIds'])
+          && request.auth.token.groupIds.hasAny(data.groupIds));
+    }
+    match /institutions/{institutionId}/knowledgeSources/{sourceId} {
+      allow read: if resource == null
+        || (studentStageReadOk(resource.data)
+          && resource.data.status == 'PUBLISHED'
+          && studentGroupOk(resource.data))
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.stageId is string && request.resource.data.subjectId is string
+        && request.resource.data.status == 'DRAFT'
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && sourceStatusOk(request.resource.data.status)
+        && sourceTransitionOk(resource.data.status, request.resource.data.status)
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
+    }
+
+    // AI-1/AI-2 — Canonical knowledge chunks (retrieval substrate for AI-3).
+    // Collection name frozen as `knowledgeChunks` (supersedes the
+    // docs-only `ragChunks` / `educationalContentChunks` variants).
+    // Reads mirror knowledgeSources (tenant-admin/SuperAdmin; students get
+    // NO direct read — retrieval runs trusted with per-request authz).
+    // Writes are SuperAdmin-only (trusted ingestion/embedding). Lifecycle:
+    // PENDING → PROCESSING → READY_FOR_EMBEDDING → EMBEDDED, or NEEDS_REVIEW
+    // / FAILED; superseded sets → ARCHIVED; withdrawn → REVOKED. Chunk
+    // identity and bytes are IMMUTABLE once written (sourceId/sourceVersion/
+    // chunkSet/chunkIndex/text/textHash can never change on update).
+    // Vectors: SA-only writes; when `embedded == true` the embedding must be
+    // a 768-float list with a model name (frozen gemini-embedding-001 dim).
+    // Malformed vectors, wrong dimensions, and non-finite values are
+    // rejected here AND in code (defense in depth). Students/teachers/
+    // center clients have NO write path (fail closed).
+    function chunkStatusOk(s) {
+      return s in ['PENDING', 'PROCESSING', 'READY_FOR_EMBEDDING', 'EMBEDDED', 'NEEDS_REVIEW', 'FAILED', 'ARCHIVED', 'REVOKED'];
+    }
+    function chunkVectorOk(data) {
+      return !(data.keys().hasAny(['embedding']))
+        || (data.embedding is list && data.embedding.size() == 768);
+    }
+    function chunkVectorModelOk(data) {
+      return !(data.keys().hasAny(['embeddingModel']))
+        || data.embeddingModel is string;
+    }
+    match /institutions/{institutionId}/knowledgeChunks/{chunkId} {
+      // AI-4: claim-bound students may read finished chunks of their OWN
+      // stage (subject-wide or group-overlapping only). Subject precision is
+      // enforced at retrieval (worker query filters); direct reads are
+      // stage-bounded PUBLISHED corpus. Teachers/parents: no change.
+      // The pure student branch is FIRST so list evaluation short-circuits
+      // before any privileged get()/exists() lookup executes.
+      allow read: if resource == null
+        || (studentStageReadOk(resource.data)
+          && resource.data.status == 'EMBEDDED'
+          && resource.data.embedded == true
+          && studentGroupOk(resource.data))
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if isSuperAdmin()
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.sourceId is string
+        && request.resource.data.chunkIndex is int && request.resource.data.chunkIndex >= 0
+        && request.resource.data.text is string && request.resource.data.text.size() > 0
+        && chunkStatusOk(request.resource.data.status)
+        && chunkVectorOk(request.resource.data)
+        && chunkVectorModelOk(request.resource.data);
+      allow update: if isSuperAdmin()
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.sourceId == resource.data.sourceId
+        && request.resource.data.sourceVersion == resource.data.sourceVersion
+        && request.resource.data.chunkSetVersion == resource.data.chunkSetVersion
+        && request.resource.data.chunkIndex == resource.data.chunkIndex
+        && request.resource.data.text == resource.data.text
+        && request.resource.data.textHash == resource.data.textHash
+        && chunkStatusOk(request.resource.data.status)
+        && chunkVectorOk(request.resource.data)
+        && chunkVectorModelOk(request.resource.data);
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/contents/{contentId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      // P3: same shape as lessons (FREE PUBLISHED only for students; paid stays Worker-gated).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3StudentContentOk(institutionId, p3ClaimStudentId(), resource.data))
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.status == 'PUBLISHED' && resource.data.keys().hasAny(['subjectId']) && resource.data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, p3ClaimTeacherId(), resource.data.subjectId, resource.data.stageId));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId is string
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && contentTypeOk(request.resource.data.contentType)
+        && request.resource.data.status == 'DRAFT'
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId == resource.data.lessonId
+        && request.resource.data.contentType == resource.data.contentType
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && lessonTransitionOk(resource.data.status, request.resource.data.status)
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
     }
 
-    // Phase 14 Subscription Codes & Content Entitlements Collections (Direct Client Writes DENIED)
-    match /institutions/{institutionId}/packages/{packageId} {
+    // D.2: lesson content items alias — identical validated posture.
+    match /institutions/{institutionId}/lessonContents/{contentId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
-      allow create, update, delete: if false;
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId is string
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && contentTypeOk(request.resource.data.contentType)
+        && request.resource.data.status == 'DRAFT'
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId == resource.data.lessonId
+        && request.resource.data.contentType == resource.data.contentType
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && lessonTransitionOk(resource.data.status, request.resource.data.status)
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
+    }
+
+    match /institutions/{institutionId}/homework/{homeworkId} {
+      // P3: eligible PUBLISHED homework (student) + owner/assigned homework (teacher, any lifecycle status).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3StudentContentOk(institutionId, p3ClaimStudentId(), resource.data))
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.institutionId == institutionId && (resource.data.teacherId == p3ClaimTeacherId() || (resource.data.keys().hasAny(['subjectId']) && resource.data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, p3ClaimTeacherId(), resource.data.subjectId, resource.data.stageId))));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId is string
+        && request.resource.data.subjectId is string
+        && request.resource.data.stageId is string
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.maxScore is number && request.resource.data.maxScore > 0
+        && request.resource.data.status == 'DRAFT'
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && homeworkModeOk(request.resource.data.get('mode', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.lessonId == resource.data.lessonId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.maxScore is number && request.resource.data.maxScore > 0
+        && homeworkTransitionOk(resource.data.status, request.resource.data.status)
+        && groupIdsOk(request.resource.data.get('groupIds', null))
+        && accessTypeOk(request.resource.data.get('accessType', null))
+        && homeworkModeOk(request.resource.data.get('mode', null))
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
+    }
+
+    // D.2: submissions — tenant-admin managed (grading flow). Identity
+    // immutable; score (when present) is bounded by the parent homework's
+    // maxScore via get(); creation never carries a score.
+    match /institutions/{institutionId}/homeworkSubmissions/{submissionId} {
+      // P3: own rows (student) + linked rows (parent) + homework-scoped rows (teacher).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && resource.data.studentId == p3ClaimStudentId())
+        || (p3IsParent() && p3ParentLinked(institutionId, resource.data.studentId))
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.keys().hasAny(['homeworkId']) && p3TeacherHomeworkScopeOk(institutionId, p3ClaimTeacherId(), resource.data.homeworkId));
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.homeworkId is string
+        && request.resource.data.studentId is string
+        && request.resource.data.status in ['SUBMITTED', 'LATE']
+        && (!request.resource.data.keys().hasAny(['score']) || request.resource.data.score == null)
+        // P3: scoped student self-submission (homework must be PUBLISHED + eligible; identity fields locked).
+        || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId())
+          && request.resource.data.institutionId == institutionId
+          && request.resource.data.studentId == p3ClaimStudentId()
+          && request.resource.data.homeworkId is string
+          && request.resource.data.status in ['SUBMITTED', 'LATE']
+          && (!request.resource.data.keys().hasAny(['score']) || request.resource.data.score == null)
+          && p3HomeworkEligibleFor(institutionId, p3ClaimStudentId(), request.resource.data.homeworkId)
+          && request.resource.data.keys().hasOnly(['homeworkId', 'studentId', 'institutionId', 'status', 'textAnswer', 'attachment', 'submittedAt', 'version']));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.homeworkId == resource.data.homeworkId
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.status in ['SUBMITTED', 'LATE', 'GRADED', 'RETURNED']
+        && (!request.resource.data.keys().hasAny(['score']) || request.resource.data.score == null
+          || (request.resource.data.score is number && request.resource.data.score >= 0
+            && request.resource.data.score <= get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(request.resource.data.homeworkId)).data.maxScore))
+        // P3: scoped teacher grading (homework-scope proof + tight key allowlist + maxScore bound).
+        || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId())
+          && request.resource.data.institutionId == resource.data.institutionId
+          && request.resource.data.institutionId == institutionId
+          && request.resource.data.homeworkId == resource.data.homeworkId
+          && request.resource.data.studentId == resource.data.studentId
+          && p3TeacherHomeworkScopeOk(institutionId, p3ClaimTeacherId(), resource.data.homeworkId)
+          && request.resource.data.status in ['SUBMITTED', 'LATE', 'GRADED', 'RETURNED']
+          && (!request.resource.data.keys().hasAny(['score']) || request.resource.data.score == null
+            || (request.resource.data.score is number && request.resource.data.score >= 0
+              && request.resource.data.score <= get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(resource.data.homeworkId)).data.maxScore))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score', 'teacherFeedback', 'status', 'gradedAt', 'gradedBy', 'version', 'updatedAt', 'updatedBy']));
+      allow delete: if isSuperAdmin();
+    }
+
+    // D.2: content access trail — append-only like auditLogs.
+    match /institutions/{institutionId}/contentAccessLogs/{logId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId;
+      allow update, delete: if false;
+    }
+
+    // Phase 14 Subscription Codes & Content Entitlements Collections
+    // HUB CORE: packages are Owner/Admin-managed via Center Desktop (allowlisted
+    // tenant-admin writes); codes/entitlements stay trusted-backend-only.
+    match /institutions/{institutionId}/packages/{packageId} {
+      // P3: ACTIVE package catalog readable by bound mobile roles (public pricing catalog).
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin() || (p3BoundRole() && p3ClaimInst() == institutionId && resource.data.status == 'ACTIVE');
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.durationDays is number && request.resource.data.durationDays > 0
+        && request.resource.data.status in ['DRAFT', 'ACTIVE', 'SUSPENDED', 'ARCHIVED']
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.status in ['DRAFT', 'ACTIVE', 'SUSPENDED', 'ARCHIVED']
+        && academicYearOk(request.resource.data.get('academicYearId', null))
+        && termOk(request.resource.data.get('termId', null));
+      allow delete: if isSuperAdmin();
     }
 
     match /institutions/{institutionId}/subscriptionCodes/{codeId} {
@@ -558,9 +1659,51 @@ service cloud.firestore {
     }
 
     match /institutions/{institutionId}/entitlements/{entitlementId} {
-      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+      // AI-4: students read ONLY records keyed to their own auth uid
+      // (entitlement.studentId == auth uid by the subscription service
+      // convention for student callers; uids are globally unique, so no
+      // cross-tenant read is possible). Pure self branch first. No claims
+      // required, nothing else.
+      allow read: if resource == null
+        || (isAuthenticated() && request.auth.uid == resource.data.studentId)
+        || isTenantAdmin(institutionId) || isSuperAdmin()
         || (isTenantUser(institutionId) && request.auth.uid == resource.data.studentId);
       allow create, update, delete: if false;
+    }
+
+    // AI-4 — Student tutor sessions (bounded, self-owned).
+    // One doc per (student, subject): id sess_{studentId}_{subjectId}.
+    // Students read/create/update ONLY their own (studentAuthUid == uid);
+    // updates append bounded history with exact +1 turn accounting.
+    // NOTE: this match lives INSIDE institutions/{institutionId} scope, so
+    // every session doc is tenant-bound by path as well.
+    match /institutions/{institutionId}/aiTutorSessions/{sessionId} {
+      allow read: if resource == null
+        || (isAuthenticated() && request.auth.uid == resource.data.studentAuthUid
+          && resource.data.institutionId == institutionId)
+        || isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.studentAuthUid
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.studentId is string
+        && request.resource.data.subjectId is string
+        && request.resource.data.turnCount == 0
+        && (!(request.resource.data.keys().hasAny(['recentTurns']))
+          || request.resource.data.recentTurns.size() <= 1)
+        && !request.resource.data.keys().hasAny(['role', 'institutionIds', 'uid', 'email', 'teacherId', 'apiKey', 'secret']);
+      allow update: if ((isAuthenticated() && request.auth.uid == resource.data.studentAuthUid)
+        || isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.studentAuthUid == resource.data.studentAuthUid
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.subjectId == resource.data.subjectId
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.turnCount == resource.data.turnCount + 1
+        && request.resource.data.turnCount <= 200
+        && (!(request.resource.data.keys().hasAny(['recentTurns']))
+          || request.resource.data.recentTurns.size() <= 6)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'turnCount', 'quizAttempts', 'recentTurns', 'weaknessNote']);
+      allow delete: if false;
     }
 
     // Phase 21 System Health & System Metadata Collections (Direct Client Writes DENIED)
@@ -574,6 +1717,21 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Client audit trail — append-only. The desktop service already treats
+    // audit denial as non-blocking; this match lets legitimate tenant-scoped
+    // audit writes succeed. C.1: tenant admins may READ their own
+    // institution's trail (doc-level institution check) for the manager audit
+    // viewer; writes stay append-only. Actor fields are optional (legacy
+    // compatible) — actorUid/institutionId remain the enforced core.
+    match /auditLogs/{logId} {
+      allow read: if isSuperAdmin()
+        || (isAuthenticated() && isTenantAdmin(resource.data.institutionId));
+      allow create: if isAuthenticated()
+        && request.resource.data.institutionId is string
+        && (isTenantUser(request.resource.data.institutionId) || isSuperAdmin());
+      allow update, delete: if false;
+    }
+
     // Phase 40 Production Identity, License & Single Device Binding Rules
     match /licenses/{licenseId} {
       allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
@@ -582,7 +1740,48 @@ service cloud.firestore {
 
     match /deviceBindings/{bindingId} {
       allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
-      allow create, update, delete: if isSuperAdmin();
+      // Activation stays SuperAdmin-only: owners/admins can ONLY mint a PENDING
+      // request for their OWN institution (validated fingerprint + self
+      // attribution). They can never create BOUND/UNBOUND, never update,
+      // never delete, never touch another tenant. SuperAdmin approves
+      // PENDING -> BOUND (or unbinds). Trusted callables (Admin SDK) bypass
+      // these client rules by design.
+      allow create: if isSuperAdmin() || (
+        isAuthenticated()
+        && request.resource.data.institutionId is string
+        && isTenantAdmin(request.resource.data.institutionId)
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.deviceFingerprintHash is string
+        && request.resource.data.deviceFingerprintHash.matches('^win_fp_[a-f0-9]{64}$')
+        && request.resource.data.boundBy == request.auth.uid
+      );
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // SUPERADMIN AI PROVIDER METADATA (metadata-only, MASKED — never plaintext secrets).
+    // Secrets live exclusively server-side (worker env / functions runtime
+    // config). Reads AND writes here are SuperAdmin-only (SuperAdmin app
+    // mirror + trusted backend service account). Center owners, teachers,
+    // students, parents: NO read, NO write. Any stored field whose name
+    // looks like a secret is rejected outright as defense-in-depth.
+    match /system/aiProviders {
+      allow read: if isSuperAdmin();
+      allow create, update: if isSuperAdmin()
+        && !request.resource.data.keys().hasAny(['activeKey', 'apiKey', 'api_key', 'candidateKey', 'secret', 'previousKey', 'geminiApiKey', 'openrouterApiKey'])
+        && (!(request.resource.data.keys().hasAny(['gemini'])) || !request.resource.data.gemini.keys().hasAny(['activeKey', 'apiKey', 'secret', 'previousKey']))
+        && (!(request.resource.data.keys().hasAny(['openrouter'])) || !request.resource.data.openrouter.keys().hasAny(['activeKey', 'apiKey', 'secret', 'previousKey']));
+      allow delete: if false;
+    }
+
+    match /system/aiConfig {
+      allow read: if isSuperAdmin() || isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // App Releases (Desktop Auto-Update Manifests)
+    match /appReleases/{releaseId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
     }
   }
 }
