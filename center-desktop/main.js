@@ -93,8 +93,7 @@ app.whenReady().then(() => {
   // 2. Gentle background hotpatch check (8 seconds after window creation)
   setTimeout(async () => {
     try {
-      const { getFirestore } = require('firebase/firestore');
-      if (!updateDb) updateDb = getFirestore();
+      if (!updateDb) updateDb = getUpdateFirestore();
       const patch = await hotpatchService.checkForHotpatch(updateDb, pkg.version);
       if (patch && patch.available && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('hotpatch-ready', patch);
