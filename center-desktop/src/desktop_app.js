@@ -6321,15 +6321,20 @@ async function renderLicenseView(container) {
 
 // 13.1 System Updates & Releases View
 let latestCachedUpdateInfo = null;
+let currentAppVersionCached = '1.0.0-release.52.5.0';
 
-async function renderSystemUpdatesView(container) {
-  let currentVer = '1.0.0-release.52.5.0';
+async function getCurrentAppVersion() {
   if (window.electronAPI && typeof window.electronAPI.getAppVersion === 'function') {
     try {
       const v = await window.electronAPI.getAppVersion();
-      if (v) currentVer = v;
+      if (v) currentAppVersionCached = v;
     } catch (_) {}
   }
+  return currentAppVersionCached;
+}
+
+async function renderSystemUpdatesView(container) {
+  const currentVer = await getCurrentAppVersion();
   
   container.innerHTML = `
     <div class="view-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -6564,12 +6569,13 @@ async function performSystemUpdatesViewCheck() {
     } else {
       if (cardStatus) cardStatus.innerHTML = '<span style="color:#22c55e;">محدّث بالكامل ✅</span>';
       if (cardSub) cardSub.innerText = 'أنت تستخدم أحدث إصدار معتمد';
+      const activeVer = res?.currentVersion || await getCurrentAppVersion();
       resultBox.innerHTML = `
         <div style="text-align:center; padding:2rem 1rem;">
           <div style="font-size:3rem; margin-bottom:0.75rem;">✅</div>
           <h3 style="color:#22c55e; margin-bottom:0.5rem;">نظام السنتر محدّث بالكامل</h3>
           <p style="color:#94a3b8; font-size:0.95rem; margin-bottom:1.2rem;">
-            أنت تستخدم بالفعل أحدث إصدار معتمد ومستقر من البرنامج (v${escapeHtmlAttr(res?.currentVersion || currentVer || '1.0.0-release.52.5.0')}).
+            أنت تستخدم بالفعل أحدث إصدار معتمد ومستقر من البرنامج (v${escapeHtmlAttr(activeVer)}).
           </p>
           <button class="btn" onclick="performSystemUpdatesViewCheck()" style="background:#334155; padding:0.5rem 1.2rem;">
             🔄 إعادة الفحص
