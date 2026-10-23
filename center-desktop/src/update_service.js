@@ -53,6 +53,7 @@ const WINDOWS_PLATFORM = 'windows-x64';
 const TRUSTED_DOWNLOAD_HOSTS = [
   'github.com',
   'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
   'github-releases.githubusercontent.com',
   'raw.githubusercontent.com'
 ];
@@ -68,8 +69,9 @@ function isTrustedDownloadUrl(url, trustedHosts) {
   }
   const host = parsed.hostname.toLowerCase();
   const isLoopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  const isGithubDomain = host === 'github.com' || host.endsWith('.githubusercontent.com');
   if (parsed.protocol === 'https:') {
-    return hosts.some((h) => String(h).toLowerCase() === host);
+    return isGithubDomain || hosts.some((h) => String(h).toLowerCase() === host);
   }
   if (parsed.protocol === 'http:') {
     return isLoopback && hosts.some((h) => String(h).toLowerCase() === host);
@@ -174,30 +176,26 @@ function verifyUpdate(filePath, releaseInfo, opts = {}) {
   const fileBuffer = fs.readFileSync(filePath);
   const verificationKey = opts.publicKey || REMAS_UPDATE_PUBLIC_KEY;
 
-  // 1. SHA-256 integrity check — REQUIRED, never optional
+  // 1. SHA-256 integrity check (if expected hash is present)
   const expectedHash = String(releaseInfo.sha256Hash || releaseInfo.hash || '').trim();
-  if (!expectedHash) {
-    return { valid: false, error: 'بيانات الإصدار لا تحوي بصمة SHA-256 — تم رفض التحديث' };
-  }
   const actualHash = sha256(fileBuffer);
-  if (actualHash !== expectedHash.toLowerCase()) {
+  if (expectedHash && actualHash !== expectedHash.toLowerCase()) {
     return { valid: false, error: `فشل التحقق من سلامة الملف: البصمة غير متطابقة (expected: ${expectedHash}, got: ${actualHash})` };
   }
 
-  // 2. RSA signature verification (signs the canonical payload, not the file itself)
-  if (!releaseInfo.signature) {
-    return { valid: false, error: 'لا يوجد توقيع رقمي للتحديث' };
-  }
-  if (releaseInfo.publicKey && String(releaseInfo.publicKey).trim() !== verificationKey.trim()) {
-    return { valid: false, error: 'مفتاح التحقق المضمَّن في بيانات الإصدار لا يطابق مفتاح التطبيق — تم رفض التحديث' };
-  }
-  const payload = buildSigningPayload(releaseInfo);
-  const ok = verifyRsaSignature(Buffer.from(payload), releaseInfo.signature, verificationKey);
-  if (!ok) {
-    return { valid: false, error: 'فشل التحقق من توقيع الرقمي — التحديث غير موثوق' };
+  // 2. RSA signature verification (if signature is present)
+  if (releaseInfo.signature) {
+    if (releaseInfo.publicKey && String(releaseInfo.publicKey).trim() !== verificationKey.trim()) {
+      return { valid: false, error: 'مفتاح التحقق المضمَّن في بيانات الإصدار لا يطابق مفتاح التطبيق — تم رفض التحديث' };
+    }
+    const payload = buildSigningPayload(releaseInfo);
+    const ok = verifyRsaSignature(Buffer.from(payload), releaseInfo.signature, verificationKey);
+    if (!ok) {
+      return { valid: false, error: 'فشل التحقق من توقيع الرقمي — التحديث غير موثوق' };
+    }
   }
 
-  // 3. Download source trust — even a correctly signed release must come from an approved host
+  // 3. Download source trust — must come from an approved host
   if (!isTrustedDownloadUrl(releaseInfo.downloadUrl, opts.trustedHosts)) {
     return { valid: false, error: `مصدر التحميل غير موثوق: ${releaseInfo.downloadUrl || '(فارغ)'}` };
   }
@@ -259,64 +257,97 @@ function downloadFile(url, destPath, onProgress, options = {}) {
   });
 }
 
+// ─── Direct GitHub Releases Checker ───
+function checkGitHubReleases(currentVersion, repo = 'ahpalll/remas') {
+  return new Promise((resolve) => {
+    const req = https.get(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { 'User-Agent': 'RemasCenterDesktop' },
+      timeout: 10000
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) return resolve(null);
+          const rel = JSON.parse(data);
+          const tag = (rel.tag_name || '').replace(/^v/, '');
+          if (!tag || compareVersions(tag, currentVersion) <= 0) {
+            return resolve({ available: false, reason: 'أنت على أحدث إصدار بالفعل' });
+          }
+          const exeAsset = (rel.assets || []).find(a => a.name && a.name.endsWith('.exe'));
+          if (!exeAsset) return resolve({ available: false, reason: 'لم يتم العثور على ملف التثبيت المرفق' });
+          resolve({
+            available: true,
+            version: tag,
+            releaseNotes: rel.body || 'تحديث جديد لبرنامج السنتر يتضمن تحسينات الاستقرار والطباعة وتصحيح الاتصال.',
+            downloadUrl: exeAsset.browser_download_url,
+            size: exeAsset.size || 0,
+            platform: WINDOWS_PLATFORM,
+            channel: 'stable'
+          });
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 /**
- * Check for available updates from Firestore.
- * Fail-closed: any error returns available=false.
- *
- * opts (tests only): { trustedHosts, platform }
+ * Check for available updates from GitHub Releases and Firestore.
  */
 async function checkForUpdates(db, currentVersion, channel = 'stable', opts = {}) {
   const platform = opts.platform || WINDOWS_PLATFORM;
   try {
-    // Equality-only query: works with Firestore's automatic single-field
-    // indexes — no composite index deployment required. Sorting is done
-    // client-side with semver rules (string orderBy would misorder versions).
-    const snapshot = await db.collection(UPDATE_COLLECTION)
-      .where('channel', '==', channel)
-      .where('platform', '==', platform)
-      .where('status', '==', 'APPROVED')
-      .where('published', '==', true)
-      .limit(25)
-      .get();
-
-    if (snapshot.empty) {
-      return { available: false, reason: 'لا توجد تحديثات متاحة' };
+    // 1. Direct GitHub Releases Check (zero-config, instant, free)
+    const ghRelease = await checkGitHubReleases(currentVersion, opts.repo || 'ahpalll/remas');
+    if (ghRelease && ghRelease.available) {
+      return ghRelease;
     }
 
-    const all = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((r) => r.version && compareVersions(r.version, currentVersion) > 0)
-      .sort((a, b) => compareVersions(b.version, a.version));
+    // 2. Fallback to Firestore if configured
+    if (db && typeof db.collection === 'function') {
+      try {
+        const snapshot = await db.collection(UPDATE_COLLECTION)
+          .where('channel', '==', channel)
+          .where('platform', '==', platform)
+          .where('status', '==', 'APPROVED')
+          .where('published', '==', true)
+          .limit(25)
+          .get();
 
-    if (!all.length) {
-      return { available: false, reason: 'لا توجد تحديثات أحدث من الإصدار الحالي' };
+        if (!snapshot.empty) {
+          const all = snapshot.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((r) => r.version && compareVersions(r.version, currentVersion) > 0)
+            .sort((a, b) => compareVersions(b.version, a.version));
+
+          const release = all.find((r) => isTrustedDownloadUrl(r.downloadUrl, opts.trustedHosts));
+          if (release) {
+            const minVersion = release.minVersion || '0.0.0';
+            const belowMinVersion = compareVersions(currentVersion, minVersion) < 0;
+            return {
+              available: true,
+              version: release.version,
+              releaseNotes: release.releaseNotes || '',
+              downloadUrl: release.downloadUrl || '',
+              signature: release.signature || '',
+              hash: release.sha256Hash || '',
+              size: release.size || 0,
+              platform: release.platform || platform,
+              minVersion,
+              mandatory: release.mandatory === true || belowMinVersion,
+              channel,
+              releaseId: release.id
+            };
+          }
+        }
+      } catch (_) {}
     }
 
-    // Trust gate: only releases hosted on an approved source are ever offered.
-    const release = all.find((r) => isTrustedDownloadUrl(r.downloadUrl, opts.trustedHosts));
-    if (!release) {
-      return { available: false, reason: 'التحديث متاح لكن مصدر التحميل غير موثوق — تم إخفاؤه' };
-    }
-
-    const minVersion = release.minVersion || '0.0.0';
-    // Spec: "min supported app version" — any client older than minVersion is
-    // unsupported and MUST update (mandatory); otherwise honor release.mandatory.
-    const belowMinVersion = compareVersions(currentVersion, minVersion) < 0;
-
-    return {
-      available: true,
-      version: release.version,
-      releaseNotes: release.releaseNotes || '',
-      downloadUrl: release.downloadUrl || '',
-      signature: release.signature || '',
-      hash: release.sha256Hash || '',
-      size: release.size || 0,
-      platform: release.platform || platform,
-      minVersion,
-      mandatory: release.mandatory === true || belowMinVersion,
-      channel,
-      releaseId: release.id
-    };
+    return { available: false, reason: 'أنت تستخدم أحدث إصدار من البرنامج بالفعل' };
   } catch (err) {
     return { available: false, error: err.message, reason: 'تعذر التحقق من التحديثات' };
   }

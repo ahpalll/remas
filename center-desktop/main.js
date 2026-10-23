@@ -7,12 +7,13 @@
 const dns = require('node:dns');
 try { dns.setDefaultResultOrder('ipv4first'); } catch (_) {}
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('node:fs');
 const pkg = require('./package.json');
 const { generateHardwareFingerprint, getSystemMetadata } = require('./src/device_fingerprint');
-const desktopServices = require('./src/center_desktop_services');
+let desktopServices = require('./src/center_desktop_services');
+const hotpatchService = require('./src/hotpatch_service');
 
 let mainWindow = null;
 let currentDeviceStatus = {
@@ -64,7 +65,42 @@ currentDeviceStatus.fingerprint = fingerprint;
 currentDeviceStatus.meta = meta;
 
 app.whenReady().then(() => {
+  // 1. Initialize Hotpatch Storage
+  try {
+    hotpatchService.init(app.getPath('userData'));
+
+    // Reload backend module if a hotpatch exists
+    if (hotpatchService.hasHotpatch('src/center_desktop_services.js')) {
+      desktopServices = hotpatchService.loadHotpatchedModule('src/center_desktop_services.js', desktopServices, __dirname);
+    }
+
+    // Intercept renderer scripts to serve verified hotpatched assets
+    session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+      try {
+        const redirected = hotpatchService.resolveEffectiveFileUrl(details.url, __dirname);
+        if (redirected && redirected !== details.url) {
+          return callback({ redirectURL: redirected });
+        }
+      } catch (_) {}
+      callback({});
+    });
+  } catch (err) {
+    console.warn('[Hotpatch] Setup failed, running factory base:', err.message);
+  }
+
   createWindow();
+
+  // 2. Gentle background hotpatch check (8 seconds after window creation)
+  setTimeout(async () => {
+    try {
+      const { getFirestore } = require('firebase/firestore');
+      if (!updateDb) updateDb = getFirestore();
+      const patch = await hotpatchService.checkForHotpatch(updateDb, pkg.version);
+      if (patch && patch.available && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('hotpatch-ready', patch);
+      }
+    } catch (_) {}
+  }, 8000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -390,12 +426,50 @@ ipcMain.handle('get-update-status', () => {
   return updateStatus;
 });
 
+// ─── OTA Hot-Patching IPC Handlers ───
+ipcMain.handle('check-for-hotpatch', async () => {
+  try {
+    const { getFirestore } = require('firebase/firestore');
+    if (!updateDb) updateDb = getFirestore();
+    const result = await hotpatchService.checkForHotpatch(updateDb, pkg.version);
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('download-apply-hotpatch', async (event, { patchInfo }) => {
+  try {
+    const result = await hotpatchService.downloadAndApplyHotpatch(patchInfo, __dirname);
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-hotpatch-version', () => {
+  return {
+    appVersion: pkg.version,
+    patchVersion: hotpatchService.getCurrentPatchVersion(),
+    appliedAt: hotpatchService.getAppliedDate()
+  };
+});
+
+ipcMain.handle('rollback-hotpatch', () => {
+  return hotpatchService.rollback();
+});
+
+ipcMain.handle('relaunch-app', () => {
+  app.relaunch();
+  app.exit(0);
+});
+
 // Trusted Backend Service Gateway Handler for Renderer Process
 ipcMain.handle('call-backend-service', async (event, { method, args = [] }) => {
   if (typeof desktopServices[method] === 'function') {
     try {
-      const isLongRunningMethod = method.startsWith('generate') && method.includes('WithAI');
-      const timeoutMs = isLongRunningMethod ? 75000 : 15000;
+      const isLongRunningMethod = (method.startsWith('generate') && method.includes('WithAI')) || method.toLowerCase().includes('content') || method.toLowerCase().includes('upload');
+      const timeoutMs = isLongRunningMethod ? 75000 : 25000;
       let timerId;
       const timeoutPromise = new Promise((_, reject) => {
         timerId = setTimeout(() => {

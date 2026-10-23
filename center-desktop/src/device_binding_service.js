@@ -60,7 +60,21 @@ async function requestDeviceActivation({
   const timestamp = new Date().toISOString();
   const bindingId = `bind_${institutionId}_${Date.now()}`;
 
-  // 5. Existing Active Binding Check (1 Device Per Center Rule)
+  // 5a. BI-DIRECTIONAL LOCK: Is this physical machine already bound to another institution?
+  const foreignMachineBinding = Array.from(_deviceBindingsStore.values()).find(
+    b => b.deviceId === fp && b.institutionId !== institutionId && (b.bindingStatus === 'ACTIVE' || b.bindingStatus === 'BOUND')
+  );
+  if (foreignMachineBinding) {
+    _logAuditEvent({
+      institutionId,
+      eventType: 'DEVICE_ACTIVATION_REJECTED',
+      details: `Rejected activation attempt from device ${fp} already bound to institution ${foreignMachineBinding.institutionId}`,
+      performedBy: callerToken.uid || 'system'
+    });
+    throw new Error('DEVICE_BOUND_TO_ANOTHER_INSTITUTION: هذا الجهاز مخصص ومرتبط بالفعل بأكاديمية/سنتر آخر. يُمنع نهائياً تشغيل حساب سنتر مختلف على نفس جهاز الكمبيوتر. لفك ارتباط هذا الجهاز بالسنتر السابق تواصل مع SuperAdmin.');
+  }
+
+  // 5b. Existing Active Binding Check (1 Device Per Center Rule)
   const activeBinding = Array.from(_deviceBindingsStore.values()).find(
     b => b.institutionId === institutionId && (b.bindingStatus === 'ACTIVE' || b.bindingStatus === 'PENDING_ACTIVATION')
   );

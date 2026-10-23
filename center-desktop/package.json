@@ -1,12 +1,14 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.52.3.0",
+  "version": "1.0.0-release.52.5.0",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check:renderer": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/preload.js && node --check main.js",
-    "build:win": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/preload.js && node --check main.js && node scripts/prebuild_clean.js && npx --yes electron-builder --win nsis"
+    "check:renderer": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/hotpatch_service.js && node --check src/preload.js && node --check main.js",
+    "hotpatch": "node scripts/publish_hotpatch.js",
+    "hotpatch:publish": "node scripts/publish_hotpatch.js && node scripts/push_hotpatch_to_firestore.js",
+    "build:win": "node --check src/desktop_app.js && node --check src/center_desktop_services.js && node --check src/hotpatch_service.js && node --check src/preload.js && node --check main.js && node scripts/prebuild_clean.js && npx --yes electron-builder --win nsis"
   },
   "keywords": [
     "remas",

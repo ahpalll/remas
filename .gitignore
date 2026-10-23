@@ -45,6 +45,11 @@ firebase-token.json
 *.apk
 *.aab
 
+# Desktop binary releases & installers
+center-desktop/release_center_*/
+center-desktop/build_temp/
+*.exe
+
 # IOS build artifacts
 *.app
 *.ipa

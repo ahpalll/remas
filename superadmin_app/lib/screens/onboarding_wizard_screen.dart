@@ -46,7 +46,29 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     super.dispose();
   }
 
+  static bool _looksLikeEmail(String v) {
+    final t = v.trim();
+    final at = t.indexOf('@');
+    return at > 0 && t.indexOf('.', at) > at + 1 && !t.contains(' ');
+  }
+
+  void _warn(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _submitWizard() async {
+    // Fail fast BEFORE any write: the wizard performs 5 ordered writes
+    // with no rollback, so invalid input must never reach step 1.
+    if (_centerNameCtrl.text.trim().isEmpty) {
+      _warn('يرجى إدخال اسم المركز قبل التأكيد');
+      return;
+    }
+    if (!_looksLikeEmail(_ownerEmailCtrl.text)) {
+      _warn('بريد مالك المركز غير صالح — صحّحه قبل الإنشاء (وإلا ستُنشأ وثائق يتيمة)');
+      return;
+    }
+    if (!mounted) return;
     setState(() => _loading = true);
     final saUid = SuperAdminService.currentUser?.uid ?? 'UNKNOWN';
     try {
@@ -104,6 +126,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
       debugPrint('[WRITE RESULT]\nstatus=PASS\ncode=200');
 
+      if (!mounted) return;
       setState(() {
         _createdInstitution = inst;
         _createdInvitation = inv;
@@ -113,11 +136,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       });
     } catch (e) {
       debugPrint('[WRITE RESULT]\nstatus=DENIED/ERROR\nerror=${e.toString()}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ أثناء تهيئة المركز: ${e.toString()}'), backgroundColor: Colors.red),
-      );
+      // NOTE: partial failure leaves earlier docs behind (no rollback by
+      // design — deletes are never issued silently). The error names the
+      // failed step so the operator can resume or clean up explicitly.
+      _warn('خطأ أثناء تهيئة المركز: ${e.toString()}');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -140,7 +164,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _centerType,
+          initialValue: _centerType,
           dropdownColor: const Color(0xFF1E293B),
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
@@ -234,7 +258,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF0284C7).withOpacity(0.15),
+            color: const Color(0xFF0284C7).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF38BDF8)),
           ),
@@ -262,7 +286,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         const Text('الخطوة 3: ترخيص التشغيل (License)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _licensePlan,
+          initialValue: _licensePlan,
           dropdownColor: const Color(0xFF1E293B),
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
@@ -281,7 +305,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<int>(
-          value: _licenseDays,
+          initialValue: _licenseDays,
           dropdownColor: const Color(0xFF1E293B),
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
@@ -340,7 +364,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF166534).withOpacity(0.3),
+            color: const Color(0xFF166534).withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF22C55E)),
           ),
@@ -372,12 +396,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               SelectableText('Institution ID: ${_createdInstitution?.institutionId}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('بريد المالك: ${_createdInvitation?.ownerEmail}', style: const TextStyle(color: Colors.white, fontSize: 14)),
-              Text('حالة دعوة المالك: PENDING', style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
+              const Text('حالة دعوة المالك: PENDING', style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('معرف الترخيص: ${_createdLicense?.licenseId}', style: const TextStyle(color: Colors.white, fontSize: 14)),
               Text('كود الترخيص: ${_createdLicense?.licenseCode}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13)),
               Text('حالة الترخيص: ${_createdLicense?.status}', style: const TextStyle(color: Color(0xFF22C55E), fontSize: 13)),
-              Text('ربط الجهاز: NOT BOUND (سيتم الربط عند أول دخول للـ Desktop)', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+              const Text('ربط الجهاز: NOT BOUND (سيتم الربط عند أول دخول للـ Desktop)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
             ],
           ),
         ),

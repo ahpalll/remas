@@ -1,0 +1,31 @@
+{
+  "patchVersion": "1.0.0-hp.52.5.0.1297",
+  "targetVersion": "1.0.0-release.52.5.0",
+  "publishedAt": "2026-10-23T17:31:31.305Z",
+  "active": true,
+  "description": "تحديث فوري للنظام يتضمن تحسينات الاستقرار وسرعة الاستجابة.",
+  "totalSizeKb": "1363.0",
+  "files": [
+    {
+      "relativePath": "src/desktop_app.js",
+      "filename": "desktop_app.js",
+      "size": 759725,
+      "sha256": "d614ebae041a73b3bdf6f6ece08431d4a9a290da6d6c85400c1273621ee3e2a0",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/main/center-desktop/src/desktop_app.js"
+    },
+    {
+      "relativePath": "src/center_desktop_services.js",
+      "filename": "center_desktop_services.js",
+      "size": 621659,
+      "sha256": "bb87122a98739146c87fccd71cfd2290d2d24fe5cbb6d6a5c459838d7f5289bb",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/main/center-desktop/src/center_desktop_services.js"
+    },
+    {
+      "relativePath": "src/hotpatch_service.js",
+      "filename": "hotpatch_service.js",
+      "size": 14344,
+      "sha256": "896d0f91c8def83cd640643fcae65d4e40e49e179986af9b149b752589da9100",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/main/center-desktop/src/hotpatch_service.js"
+    }
+  ]
+}

@@ -48,7 +48,7 @@ function applyBrandingToUI(b) {
   if (!b) return;
   const centerName = b.centerName || 'REMAS EDU | رماس للتقنية التعليمية';
   const logoUrl = b.logoUrl || null;
-  const subtitle = b.welcomeMessage || b.loginSubtitle || 'إدارة أذكى.. تعليم أفضل (v1.0.0-release.52.2.0)';
+  const subtitle = b.welcomeMessage || b.loginSubtitle || 'إدارة أذكى.. تعليم أفضل (v1.0.0-release.52.3.0)';
 
   // 1. Top Header
   const headerTitle = document.getElementById('mainHeaderTitle');
@@ -542,6 +542,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initDesktopApp() {
   setupNetworkMonitoring();
+
+  // Background Auto-Update Check (Check for new GitHub releases silently)
+  setTimeout(() => {
+    checkForAppUpdatesSilently();
+  }, 5000);
 
   // Load and apply cached branding immediately on startup
   try {
@@ -1131,6 +1136,11 @@ function renderSidebarNav() {
           <span class="nav-icon">📜</span>
           <span>سجل الرقابة والعمليات</span>
         </li>
+        <li class="nav-item ${activeView === 'system_updates' ? 'active' : ''}" onclick="navigate('system_updates')" style="color:#38bdf8; border-top:1px dashed #334155; margin-top:0.4rem; padding-top:0.6rem; display:flex; align-items:center;">
+          <span class="nav-icon">📦</span>
+          <span>تحديثات النظام والإصدارات</span>
+          <span id="sidebarUpdateBadge" style="display:none; background:#ef4444; color:#fff; font-size:0.65rem; padding:0.12rem 0.45rem; border-radius:10px; margin-right:auto; font-weight:800;">جديد 🚀</span>
+        </li>
       </div>
     `;
   }
@@ -1394,6 +1404,9 @@ async function renderActiveView(view) {
         break;
       case 'license':
         await renderLicenseView(mainView);
+        break;
+      case 'system_updates':
+        await renderSystemUpdatesView(mainView);
         break;
       // SuperAdmin Platform Views
       case 'superadmin_dashboard':
@@ -3862,20 +3875,44 @@ async function renderContentView(container) {
             <thead>
               <tr>
                 <th>عنوان المذكرة / الملف</th>
-                <th>النوع</th>
-                <th>تاريخ الإضافة</th>
+                <th>التصنيف</th>
+                <th>حجم الملف</th>
+                <th>تاريخ الرفع</th>
                 <th>الحالة</th>
+                <th style="text-align:center;">إجراءات الملف</th>
               </tr>
             </thead>
             <tbody>
-              ${contents.map(c => `
+              ${contents.map(c => {
+                const isPdf = (c.fileName || c.title || '').toLowerCase().endsWith('.pdf') || (c.type === 'PDF');
+                const isDoc = (c.fileName || '').toLowerCase().match(/\.(doc|docx)$/);
+                const isImg = (c.fileName || '').toLowerCase().match(/\.(jpg|jpeg|png|webp)$/) || (c.type === 'IMAGE');
+                const icon = isPdf ? '📕' : (isDoc ? '📝' : (isImg ? '🖼️' : '📄'));
+                const fileTarget = c.dataUrl || c.url;
+                const sizeText = c.sizeBytes ? ((c.sizeBytes > 1024 * 1024) ? (c.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : (c.sizeBytes / 1024).toFixed(1) + ' KB') : '—';
+                return `
                 <tr>
-                  <td><strong style="color:#f1f5f9;">${escapeHtmlAttr(c.title)}</strong></td>
+                  <td>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <span style="font-size:1.3rem;">${icon}</span>
+                      <div>
+                        <strong style="color:#f1f5f9; display:block;">${escapeHtmlAttr(c.title)}</strong>
+                        ${c.fileName && c.fileName !== c.title ? `<div style="font-size:0.72rem; color:#94a3b8;">${escapeHtmlAttr(c.fileName)}</div>` : ''}
+                      </div>
+                    </div>
+                  </td>
                   <td><span class="badge" style="background:#1e3a8a; color:#93c5fd;">${escapeHtmlAttr(c.type || 'PDF')}</span></td>
+                  <td style="color:#cbd5e1; font-size:0.82rem;">${sizeText}</td>
                   <td style="color:#94a3b8; font-size:0.82rem;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
                   <td><span class="badge" style="background:#064e3b; color:#86efac;">متاح للطلاب 🟢</span></td>
+                  <td style="text-align:center;">
+                    <div style="display:inline-flex; gap:0.35rem;">
+                      ${fileTarget ? `<button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(fileTarget)}', '${escapeHtmlAttr(c.title)}')">👁️ فتح / تنزيل</button>` : ''}
+                      <button type="button" class="btn btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="deleteContentItemAction('${c.id}')">🗑️</button>
+                    </div>
+                  </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -4000,7 +4037,7 @@ async function renderExamsView(container) {
                     <td>
                       <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(x.title)}</strong>
                       ${x.description ? `<div style="font-size:0.75rem; color:#94a3b8; max-width:280px;">${escapeHtmlAttr(x.description)}</div>` : ''}
-                      ${x.paperUrl ? `<div style="margin-top:0.25rem;"><a href="${escapeHtmlAttr(x.paperUrl)}" target="_blank" style="font-size:0.75rem; color:#38bdf8;">📎 معاينة ورقة الأسئلة</a></div>` : ''}
+                      ${x.paperUrl ? `<div style="margin-top:0.25rem;"><button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.15rem 0.55rem; font-size:0.72rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(x.paperUrl)}', '${escapeHtmlAttr(x.title)} - ورقة الاختبار')">📎 عرض / تنزيل ورقة الاختبار</button></div>` : ''}
                     </td>
                     <td>
                       <div style="font-size:0.85rem; color:#e2e8f0; font-weight:bold;">${escapeHtmlAttr(subjectName)}</div>
@@ -4164,7 +4201,7 @@ async function renderHomeworkView(container) {
                     <td>
                       <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(h.title)}</strong>
                       ${h.description ? `<div style="font-size:0.75rem; color:#94a3b8; max-width:280px;">${escapeHtmlAttr(h.description)}</div>` : ''}
-                      ${h.attachmentUrl ? `<div style="margin-top:0.25rem;"><a href="${escapeHtmlAttr(h.attachmentUrl)}" target="_blank" style="font-size:0.75rem; color:#38bdf8;">📎 معاينة ورقة الواجب</a></div>` : ''}
+                      ${h.attachmentUrl ? `<div style="margin-top:0.25rem;"><button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.15rem 0.55rem; font-size:0.72rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(h.attachmentUrl)}', '${escapeHtmlAttr(h.title)} - ورقة الواجب')">📎 عرض / تنزيل ورقة الواجب</button></div>` : ''}
                     </td>
                     <td>
                       <div style="font-size:0.85rem; color:#e2e8f0; font-weight:bold;">${escapeHtmlAttr(subjectName)}</div>
@@ -6121,8 +6158,19 @@ async function renderInvoiceSettingsView(container) {
         </div>
 
         <div class="form-group">
-          <label>رابط شعار الفاتورة (Logo URL)</label>
-          <input type="text" id="invLogoUrl" value="${escapeHtmlAttr(effectiveLogo)}" placeholder="https://..." style="width:100%; padding:0.65rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+          <label style="font-weight:600; color:#f8fafc; display:block; margin-bottom:0.4rem;">شعار الفاتورة والإيصالات (من جهاز الكمبيوتر):</label>
+          <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn" style="background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem;" onclick="document.getElementById('invLogoFileInput').click()">
+              🖼️ اختيار صورة الشعار من الكمبيوتر
+            </button>
+            <input type="file" id="invLogoFileInput" accept="image/*" style="display:none;" onchange="previewInvoiceLogoFile(this)">
+            <div id="invLogoPreviewBox" style="${effectiveLogo ? 'display:flex;' : 'display:none;'} align-items:center; gap:0.5rem; background:#0f172a; padding:4px 10px; border-radius:6px; border:1px solid #334155;">
+              <img id="invLogoImg" src="${escapeHtmlAttr(effectiveLogo)}" alt="شعار الفاتورة" style="max-height:42px; max-width:130px; object-fit:contain; background:#fff; padding:2px; border-radius:4px;">
+              <button type="button" class="btn btn-danger" style="padding:0.2rem 0.45rem; font-size:0.7rem;" onclick="clearInvoiceLogo()">حذف ✕</button>
+            </div>
+          </div>
+          <input type="hidden" id="invLogoUrl" value="${escapeHtmlAttr(effectiveLogo)}">
+          <small style="color:#94a3b8; display:block; margin-top:0.35rem;">يُطبع هذا الشعار أعلى إيصالات وفواتير السنتر للطلاب وأولياء الأمور</small>
         </div>
 
         <div class="form-group">
@@ -6199,6 +6247,37 @@ async function saveInvoiceConfigAction() {
   }
 }
 
+function previewInvoiceLogoFile(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 2 ميجابايت', true);
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    document.getElementById('invLogoUrl').value = dataUrl;
+    const img = document.getElementById('invLogoImg');
+    if (img) img.src = dataUrl;
+    const box = document.getElementById('invLogoPreviewBox');
+    if (box) box.style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearInvoiceLogo() {
+  const hiddenInput = document.getElementById('invLogoUrl');
+  if (hiddenInput) hiddenInput.value = '';
+  const fileInput = document.getElementById('invLogoFileInput');
+  if (fileInput) fileInput.value = '';
+  const box = document.getElementById('invLogoPreviewBox');
+  if (box) box.style.display = 'none';
+  const img = document.getElementById('invLogoImg');
+  if (img) img.src = '';
+}
+
 // 13. License View
 async function renderLicenseView(container) {
   const lic = await callBackend('getLicenseStatus', currentCallerToken, currentCallerToken.institutionId).catch(() => null);
@@ -6233,11 +6312,234 @@ async function renderLicenseView(container) {
       <div style="display:flex; flex-direction:column; gap:0.75rem;">
         <div><strong>معرف السنتر (Institution ID):</strong> <span class="code-box" style="color:#38bdf8;">${currentCallerToken.institutionId}</span></div>
         <div><strong>بريد المالك المرخص:</strong> <span class="code-box">${currentCallerToken.email || 'مالك معتمد'}</span></div>
-        <div><strong>إصدار التطبيق المكتبي:</strong> <span class="code-box">v1.0.0-release.52.2.0</span></div>
+        <div><strong>إصدار التطبيق المكتبي:</strong> <span class="code-box">v1.0.0-release.52.3.0</span></div>
         <div><strong>حالة الحماية العتادية:</strong> <span class="badge" style="background:#064e3b; color:#86efac; border:1px solid #10b981;">HARDWARE BOUND 🔒</span></div>
       </div>
     </div>
   `;
+}
+
+// 13.1 System Updates & Releases View
+let latestCachedUpdateInfo = null;
+
+async function renderSystemUpdatesView(container) {
+  const currentVer = '1.0.0-release.52.3.0';
+  
+  container.innerHTML = `
+    <div class="view-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <span style="font-size:1.8rem;">📦</span>
+        <div>
+          <h2 style="margin:0; font-size:1.4rem; color:#f8fafc;">تحديثات وإصدارات نظام السنتر</h2>
+          <span style="font-size:0.85rem; color:#94a3b8;">إدارة وتنزيل التحديثات التلقائية المباشرة عبر سيرفر التحديث السحابي GitHub Releases</span>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="performSystemUpdatesViewCheck()" style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 1.2rem; font-weight:bold;">
+        <span>🔄</span> <span>فحص التحديثات الآن من السيرفر</span>
+      </button>
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+      <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">الإصدار المثبت حالياً</div>
+            <div class="stat-value" style="color:#38bdf8; font-size:1.4rem;">v${currentVer}</div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">💻</div>
+        </div>
+        <div class="stat-sub"><span>النسخة المشغلة حالياً على هذا الكمبيوتر</span></div>
+      </div>
+
+      <div class="stat-card-modern" style="border-right: 4px solid #22c55e;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">قناة التحديثات السحابية</div>
+            <div class="stat-value" style="color:#4ade80; font-size:1.3rem;">نشطة ومباشرة 🟢</div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);">☁️</div>
+        </div>
+        <div class="stat-sub"><span>GitHub Releases (ahpalll/remas)</span></div>
+      </div>
+
+      <div class="stat-card-modern" style="border-right: 4px solid #f59e0b;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">حالة التحديثات التلقائية</div>
+            <div class="stat-value" id="systemUpdatesCardStatus" style="color:#f59e0b; font-size:1.2rem;">جاهز للفحص</div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);">🚀</div>
+        </div>
+        <div class="stat-sub"><span id="systemUpdatesCardSub">يتم الفحص تلقائياً عند فتح البرنامج</span></div>
+      </div>
+    </div>
+
+    <!-- Live Status / Result Container -->
+    <div id="updatesMainResultBox" class="card" style="box-shadow:0 8px 24px rgba(0,0,0,0.3); border:1px solid #334155; margin-bottom:1.5rem; background:#0f172a;">
+      <div style="text-align:center; padding:2rem 1rem;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">🔍</div>
+        <h3 style="color:#f8fafc; margin-bottom:0.5rem;">جاهز للتحقق من وجود أي إصدارات جديدة</h3>
+        <p style="color:#94a3b8; font-size:0.9rem; max-width:500px; margin:0 auto 1.5rem auto;">
+          يقوم النظام بالاتصال بسيرفر GitHub مباشرة للاستعلام عن أحدث نسخة معتمدة لبرنامج السنتر وتحميلها وتثبيتها بنقرة واحدة.
+        </p>
+        <button class="btn btn-primary" onclick="performSystemUpdatesViewCheck()" style="padding:0.75rem 2rem; font-size:1rem; font-weight:bold;">
+          🔄 ابدأ فحص التحديثات الآن
+        </button>
+      </div>
+    </div>
+
+    <div class="card" style="background:#1e293b; border:1px solid #334155;">
+      <div class="card-title" style="display:flex; align-items:center; gap:0.5rem;">
+        <span>ℹ️</span> <span>كيف يعمل نظام التحديث التلقائي في السنتر؟</span>
+      </div>
+      <div style="color:#cbd5e1; font-size:0.9rem; line-height:1.8;">
+        <p style="margin-bottom:0.5rem;">1. <strong>فحص تلقائي صامت:</strong> في كل مرة يتم فيها فتح برنامج السنتر مع وجود اتصال بالإنترنت، يفحص البرنامج تلقائياً في الخلفية وجود أي إصدار جديد.</p>
+        <p style="margin-bottom:0.5rem;">2. <strong>إشعار فوري:</strong> عند توفر إصدار أحدث، يظهر زر تنبيه علوي في أعلى الشاشة <code>🚀 يتوفر تحديث جديد!</code>، ويضاف تنبيه داخل جرس الإشعارات 🔔، وتظهر نافذة منبثقة تفصيلية.</p>
+        <p style="margin-bottom:0.5rem;">3. <strong>تثبيت آمن بنقرة واحدة:</strong> يتم تنزيل التحديث في الخلفية واستبدال البرنامج بأحدث نسخة بدون التأثير على بيانات الطلاب أو التراخيص أو السجلات المحلية.</p>
+      </div>
+    </div>
+  `;
+
+  setTimeout(() => {
+    performSystemUpdatesViewCheck();
+  }, 200);
+}
+
+async function performSystemUpdatesViewCheck() {
+  const resultBox = document.getElementById('updatesMainResultBox');
+  const cardStatus = document.getElementById('systemUpdatesCardStatus');
+  const cardSub = document.getElementById('systemUpdatesCardSub');
+  if (!resultBox) return;
+
+  if (!navigator.onLine) {
+    if (cardStatus) cardStatus.innerHTML = '<span style="color:#ef4444;">غير متصل</span>';
+    if (cardSub) cardSub.innerText = 'يرجى الاتصال بالإنترنت أولاً';
+    resultBox.innerHTML = `
+      <div style="text-align:center; padding:2rem 1rem;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">📡</div>
+        <h3 style="color:#ef4444; margin-bottom:0.5rem;">جهاز الكمبيوتر غير متصل بالإنترنت</h3>
+        <p style="color:#94a3b8; font-size:0.9rem;">تعذر فحص التحديثات بسبب انقطاع اتصال الإنترنت. يرجى إعادة الاتصال ثم المحاولة مجدداً.</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (cardStatus) cardStatus.innerHTML = '<span style="color:#38bdf8;">جاري الفحص...</span>';
+  resultBox.innerHTML = `
+    <div style="text-align:center; padding:2.5rem 1rem;">
+      <div class="spinner" style="margin:0 auto 1rem auto; width:45px; height:45px; border-width:4px;"></div>
+      <h3 style="color:#38bdf8; margin-bottom:0.3rem;">جاري الاتصال بالسيرفر السحابي وفحص التحديثات...</h3>
+      <p style="color:#94a3b8; font-size:0.85rem;">يتم الاستعلام المباشر من GitHub Releases</p>
+    </div>
+  `;
+
+  try {
+    // 1. Check for Lightweight Hotpatch First (< 1 MB)
+    if (window.electronAPI && typeof window.electronAPI.checkForHotpatch === 'function') {
+      try {
+        const hp = await window.electronAPI.checkForHotpatch();
+        if (hp && hp.success && hp.available) {
+          if (cardStatus) cardStatus.innerHTML = '<span style="color:#38bdf8;">تحديث فوري جاهز ⚡</span>';
+          if (cardSub) cardSub.innerText = `الإصدار ${hp.patchVersion} (حجم خفيف)`;
+
+          const totalBytes = Array.isArray(hp.files) ? hp.files.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+          const sizeKb = totalBytes ? `${(totalBytes / 1024).toFixed(0)} KB` : '< 1 MB';
+
+          resultBox.innerHTML = `
+            <div style="padding:1.5rem; text-align:right;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; border-bottom:1px solid #334155; padding-bottom:1rem; margin-bottom:1rem;">
+                <div>
+                  <span class="badge" style="background:#0284c7; color:#fff; font-size:0.85rem; padding:0.3rem 0.8rem; margin-left:0.5rem;">تحديث فوري مباشر (OTA) ⚡</span>
+                  <h2 style="display:inline-block; margin:0; font-size:1.4rem; color:#38bdf8;">${escapeHtmlAttr(hp.patchVersion)}</h2>
+                  <span style="color:#94a3b8; font-size:0.9rem; margin-right:0.5rem;">(${sizeKb})</span>
+                </div>
+                <button class="btn btn-primary" id="btnPageHotpatchInstall" onclick="applyHotpatchAction('${encodeURIComponent(JSON.stringify(hp))}')" style="padding:0.7rem 1.8rem; font-size:1rem; font-weight:bold; display:flex; align-items:center; gap:0.5rem; background:#0284c7;">
+                  <span>⚡</span> <span>تطبيق التحديث الفوري الآن (ثانية واحدة)</span>
+                </button>
+              </div>
+
+              <div style="background:#1e293b; padding:1.2rem; border-radius:8px; border-right:4px solid #38bdf8; margin-bottom:1.5rem;">
+                <strong style="color:#f8fafc; font-size:1rem; display:block; margin-bottom:0.5rem;">بيان التعديلات الفورية:</strong>
+                <p style="color:#cbd5e1; font-size:0.95rem; line-height:1.7; margin:0;">
+                  ${escapeHtmlAttr(hp.description || 'تحديث فوري وخفيف لكود البرنامج لا يتطلب تحميل ملف الـ 93 ميجا ويتم تفعيله لحظياً.')}
+                </p>
+              </div>
+            </div>
+          `;
+          return;
+        }
+      } catch (_) {}
+    }
+
+    const res = await window.electronAPI.checkForUpdates();
+    if (res && res.success && res.available && res.downloadUrl) {
+      latestCachedUpdateInfo = res;
+      if (cardStatus) cardStatus.innerHTML = '<span style="color:#38bdf8;">يوجد إصدار جديد! 🚀</span>';
+      if (cardSub) cardSub.innerText = `الإصدار v${res.version} جاهز للتثبيت`;
+      
+      const sizeMb = res.size ? `(${(res.size / 1048576).toFixed(1)} ميجابايت)` : '';
+      
+      resultBox.innerHTML = `
+        <div style="padding:1.5rem; text-align:right;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; border-bottom:1px solid #334155; padding-bottom:1rem; margin-bottom:1rem;">
+            <div>
+              <span class="badge" style="background:#0284c7; color:#fff; font-size:0.85rem; padding:0.3rem 0.8rem; margin-left:0.5rem;">تحديث جديد متوفر</span>
+              <h2 style="display:inline-block; margin:0; font-size:1.4rem; color:#38bdf8;">v${escapeHtmlAttr(res.version)}</h2>
+              <span style="color:#94a3b8; font-size:0.9rem; margin-right:0.5rem;">${sizeMb}</span>
+            </div>
+            <button class="btn btn-primary" id="btnPageUpdateInstall" onclick="startUpdateDownloadAction(${JSON.stringify(res).replace(/"/g, '&quot;')})" style="padding:0.7rem 1.8rem; font-size:1rem; font-weight:bold; display:flex; align-items:center; gap:0.5rem;">
+              <span>⬇️</span> <span>تحديث وتثبيت النسخة الآن تلقائياً</span>
+            </button>
+          </div>
+
+          <div style="background:#1e293b; padding:1.2rem; border-radius:8px; border-right:4px solid #38bdf8; margin-bottom:1.5rem;">
+            <strong style="color:#f8fafc; font-size:1rem; display:block; margin-bottom:0.5rem;">سجل التحسينات والإصلاحات في هذا الإصدار:</strong>
+            <p style="color:#cbd5e1; font-size:0.95rem; line-height:1.7; margin:0; white-space:pre-line;">
+              ${escapeHtmlAttr(res.releaseNotes || 'يتضمن هذا التحديث إصلاحات مهمة لحل مشكلة انقطاع الإنترنت، وضبط طباعة وإرسال الإيصالات بدقة، وتطوير سرعة واستقرار النظام.')}
+            </p>
+          </div>
+
+          <!-- Progress box in page -->
+          <div id="updateDownloadProgressBoxInView" style="display:none; background:#1e293b; padding:1.5rem; border-radius:8px; border:1px solid #38bdf8;">
+            <div style="display:flex; justify-content:space-between; font-size:0.95rem; color:#38bdf8; font-weight:bold; margin-bottom:0.6rem;">
+              <span id="updateProgressStatusInView">جاري تنزيل التحديث من السيرفر...</span>
+              <span id="updateProgressPercentInView">0%</span>
+            </div>
+            <div style="width:100%; height:12px; background:#334155; border-radius:6px; overflow:hidden;">
+              <div id="updateProgressBarInView" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #0284c7); transition:width 0.2s;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      updateGlobalNotificationBadges(res);
+    } else {
+      if (cardStatus) cardStatus.innerHTML = '<span style="color:#22c55e;">محدّث بالكامل ✅</span>';
+      if (cardSub) cardSub.innerText = 'أنت تستخدم أحدث إصدار معتمد';
+      resultBox.innerHTML = `
+        <div style="text-align:center; padding:2rem 1rem;">
+          <div style="font-size:3rem; margin-bottom:0.75rem;">✅</div>
+          <h3 style="color:#22c55e; margin-bottom:0.5rem;">نظام السنتر محدّث بالكامل</h3>
+          <p style="color:#94a3b8; font-size:0.95rem; margin-bottom:1.2rem;">
+            أنت تستخدم بالفعل أحدث إصدار معتمد ومستقر من البرنامج (v${escapeHtmlAttr(res?.currentVersion || '1.0.0-release.52.3.0')}).
+          </p>
+          <button class="btn" onclick="performSystemUpdatesViewCheck()" style="background:#334155; padding:0.5rem 1.2rem;">
+            🔄 إعادة الفحص
+          </button>
+        </div>
+      `;
+    }
+  } catch (err) {
+    if (cardStatus) cardStatus.innerHTML = '<span style="color:#ef4444;">خطأ في الفحص</span>';
+    resultBox.innerHTML = `
+      <div style="text-align:center; padding:2rem 1rem;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">⚠️</div>
+        <h3 style="color:#ef4444; margin-bottom:0.5rem;">تعذر فحص التحديثات من السيرفر</h3>
+        <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">${escapeHtmlAttr(err.message)}</p>
+        <button class="btn btn-primary" onclick="performSystemUpdatesViewCheck()">إعادة المحاولة</button>
+      </div>
+    `;
+  }
 }
 
 // ============================================================================
@@ -11680,8 +11982,21 @@ async function openAddHomeworkModal() {
             </div>
           </div>
           <div class="form-group">
-            <label>رابط مرفق ورقة الأسئلة أو الشيت (PDF / Drive)</label>
-            <input type="url" id="mHwAttachmentUrl" placeholder="https://... رابط الشيت أو الملف إن وجد">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span>مرفق ورقة الأسئلة أو الشيت (PDF / ملف / رابط):</span>
+              <span style="font-size:0.75rem; color:#94a3b8;">اختيار من الجهاز أو رابط مباشر</span>
+            </label>
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.4rem;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; font-size:0.8rem; display:flex; align-items:center; gap:0.35rem;" onclick="document.getElementById('mHwFileInput').click()">
+                📎 اختيار ملف من الكمبيوتر
+              </button>
+              <input type="file" id="mHwFileInput" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png" style="display:none;" onchange="handleHomeworkFilePick(this)">
+              <div id="mHwFilePickedName" style="display:none; align-items:center; gap:0.4rem; background:#0f172a; padding:0.25rem 0.6rem; border-radius:6px; border:1px solid #334155; font-size:0.8rem; color:#38bdf8;">
+                <span id="mHwFileNameLabel"></span>
+                <button type="button" class="btn btn-danger" style="padding:0.1rem 0.35rem; font-size:0.7rem;" onclick="clearHomeworkPickedFile()">✕</button>
+              </div>
+            </div>
+            <input type="url" id="mHwAttachmentUrl" placeholder="أو اكتب رابط الشيت (Google Drive / رابط خارجي)..." style="font-size:0.82rem;">
           </div>
           <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
             <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
@@ -11729,6 +12044,36 @@ async function submitCreateHomework() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function handleHomeworkFilePick(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('حجم الملف كبير، يرجى اختيار ملف أقل من 10 ميجابايت', true);
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const urlInput = document.getElementById('mHwAttachmentUrl');
+    if (urlInput) urlInput.value = dataUrl;
+    const label = document.getElementById('mHwFileNameLabel');
+    if (label) label.textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+    const box = document.getElementById('mHwFilePickedName');
+    if (box) box.style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearHomeworkPickedFile() {
+  const fileInput = document.getElementById('mHwFileInput');
+  if (fileInput) fileInput.value = '';
+  const urlInput = document.getElementById('mHwAttachmentUrl');
+  if (urlInput) urlInput.value = '';
+  const box = document.getElementById('mHwFilePickedName');
+  if (box) box.style.display = 'none';
 }
 
 async function publishHomeworkAction(homeworkId) {
@@ -12399,6 +12744,316 @@ async function adoptAndSaveAiExam() {
     showToast(friendlyBatchAError(err), true);
   }
 }
+
+// ----------------------------------------------------------------------------
+// AUTO-UPDATE SYSTEM (DIRECT GITHUB RELEASES & ZERO-CONFIG)
+// ----------------------------------------------------------------------------
+
+let isUpdateModalOpen = false;
+
+async function checkForAppUpdatesSilently(isManual = false) {
+  if (!navigator.onLine) {
+    if (isManual) showToast('جهاز الكمبيوتر غير متصل بالإنترنت لفحص التحديثات', true);
+    return;
+  }
+  if (isManual) showToast('جاري فحص وجود تحديثات جديدة...');
+
+  // 1. Check for Lightweight Hotpatch First (< 1 MB)
+  if (window.electronAPI && typeof window.electronAPI.checkForHotpatch === 'function') {
+    try {
+      const hp = await window.electronAPI.checkForHotpatch();
+      if (hp && hp.success && hp.available) {
+        showHotpatchAvailableModal(hp);
+        return;
+      }
+    } catch (_) {}
+  }
+
+  // 2. Fallback to Full Installer Update Check (93 MB)
+  if (!window.electronAPI || typeof window.electronAPI.checkForUpdates !== 'function') return;
+  try {
+    const res = await window.electronAPI.checkForUpdates();
+    if (res && res.success && res.available && res.downloadUrl) {
+      latestCachedUpdateInfo = res;
+      updateGlobalNotificationBadges(res);
+      showUpdateAvailableModal(res);
+    } else if (isManual) {
+      showToast('أنت تستخدم أحدث إصدار من برنامج السنتر بالفعل ✅');
+    }
+  } catch (err) {
+    if (isManual) showToast(`تعذر فحص التحديثات: ${err.message}`, true);
+  }
+}
+
+function triggerManualUpdateCheck() {
+  checkForAppUpdatesSilently(true);
+}
+
+function showHotpatchAvailableModal(patch) {
+  if (isUpdateModalOpen) return;
+  isUpdateModalOpen = true;
+
+  const container = document.getElementById('modalContainer');
+  if (!container) return;
+
+  const totalBytes = Array.isArray(patch.files) ? patch.files.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+  const sizeKb = totalBytes ? `${(totalBytes / 1024).toFixed(0)} KB` : '< 1 MB';
+
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:520px; max-height:90vh; overflow-y:auto; padding:2rem; background:#0f172a; border:2px solid #38bdf8; border-radius:14px; text-align:center; box-shadow:0 20px 40px rgba(0,0,0,0.7);">
+        <div style="font-size:3.2rem; margin-bottom:0.8rem;">⚡</div>
+        <h2 style="color:#38bdf8; margin:0 0 0.5rem 0; font-size:1.4rem;">تحديث فوري خفيف متوفر! (OTA Hotpatch)</h2>
+        <div style="display:inline-block; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid #38bdf8; padding:0.3rem 0.9rem; border-radius:20px; font-weight:bold; font-size:0.85rem; margin-bottom:1.2rem;">
+          الإصدار الفوري: ${escapeHtmlAttr(patch.patchVersion)} • الحجم: ${sizeKb}
+        </div>
+        
+        <p style="color:#94a3b8; font-size:0.88rem; margin:0 0 1.25rem 0; line-height:1.6;">
+          تحديث كود فوري وسريع لا يتطلب تحميل البرنامج كاملاً ويتم تطبيقه في ثانية واحدة فقط.
+        </p>
+
+        <div style="background:#1e293b; border-radius:8px; padding:1rem; text-align:right; margin-bottom:1.5rem; border-right:4px solid #38bdf8;">
+          <strong style="color:#f8fafc; font-size:0.9rem; display:block; margin-bottom:0.4rem;">محتوى التعديل والتحسينات:</strong>
+          <div style="color:#cbd5e1; font-size:0.85rem; line-height:1.6;">
+            ${escapeHtmlAttr(patch.description || 'تحسينات وإصلاحات فورية لاستقرار البرنامج والواجهات.')}
+          </div>
+        </div>
+
+        <div id="hotpatchActionControls" style="display:flex; justify-content:center; gap:0.75rem;">
+          <button class="btn" onclick="closeHotpatchModal()" style="padding:0.6rem 1.5rem; background:#334155; color:#cbd5e1;">لاحقاً</button>
+          <button class="btn btn-primary" id="btnApplyHotpatchNow" onclick="applyHotpatchAction('${encodeURIComponent(JSON.stringify(patch))}')" style="padding:0.6rem 1.8rem; font-weight:bold; background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem;">
+            <span>⚡ تطبيق التحديث الآن فوراً</span>
+          </button>
+        </div>
+
+        <div id="hotpatchProgressBox" style="display:none; margin-top:1.25rem;">
+          <div class="spinner" style="margin:0 auto 0.75rem auto; width:35px; height:35px; border-width:3px;"></div>
+          <div style="color:#38bdf8; font-size:0.9rem; font-weight:bold;">جاري تحميل وتطبيق التحديث الفوري...</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeHotpatchModal() {
+  isUpdateModalOpen = false;
+  closeModal();
+}
+
+async function applyHotpatchAction(patchEncoded) {
+  const actionControls = document.getElementById('hotpatchActionControls');
+  const progressBox = document.getElementById('hotpatchProgressBox');
+
+  if (actionControls) actionControls.style.display = 'none';
+  if (progressBox) progressBox.style.display = 'block';
+
+  try {
+    const patch = JSON.parse(decodeURIComponent(patchEncoded));
+    const res = await window.electronAPI.downloadApplyHotpatch({ patchInfo: patch });
+    if (res && res.success) {
+      if (progressBox) {
+        progressBox.innerHTML = `
+          <div style="font-size:2.5rem; margin-bottom:0.5rem;">✅</div>
+          <div style="color:#22c55e; font-size:1.1rem; font-weight:bold;">تم تطبيق التحديث الفوري بنجاح!</div>
+          <div style="color:#94a3b8; font-size:0.85rem; margin-top:0.3rem;">جاري إعادة تشغيل الواجهة لتفعيل التعديلات...</div>
+        `;
+      }
+      setTimeout(() => {
+        if (window.electronAPI && typeof window.electronAPI.relaunchApp === 'function') {
+          window.electronAPI.relaunchApp();
+        } else {
+          location.reload();
+        }
+      }, 1400);
+    } else {
+      throw new Error(res?.error || 'فشل تطبيق التحديث');
+    }
+  } catch (err) {
+    if (actionControls) actionControls.style.display = 'flex';
+    if (progressBox) progressBox.style.display = 'none';
+    showToast(`خطأ أثناء تطبيق التحديث: ${err.message}`, true);
+  }
+}
+
+if (window.electronAPI && typeof window.electronAPI.onHotpatchReady === 'function') {
+  window.electronAPI.onHotpatchReady((patch) => {
+    showHotpatchAvailableModal(patch);
+  });
+}
+
+function showUpdateAvailableModal(release) {
+  if (isUpdateModalOpen) return;
+  isUpdateModalOpen = true;
+
+  const container = document.getElementById('modalContainer');
+  if (!container) return;
+
+  const sizeMb = release.size ? `(${(release.size / 1048576).toFixed(1)} ميجابايت)` : '';
+
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:560px; max-height:90vh; overflow-y:auto; padding:2rem; background:#0f172a; border:2px solid #38bdf8; border-radius:14px; text-align:center; box-shadow:0 20px 40px rgba(0,0,0,0.7);">
+        <div style="font-size:3.5rem; margin-bottom:1rem;">🚀</div>
+        <h2 style="color:#38bdf8; margin:0 0 0.5rem 0; font-size:1.5rem;">تحديث جديد متوفر لبرنامج السنتر!</h2>
+        <div style="display:inline-block; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid #38bdf8; padding:0.3rem 0.9rem; border-radius:20px; font-weight:bold; font-size:0.9rem; margin-bottom:1.2rem;">
+          الإصدار الجديد: v${escapeHtmlAttr(release.version)} ${sizeMb}
+        </div>
+        
+        <p style="color:#cbd5e1; font-size:0.95rem; line-height:1.7; margin-bottom:1.5rem; text-align:right; background:#1e293b; padding:1rem; border-radius:8px; border-right:4px solid #38bdf8;">
+          ${escapeHtmlAttr(release.releaseNotes || 'يتضمن هذا التحديث إصلاحات مهمة لاستقرار الاتصال بالإنترنت، وحل مشكلة طباعة الإيصالات، وتطوير سرعة واستقرار النظام.')}
+        </p>
+
+        <!-- Progress Container (Hidden initially) -->
+        <div id="updateDownloadProgressBox" style="display:none; margin-bottom:1.5rem;">
+          <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#94a3b8; margin-bottom:0.4rem;">
+            <span id="updateProgressStatus">جاري تنزيل التحديث...</span>
+            <span id="updateProgressPercent">0%</span>
+          </div>
+          <div style="width:100%; height:10px; background:#334155; border-radius:5px; overflow:hidden;">
+            <div id="updateProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #0284c7); transition:width 0.2s;"></div>
+          </div>
+        </div>
+
+        <div id="updateActionButtons" style="display:flex; gap:0.75rem; justify-content:center;">
+          <button class="btn btn-primary" id="btnStartDownloadUpdate" onclick="startUpdateDownloadAction(${JSON.stringify(release).replace(/"/g, '&quot;')})" style="padding:0.75rem 1.8rem; font-weight:bold; font-size:1rem; display:inline-flex; align-items:center; gap:0.5rem;">
+            <span>⬇️</span> <span>تحديث وتثبيت الآن تلقائياً</span>
+          </button>
+          <button class="btn" style="background:#475569; padding:0.75rem 1.5rem;" onclick="closeUpdateModal()">
+            لاحقاً
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeUpdateModal() {
+  isUpdateModalOpen = false;
+  closeModal();
+}
+
+async function startUpdateDownloadAction(release) {
+  const actionBtns = document.getElementById('updateActionButtons');
+  const progressBox = document.getElementById('updateDownloadProgressBox');
+  const progressBar = document.getElementById('updateProgressBar');
+  const progressPercent = document.getElementById('updateProgressPercent');
+  const progressStatus = document.getElementById('updateProgressStatus');
+
+  // In-view elements if available
+  const progressBoxInView = document.getElementById('updateDownloadProgressBoxInView');
+  const progressBarInView = document.getElementById('updateProgressBarInView');
+  const progressPercentInView = document.getElementById('updateProgressPercentInView');
+  const progressStatusInView = document.getElementById('updateProgressStatusInView');
+  const btnPageUpdateInstall = document.getElementById('btnPageUpdateInstall');
+
+  if (actionBtns) actionBtns.style.display = 'none';
+  if (progressBox) progressBox.style.display = 'block';
+
+  if (btnPageUpdateInstall) btnPageUpdateInstall.style.display = 'none';
+  if (progressBoxInView) progressBoxInView.style.display = 'block';
+
+  let removeListener = null;
+  if (window.electronAPI && typeof window.electronAPI.onUpdateProgress === 'function') {
+    removeListener = window.electronAPI.onUpdateProgress((p) => {
+      const pct = p.percent || 0;
+      if (progressBar) progressBar.style.width = `${pct}%`;
+      if (progressPercent) progressPercent.innerText = `${pct}%`;
+      if (progressBarInView) progressBarInView.style.width = `${pct}%`;
+      if (progressPercentInView) progressPercentInView.innerText = `${pct}%`;
+    });
+  }
+
+  try {
+    const res = await window.electronAPI.downloadUpdate({ releaseInfo: release });
+    if (removeListener) removeListener();
+
+    if (res && res.success && res.path) {
+      const successMsg = '✅ تم التنزيل بنجاح! جاري تثبيت التحديث وإعادة تشغيل البرنامج...';
+      if (progressStatus) progressStatus.innerText = successMsg;
+      if (progressBar) progressBar.style.width = '100%';
+      if (progressPercent) progressPercent.innerText = '100%';
+
+      if (progressStatusInView) progressStatusInView.innerText = successMsg;
+      if (progressBarInView) progressBarInView.style.width = '100%';
+      if (progressPercentInView) progressPercentInView.innerText = '100%';
+
+      setTimeout(async () => {
+        await window.electronAPI.installUpdate({ filePath: res.path });
+      }, 1200);
+    } else {
+      throw new Error(res?.error || 'فشل تنزيل ملف التحديث');
+    }
+  } catch (err) {
+    if (removeListener) removeListener();
+    if (progressBox) progressBox.style.display = 'none';
+    if (actionBtns) actionBtns.style.display = 'flex';
+    if (progressBoxInView) progressBoxInView.style.display = 'none';
+    if (btnPageUpdateInstall) btnPageUpdateInstall.style.display = 'inline-flex';
+    showToast(`تعذر تثبيت التحديث: ${err.message}`, true);
+  }
+}
+
+function updateGlobalNotificationBadges(release) {
+  const headerBtn = document.getElementById('headerUpdateBtn');
+  if (headerBtn) {
+    headerBtn.style.display = 'inline-block';
+    headerBtn.title = `إصدار جديد متوفر: v${release.version}`;
+  }
+  const sideBadge = document.getElementById('sidebarUpdateBadge');
+  if (sideBadge) {
+    sideBadge.style.display = 'inline-block';
+  }
+  addAppNotification(`🚀 تحديث نظام متوفر (v${release.version})`, 'يتوفر إصدار جديد لبرنامج السنتر - اضغط هنا للتثبيت المباشر', () => {
+    navigate('system_updates');
+  });
+}
+
+// Global Notification Center Drawer Handlers
+let appNotificationsList = [];
+
+function toggleNotificationDrawer() {
+  const drawer = document.getElementById('notificationDrawer');
+  if (!drawer) return;
+  const isHidden = drawer.style.display === 'none' || !drawer.style.display;
+  drawer.style.display = isHidden ? 'block' : 'none';
+}
+
+function clearNotifications() {
+  appNotificationsList = [];
+  const list = document.getElementById('notificationList');
+  const countBadge = document.getElementById('unreadNotifCount');
+  if (list) list.innerHTML = '<div style="color:#64748b; font-size:0.85rem; text-align:center; padding:1.5rem 0;">لا توجد تنبيهات جديدة</div>';
+  if (countBadge) countBadge.style.display = 'none';
+}
+
+function addAppNotification(title, text, onClickAction) {
+  const list = document.getElementById('notificationList');
+  const countBadge = document.getElementById('unreadNotifCount');
+  if (!list) return;
+
+  appNotificationsList.push({ title, text });
+  if (countBadge) {
+    countBadge.innerText = appNotificationsList.length;
+    countBadge.style.display = 'inline-block';
+  }
+
+  const item = document.createElement('div');
+  item.style.cssText = 'padding:0.75rem; background:#1e293b; border-radius:6px; margin-bottom:0.5rem; cursor:pointer; border-right:3px solid #38bdf8; text-align:right;';
+  item.innerHTML = `
+    <div style="font-weight:bold; color:#38bdf8; font-size:0.85rem; margin-bottom:0.2rem;">${escapeHtmlAttr(title)}</div>
+    <div style="font-size:0.8rem; color:#cbd5e1;">${escapeHtmlAttr(text)}</div>
+  `;
+  item.onclick = () => {
+    toggleNotificationDrawer();
+    if (typeof onClickAction === 'function') onClickAction();
+  };
+
+  if (appNotificationsList.length === 1) {
+    list.innerHTML = '';
+  }
+  list.prepend(item);
+}
+
 
 
 
