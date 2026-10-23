@@ -1,16 +1,16 @@
 {
-  "patchVersion": "1.0.0-hp.52.5.0.1297",
-  "targetVersion": "1.0.0-release.52.5.0",
-  "publishedAt": "2026-10-23T17:31:31.305Z",
+  "patchVersion": "1.0.0-hp.52.6.0.7837",
+  "targetVersion": "1.0.0-release.52.6.0",
+  "publishedAt": "2026-10-23T18:56:27.847Z",
   "active": true,
   "description": "تحديث فوري للنظام يتضمن تحسينات الاستقرار وسرعة الاستجابة.",
-  "totalSizeKb": "1363.0",
+  "totalSizeKb": "1368.3",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 759725,
-      "sha256": "d614ebae041a73b3bdf6f6ece08431d4a9a290da6d6c85400c1273621ee3e2a0",
+      "size": 765103,
+      "sha256": "22015310732ee8fc4600a0270083c46a0bdbde0d7a7b7580cacf0cf415304bb3",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/main/center-desktop/src/desktop_app.js"
     },
     {

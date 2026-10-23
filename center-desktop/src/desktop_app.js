@@ -3379,8 +3379,8 @@ async function sendStudentDueWhatsApp(studentId, studentName, dueAmount, phone) 
     if (res.mode === 'api') {
       showToast('✅ تم إرسال تذكير المصروفات عبر بوابة الواتس بنجاح!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح واتساب لإرسال مطالبة المصروفات');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي لإرسال مطالبة المصروفات');
     }
   } catch (err) {
     showToast(err.message, true);
@@ -4824,7 +4824,7 @@ async function submitAllocateVoucher() {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <button class="btn" style="background:#475569;" onclick="closeModal()">تم والإغلاق</button>
             ${res.studentPhone ? `
-              <button class="btn btn-success" onclick="openWhatsAppExternalUrl('https://wa.me/${res.studentPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('أهلاً بك يا ' + res.studentName + '! كود تفعيل باقة المساعد الذكي VIP في تطبيق السنتر هو: ' + res.code + ' — أدخل الكود في قسم المساعد الذكي لفتح كافة الميزات.')}')">
+              <button class="btn btn-success" onclick="const p = '${(res.studentPhone || '').replace(/[^0-9]/g, '')}'; const m = encodeURIComponent('أهلاً بك يا ${(res.studentName || 'طالب')}! كود تفعيل باقة المساعد الذكي VIP في تطبيق السنتر هو: ${(res.code || '')} — أدخل الكود في قسم المساعد الذكي لفتح كافة الميزات.'); openWhatsAppExternalUrl('whatsapp://send?phone=' + p + '&text=' + m, 'https://wa.me/' + p + '?text=' + m)">
                 💬 إرسال الكود للواتساب
               </button>
             ` : ''}
@@ -4993,8 +4993,8 @@ async function sendParentCredentialsWhatsApp(parentName, phone, pin) {
     if (res.mode === 'api') {
       showToast('✅ تم إرسال بيانات الدخول لولي الأمر عبر الواتس بنجاح!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح واتساب لمشاركة بيانات الدخول مع ولي الأمر');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي لمشاركة بيانات الدخول مع ولي الأمر');
     }
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
@@ -6074,8 +6074,8 @@ async function sendTestWhatsAppAction() {
     if (res.mode === 'api') {
       showToast('✅ تم إرسال الرسالة التجريبية بنجاح عبر البوابة!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح نافذة الواتس آب للمحادثة التجريبية');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي للمحادثة التجريبية');
     }
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
@@ -8347,11 +8347,20 @@ async function saveReceiptImageDirectly(receiptNo = '') {
   }
 }
 
-async function openWhatsAppExternalUrl(targetUrl) {
+async function openWhatsAppExternalUrl(targetUrl, fallbackUrl) {
   if (!targetUrl) return;
 
   if (window.electronAPI && typeof window.electronAPI.openExternalUrl === 'function') {
-    await window.electronAPI.openExternalUrl(targetUrl);
+    try {
+      const res = await window.electronAPI.openExternalUrl(targetUrl);
+      if ((!res || !res.success) && fallbackUrl && fallbackUrl !== targetUrl) {
+        await window.electronAPI.openExternalUrl(fallbackUrl);
+      }
+    } catch (_) {
+      if (fallbackUrl && fallbackUrl !== targetUrl) {
+        try { await window.electronAPI.openExternalUrl(fallbackUrl); } catch (_) {}
+      }
+    }
   } else {
     window.open(targetUrl, '_blank');
   }

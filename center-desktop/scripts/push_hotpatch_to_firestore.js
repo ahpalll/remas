@@ -40,18 +40,34 @@ async function main() {
     console.warn(`تحذير أثناء تسجيل الدخول: ${authErr.message}`);
   }
 
-  const hotpatchDocRef = doc(db, 'appHotpatches', 'latest');
-  await setDoc(hotpatchDocRef, {
+  // 1. Primary Fleet Document (licenses/system_hotpatch_latest) - Authorized for SuperAdmin & readable by all centers
+  const licenseHotpatchRef = doc(db, 'licenses', 'system_hotpatch_latest');
+  await setDoc(licenseHotpatchRef, {
     ...manifest,
+    institutionId: 'GLOBAL_FLEET',
+    publishedBy: 'admin@remas.edu',
     pushedAt: new Date().toISOString()
   }, { merge: true });
 
-  console.log('✅ تم نشر التحديث الفوري بنجاح إلى (appHotpatches/latest)!');
+  console.log('✅ تم نشر التحديث الفوري بنجاح إلى القناة العامة (licenses/system_hotpatch_latest)!');
 
-  const check = await getDoc(hotpatchDocRef);
+  // 2. Secondary fallback attempt
+  try {
+    const hotpatchDocRef = doc(db, 'appHotpatches', 'latest');
+    await setDoc(hotpatchDocRef, {
+      ...manifest,
+      institutionId: 'GLOBAL_FLEET',
+      pushedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (_) {
+    // Ignore if appHotpatches collection rules are strictly isolated
+  }
+
+  const check = await getDoc(licenseHotpatchRef);
   if (check.exists()) {
     console.log(`📡 تأكيد: النسخة المنشورة حالياً في السحابة هي: ${check.data().patchVersion}`);
-    console.log('⚡ ستصل هذه النسخة تلقائياً وفوراً إلى جميع أجهزة السنتر المفتوحة.');
+    console.log(`📝 الوصف: ${check.data().description}`);
+    console.log('⚡ ستصل هذه النسخة تلقائياً وفوراً إلى جميع أجهزة السنتر المفتوحة بمجرد سحب التحديث.');
   }
 
   process.exit(0);

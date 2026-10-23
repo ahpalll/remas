@@ -3379,8 +3379,8 @@ async function sendStudentDueWhatsApp(studentId, studentName, dueAmount, phone) 
     if (res.mode === 'api') {
       showToast('✅ تم إرسال تذكير المصروفات عبر بوابة الواتس بنجاح!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح واتساب لإرسال مطالبة المصروفات');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي لإرسال مطالبة المصروفات');
     }
   } catch (err) {
     showToast(err.message, true);
@@ -4824,7 +4824,7 @@ async function submitAllocateVoucher() {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <button class="btn" style="background:#475569;" onclick="closeModal()">تم والإغلاق</button>
             ${res.studentPhone ? `
-              <button class="btn btn-success" onclick="openWhatsAppExternalUrl('https://wa.me/${res.studentPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('أهلاً بك يا ' + res.studentName + '! كود تفعيل باقة المساعد الذكي VIP في تطبيق السنتر هو: ' + res.code + ' — أدخل الكود في قسم المساعد الذكي لفتح كافة الميزات.')}')">
+              <button class="btn btn-success" onclick="const p = '${(res.studentPhone || '').replace(/[^0-9]/g, '')}'; const m = encodeURIComponent('أهلاً بك يا ${(res.studentName || 'طالب')}! كود تفعيل باقة المساعد الذكي VIP في تطبيق السنتر هو: ${(res.code || '')} — أدخل الكود في قسم المساعد الذكي لفتح كافة الميزات.'); openWhatsAppExternalUrl('whatsapp://send?phone=' + p + '&text=' + m, 'https://wa.me/' + p + '?text=' + m)">
                 💬 إرسال الكود للواتساب
               </button>
             ` : ''}
@@ -4993,8 +4993,8 @@ async function sendParentCredentialsWhatsApp(parentName, phone, pin) {
     if (res.mode === 'api') {
       showToast('✅ تم إرسال بيانات الدخول لولي الأمر عبر الواتس بنجاح!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح واتساب لمشاركة بيانات الدخول مع ولي الأمر');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي لمشاركة بيانات الدخول مع ولي الأمر');
     }
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
@@ -6074,8 +6074,8 @@ async function sendTestWhatsAppAction() {
     if (res.mode === 'api') {
       showToast('✅ تم إرسال الرسالة التجريبية بنجاح عبر البوابة!');
     } else {
-      openWhatsAppExternalUrl(res.directUrl || res.waMeUrl);
-      showToast('تم فتح نافذة الواتس آب للمحادثة التجريبية');
+      openWhatsAppExternalUrl(res.appUrl || res.waMeUrl || res.directUrl, res.directUrl || res.waMeUrl);
+      showToast('💬 جاري فتح تطبيق واتساب المكتبي للمحادثة التجريبية');
     }
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
@@ -6321,9 +6321,20 @@ async function renderLicenseView(container) {
 
 // 13.1 System Updates & Releases View
 let latestCachedUpdateInfo = null;
+let currentAppVersionCached = '1.0.0-release.52.5.0';
+
+async function getCurrentAppVersion() {
+  if (window.electronAPI && typeof window.electronAPI.getAppVersion === 'function') {
+    try {
+      const v = await window.electronAPI.getAppVersion();
+      if (v) currentAppVersionCached = v;
+    } catch (_) {}
+  }
+  return currentAppVersionCached;
+}
 
 async function renderSystemUpdatesView(container) {
-  const currentVer = '1.0.0-release.52.3.0';
+  const currentVer = await getCurrentAppVersion();
   
   container.innerHTML = `
     <div class="view-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -6385,6 +6396,48 @@ async function renderSystemUpdatesView(container) {
         <button class="btn btn-primary" onclick="performSystemUpdatesViewCheck()" style="padding:0.75rem 2rem; font-size:1rem; font-weight:bold;">
           🔄 ابدأ فحص التحديثات الآن
         </button>
+      </div>
+    </div>
+
+    <!-- Changelog & Release History -->
+    <div class="card" style="background:#1e293b; border:1px solid #334155; margin-bottom:1.5rem;">
+      <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-size:1.3rem;">📋</span> <span style="color:#f8fafc; font-size:1.1rem; font-weight:bold;">سجل الإصلاحات والتحسينات المعتمدة في هذا الإصدار (v${currentVer})</span>
+        </div>
+        <span class="badge" style="background:#0284c7; color:#fff; font-size:0.8rem; padding:0.25rem 0.75rem; border-radius:20px;">أحدث إصدار نشط ومطبق 🟢</span>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; margin-top:1rem;">
+        <div style="background:#0f172a; padding:1.1rem; border-radius:8px; border-right:4px solid #38bdf8;">
+          <strong style="color:#38bdf8; display:block; margin-bottom:0.35rem; font-size:0.95rem;">🌐 حماية تجميد النت ورسائل الدخول الصريحة</strong>
+          <span style="color:#cbd5e1; font-size:0.85rem; line-height:1.6; display:block;">
+            تم التخلص نهائياً من تجميد الشاشة عند انقطاع الاتصال، وإظهار رسائل عربية صريحة للسبب الحقيقي (انقطاع الإنترنت) بدلاً من رسالة خطأ بيانات الدخول المضللة.
+          </span>
+        </div>
+        <div style="background:#0f172a; padding:1.1rem; border-radius:8px; border-right:4px solid #22c55e;">
+          <strong style="color:#4ade80; display:block; margin-bottom:0.35rem; font-size:0.95rem;">⚡ دمج محرك الذكاء الاصطناعي السريع (Groq)</strong>
+          <span style="color:#cbd5e1; font-size:0.85rem; line-height:1.6; display:block;">
+            تفعيل نموذج Llama 3.3 70B المجاني الفائق السرعة كأساسي لبنك الأسئلة والامتحانات، ليعمل خلال ثانيتين فقط وبدون أي حظر أو حدود يومية خانقة.
+          </span>
+        </div>
+        <div style="background:#0f172a; padding:1.1rem; border-radius:8px; border-right:4px solid #f59e0b;">
+          <strong style="color:#fbbf24; display:block; margin-bottom:0.35rem; font-size:0.95rem;">🖨️ تصحيح معاينة وطباعة الإيصالات والواتساب</strong>
+          <span style="color:#cbd5e1; font-size:0.85rem; line-height:1.6; display:block;">
+            توليد لقطة فائقة الدقة ونظيفة للفاتورة وحدها وإرسالها مباشرة لرقم ولي الأمر أو الطالب على واتساب بدون التقاط خلفيات أو أزرار الشاشة.
+          </span>
+        </div>
+        <div style="background:#0f172a; padding:1.1rem; border-radius:8px; border-right:4px solid #a855f7;">
+          <strong style="color:#c084fc; display:block; margin-bottom:0.35rem; font-size:0.95rem;">👁️ تطوير سجل الرقابة والعمليات (Audit Log)</strong>
+          <span style="color:#cbd5e1; font-size:0.85rem; line-height:1.6; display:block;">
+            إعادة تصميم شاملة لسجل الرقابة ليعرض 4 بطاقات إحصائية ذكية وتفاصيل باللغة العربية مع فلاتر حسب نوع العملية وتصدير ملفات إكسيل.
+          </span>
+        </div>
+        <div style="background:#0f172a; padding:1.1rem; border-radius:8px; border-right:4px solid #06b6d4;">
+          <strong style="color:#22d3ee; display:block; margin-bottom:0.35rem; font-size:0.95rem;">🚀 نظام التحديثات الفورية الهوائية (OTA Fleet)</strong>
+          <span style="color:#cbd5e1; font-size:0.85rem; line-height:1.6; display:block;">
+            ربط برنامج السنتر مع تطبيق السوبر أدمن لاستقبال التحديثات الفورية الخفيفة أونلاين وتطبيقها بلحظة واحدة وبحجم أقل من 1 ميجابايت.
+          </span>
+        </div>
       </div>
     </div>
 
@@ -6516,12 +6569,13 @@ async function performSystemUpdatesViewCheck() {
     } else {
       if (cardStatus) cardStatus.innerHTML = '<span style="color:#22c55e;">محدّث بالكامل ✅</span>';
       if (cardSub) cardSub.innerText = 'أنت تستخدم أحدث إصدار معتمد';
+      const activeVer = res?.currentVersion || await getCurrentAppVersion();
       resultBox.innerHTML = `
         <div style="text-align:center; padding:2rem 1rem;">
           <div style="font-size:3rem; margin-bottom:0.75rem;">✅</div>
           <h3 style="color:#22c55e; margin-bottom:0.5rem;">نظام السنتر محدّث بالكامل</h3>
           <p style="color:#94a3b8; font-size:0.95rem; margin-bottom:1.2rem;">
-            أنت تستخدم بالفعل أحدث إصدار معتمد ومستقر من البرنامج (v${escapeHtmlAttr(res?.currentVersion || '1.0.0-release.52.3.0')}).
+            أنت تستخدم بالفعل أحدث إصدار معتمد ومستقر من البرنامج (v${escapeHtmlAttr(activeVer)}).
           </p>
           <button class="btn" onclick="performSystemUpdatesViewCheck()" style="background:#334155; padding:0.5rem 1.2rem;">
             🔄 إعادة الفحص
@@ -8293,11 +8347,20 @@ async function saveReceiptImageDirectly(receiptNo = '') {
   }
 }
 
-async function openWhatsAppExternalUrl(targetUrl) {
+async function openWhatsAppExternalUrl(targetUrl, fallbackUrl) {
   if (!targetUrl) return;
 
   if (window.electronAPI && typeof window.electronAPI.openExternalUrl === 'function') {
-    await window.electronAPI.openExternalUrl(targetUrl);
+    try {
+      const res = await window.electronAPI.openExternalUrl(targetUrl);
+      if ((!res || !res.success) && fallbackUrl && fallbackUrl !== targetUrl) {
+        await window.electronAPI.openExternalUrl(fallbackUrl);
+      }
+    } catch (_) {
+      if (fallbackUrl && fallbackUrl !== targetUrl) {
+        try { await window.electronAPI.openExternalUrl(fallbackUrl); } catch (_) {}
+      }
+    }
   } else {
     window.open(targetUrl, '_blank');
   }
