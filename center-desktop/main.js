@@ -370,12 +370,30 @@ let updateStatus = { checking: false, available: false, downloading: false, down
 const UPDATE_DOWNLOAD_DIR = path.join(app.getPath('userData'), 'updates');
 let updateDb = null;
 
+function getUpdateFirestore() {
+  try {
+    const { initializeApp, getApps } = require('firebase/app');
+    const { getFirestore } = require('firebase/firestore');
+    if (getApps().length === 0) {
+      initializeApp({
+        apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyBnsc7JvEKUNyKDxfo0iQP0pJrw41VnZfY',
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'educenter-saas-860c5.firebaseapp.com',
+        projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT || 'educenter-saas-860c5',
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'educenter-saas-860c5.firebasestorage.app'
+      });
+    }
+    return getFirestore();
+  } catch (err) {
+    console.warn('[Update Firestore] Init error:', err.message);
+    return null;
+  }
+}
+
 ipcMain.handle('check-for-updates', async () => {
   updateStatus = { ...updateStatus, checking: true, error: null };
   try {
-    const { getFirestore } = require('firebase/firestore');
-    if (!updateDb) updateDb = getFirestore();
-    const result = await updateService.checkForUpdates(updateDb, pkg.version, 'stable');
+    const db = getUpdateFirestore();
+    const result = await updateService.checkForUpdates(db, pkg.version, 'stable');
     updateStatus = { ...updateStatus, checking: false, available: !!result.available, version: result.version || null, error: result.error || null };
     return { success: true, ...result };
   } catch (err) {
@@ -429,11 +447,11 @@ ipcMain.handle('get-update-status', () => {
 // ─── OTA Hot-Patching IPC Handlers ───
 ipcMain.handle('check-for-hotpatch', async () => {
   try {
-    const { getFirestore } = require('firebase/firestore');
-    if (!updateDb) updateDb = getFirestore();
-    const result = await hotpatchService.checkForHotpatch(updateDb, pkg.version);
+    const db = getUpdateFirestore();
+    const result = await hotpatchService.checkForHotpatch(db, pkg.version);
     return { success: true, ...result };
   } catch (err) {
+    console.warn('[Hotpatch IPC] check error:', err.message);
     return { success: false, error: err.message };
   }
 });
@@ -609,21 +627,6 @@ ipcMain.handle('save-receipt-pdf', async (event, { html, defaultFilename }) => {
   }
 });
 
-// Native Print Handler using mainWindow so Windows Print Preview generates properly
-ipcMain.handle('print-receipt-native', async (event) => {
-  try {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return { success: false, error: 'نافذة البرنامج غير متوفرة' };
-    }
-    await mainWindow.webContents.print({
-      silent: false,
-      printBackground: true
-    });
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
 
 // Helper to render clean isolated receipt HTML to native Electron image
 async function renderReceiptToNativeImage(html) {

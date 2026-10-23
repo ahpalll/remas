@@ -6323,7 +6323,13 @@ async function renderLicenseView(container) {
 let latestCachedUpdateInfo = null;
 
 async function renderSystemUpdatesView(container) {
-  const currentVer = '1.0.0-release.52.3.0';
+  let currentVer = '1.0.0-release.52.5.0';
+  if (window.electronAPI && typeof window.electronAPI.getAppVersion === 'function') {
+    try {
+      const v = await window.electronAPI.getAppVersion();
+      if (v) currentVer = v;
+    } catch (_) {}
+  }
   
   container.innerHTML = `
     <div class="view-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
