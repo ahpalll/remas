@@ -1,6 +1,6 @@
 {
   "name": "remas-center-desktop",
-  "version": "1.0.0-release.52.6.0",
+  "version": "1.0.0-release.52.8.0",
   "description": "REMAS Educational Center SaaS — Standalone Windows Desktop Application",
   "main": "main.js",
   "scripts": {
