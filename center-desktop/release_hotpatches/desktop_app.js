@@ -15959,10 +15959,26 @@ async function submitGenerateAiQuestions() {
     sourceId = memo.id;
     filePath = memo.localStoredPath || memo.filePath || null;
     fileName = memo.fileName || memo.title || null;
-    const cleanMemoText = (memo.textContent && !String(memo.textContent).trimStart().startsWith('%PDF-')) ? memo.textContent : '';
-    contextText = window._aiLessonPrefilledContext || cleanMemoText || memo.description || `مذكرة تعليمية: ${memo.title}`;
     startPage = parseInt(document.getElementById('mAiSavedPageStart')?.value, 10) || memo.pageStart || 1;
     endPage = parseInt(document.getElementById('mAiSavedPageEnd')?.value, 10) || memo.pageEnd || memo.pagesCount || null;
+    const cleanMemoText = (memo.textContent && !String(memo.textContent).trimStart().startsWith('%PDF-')) ? memo.textContent : '';
+    let matchedLessonText = window._aiLessonPrefilledContext || '';
+    if (!matchedLessonText) {
+      const cachedLessons = window._allLessonsCache || [];
+      const matchingLesson = cachedLessons.find(l => l.sourceId === memo.id && (!startPage || !l.pageStart || Number(l.pageStart) === Number(startPage)))
+        || cachedLessons.find(l => l.sourceId === memo.id)
+        || cachedLessons.find(l => l.subjectId === subjectId && l.stageId === stageId);
+      if (matchingLesson) {
+        matchedLessonText = [
+          matchingLesson.title ? `عنوان الدرس: ${matchingLesson.title}` : '',
+          matchingLesson.outlines ? `العناصر الأساسية:\n${matchingLesson.outlines}` : '',
+          matchingLesson.concepts ? `المفاهيم والتعريفات:\n${matchingLesson.concepts}` : '',
+          matchingLesson.summary ? `ملخص الدرس:\n${matchingLesson.summary}` : '',
+          (!matchingLesson.outlines && !matchingLesson.summary && matchingLesson.description) ? matchingLesson.description : ''
+        ].filter(Boolean).join('\n\n');
+      }
+    }
+    contextText = matchedLessonText || cleanMemoText || memo.description || `مذكرة تعليمية باللغة العربية: ${memo.title}`;
   } else if (mode === 'FILE_UPLOAD') {
     contextText = window._aiUploadedFileText || window._aiLessonPrefilledContext || '';
     pdfBase64 = window._aiUploadedFileBase64 || null;

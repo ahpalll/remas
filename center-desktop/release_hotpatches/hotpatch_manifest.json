@@ -1,23 +1,23 @@
 {
-  "patchVersion": "1.0.0-hp.53.2.5",
+  "patchVersion": "1.0.0-hp.53.2.6",
   "targetVersion": "1.0.0-release.53.0.0",
-  "publishedAt": "2026-10-26T22:44:58.682Z",
+  "publishedAt": "2026-10-26T23:25:27.148Z",
   "active": true,
-  "description": "تطوير بروفايل الطالب 360، إصلاح توليد الاختبارات بالذكاء مع شريط تتبع التقدم، وتنسيق عرض الدروس",
-  "totalSizeKb": "1655.7",
+  "description": "ضمان توليد أسئلة الاختبارات باللغة العربية 100% وتنقية بيانات ملفات PDF المصورة",
+  "totalSizeKb": "1659.6",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 969440,
-      "sha256": "2c35ee47926da8b232e8ea0e5148fd69cdeba5772e7ebecd77d1bb8e1249726d",
+      "size": 970546,
+      "sha256": "85e2fd76ced72160088dbe5363072da6b7709aac921f4835f08432c92ee9cc57",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
-      "size": 688659,
-      "sha256": "6c75e3c647e5b9f4d8dad1af6f1ad198e19c5fbcd92a5c5e2d7e69fa3110c175",
+      "size": 691596,
+      "sha256": "170fc4fe7109737ba0ba89dfd994a3c60bea64ffd40d4ab47fd30ec8d193d42f",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {

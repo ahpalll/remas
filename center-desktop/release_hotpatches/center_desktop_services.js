@@ -11307,15 +11307,25 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
   const finalType = questionType || type || 'MCQ';
   const rawTopicStr = String(topic || lessonTitle || resolvedSource.sourceTitle || '').trim();
   const effectiveTopic = rawTopicStr.length > 180 ? rawTopicStr.slice(0, 180) + '...' : rawTopicStr;
+  const isForeignLangSubject = /انجليز|إنجليز|english|فرنساوي|فرنس|french|ألمان|المان|german|إيطال|ايطال|italian|spanish|أسبان/i.test(`${subjectName} ${effectiveTopic}`);
+
+  const cleanInvalidPdfNoise = (txt) => {
+    if (!txt || typeof txt !== 'string') return '';
+    const cleaned = txt.replace(/\b(?:en-US|en-GB|ar-EG|ar-SA|Span|Artifact|Document|Figure|Table|Sect|Part|H[1-6]|P|L|LI|Lbl|LBody|TOC|TOCI|Reference|Note|Link|Annot|Form|PlacedPDF|CIDFont|Identity-H|Adobe|Acrobat|Distiller|Calibri|Arial|TimesNewRoman)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (!isForeignLangSubject && (cleaned.match(/[\u0600-\u06FF]/g) || []).length < 20) {
+      return '';
+    }
+    return cleaned;
+  };
 
   const explicitContext = (!isRawPdfBinaryString(contextText) && String(contextText || '').trim().length > 30)
-    ? String(contextText).trim()
-    : ((!isRawPdfBinaryString(sourceText) && String(sourceText || '').trim().length > 30) ? String(sourceText).trim() : '');
+    ? cleanInvalidPdfNoise(String(contextText).trim())
+    : ((!isRawPdfBinaryString(sourceText) && String(sourceText || '').trim().length > 30) ? cleanInvalidPdfNoise(String(sourceText).trim()) : '');
 
   let effectiveSource = sanitizeDocumentText(
     (explicitContext && /[\u0600-\u06FF]{10,}/.test(explicitContext))
       ? explicitContext
-      : (resolvedSource.cleanText || explicitContext || '')
+      : (cleanInvalidPdfNoise(resolvedSource.cleanText) || explicitContext || '')
   );
   if (effectiveSource && (sPage || ePage) && effectiveSource.length > 4500) {
     effectiveSource = extractPageRangeFromContent(effectiveSource, sPage, ePage);
@@ -11359,7 +11369,14 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
               explanation: String(q.explanation || q.reason || 'إجابة نموذجية وفق المقرر الدراسي').trim(),
               marks: Number(q.marks) || 2
             };
-          }).filter(q => q.prompt && !q.prompt.includes('لا يمكنني توليد أسئلة'));
+          }).filter(q => {
+            if (!q.prompt || q.prompt.includes('لا يمكنني توليد أسئلة')) return false;
+            if (!isForeignLangSubject) {
+              const arabicCharsInPrompt = (q.prompt.match(/[\u0600-\u06FF]/g) || []).length;
+              if (arabicCharsInPrompt < 4) return false;
+            }
+            return true;
+          });
           if (normalized.length > 0) return normalized;
         }
       } catch (_) {}
@@ -11381,40 +11398,37 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     MIXED: 'مزيج من أسئلة الاختيار من متعدد والمسائل والأسئلة المقالية'
   }[finalType] || 'أسئلة اختيار من متعدد';
 
-  const systemPrompt = `أنت خبير تربوي ومعلم أول متخصص في وضع الامتحانات الرسمية والمدرسية باللغة العربية وفق المناهج التعليمية المعتمدة.
-مهمتك: توليد اختبار تعليمي دقيق وممتاز للطلاب.
+  const systemPrompt = `أنت خبير تربوي ومعلم أول متخصص في وضع الامتحانات الرسمية والمدرسية باللغة العربية وفق المناهج التعليمية المصرية المعتمدة.
+مهمتك: توليد اختبار تعليمي دقيق وممتاز للطلاب باللغة العربية الفصحى حصرياً.
+⚠️ شرط إلزامي صارم جداً: يجب أن تكون جميع نصوص الأسئلة (prompt) وجميع الاختيارات (options) والإجابة الصحيحة (correctAnswer) والشرح (explanation) باللغة العربية الفصحى السليمة 100%، ويُمنع منعاً باتاً كتابة الأسئلة أو الاختيارات باللغة الإنجليزية (إلا إذا كانت المادة لغة أجنبية).
 المطلوب إخراج النتيجة بتنسيق JSON صالح فقط (valid JSON array) بدون أي نصوص قبلها أو بعدها.
-يُمنع منعاً باتاً إرجاع أي رسائل اعتذار داخل الأسئلة؛ إذا كان هناك ملف PDF مرفق، اقرأ الصفحات المحددة منه بدقة واستخرج الأسئلة منها مباشرة.
 هيكل كل سؤال في الـ JSON:
 {
   "questionNumber": 1,
-  "prompt": "نص السؤال بوضوح وصياغة لغوية سليمة",
+  "prompt": "نص السؤال باللغة العربية بوضوح وصياغة لغوية سليمة",
   "type": "MCQ",
-  "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+  "options": ["الخيار الأول بالعربية", "الخيار الثاني بالعربية", "الخيار الثالث بالعربية", "الخيار الرابع بالعربية"],
   "correctIndex": 0,
-  "correctAnswer": "نص الخيار الصحيح",
-  "explanation": "شرح علمي مبسط لسبب صحة هذه الإجابة ليتعلم منه الطالب",
+  "correctAnswer": "نص الخيار الصحيح بالعربية",
+  "explanation": "شرح علمي مبسط باللغة العربية لسبب صحة هذه الإجابة ليتعلم منه الطالب",
   "marks": 2
 }`;
 
-  let userPrompt = `يرجى توليد عدد ${countNum} سؤال (${typeDesc}) بمستوى صعوبة: ${diffArabic}.
+  let userPrompt = `يرجى توليد عدد ${countNum} سؤال (${typeDesc}) باللغة العربية الفصحى فقط بمستوى صعوبة: ${diffArabic}.
 المرحلة الدراسية: ${stageName || 'المرحلة التعليمية المعتمدة'}
 المادة: ${subjectName || 'المادة الدراسية'}
 عنوان الدرس / الموضوع: ${effectiveTopic || 'الدرس المحدد'}
+⚠️ تنبيه هام: اكتب جميع الأسئلة والخيارات والشرح باللغة العربية فقط (Arabic Only).
 `;
 
   if (sPage || ePage) {
-    userPrompt += `\n🎯 نطاق الصفحات المستهدفة حصرياً: من صفحة (${sPage || 1}) إلى صفحة (${ePage || 'نهاية المذكرة'}).\n⚠️ توجيه تعليمي إلزامي: يجب قراءة واستنباط جميع الأسئلة حصرياً وبدقة تامة من الصفحات من (${sPage || 1}) إلى (${ePage || 'النهاية'}) فقط داخل المذكرة المرفقة وتجاهل أي صفحات خارج هذا النطاق.\n`;
+    userPrompt += `\n🎯 نطاق الصفحات المستهدفة: من صفحة (${sPage || 1}) إلى صفحة (${ePage || 'نهاية المذكرة'}).\n`;
   }
 
-  if (pdfBase64) {
-    userPrompt += `\n📎 مرفق لك ملف الـ PDF الأصلي للمذكرة (${resolvedSource.sourceTitle || 'المذكرة الدراسية'}). اقرأ محتوى الصفحات المطلوبة (${sPage || 1} إلى ${ePage || 'النهاية'}) مباشرة من ملف الـ PDF المرفق واستخرج الأسئلة منها بدقة علمية كاملة.\n`;
-  }
-
-  if (effectiveSource && String(effectiveSource).trim().length > 40) {
-    userPrompt += `\nنص مستخرج مساعد من المذكرة:\n"""\n${String(effectiveSource).slice(0, 30000)}\n"""\n`;
-  } else if (!pdfBase64) {
-    userPrompt += `\nيرجى صياغة الأسئلة حول موضوع "${effectiveTopic || subjectName}" وفق المنهج الدراسي المصري الرسمي المعتمد لهذه المرحلة والمادة بدقة واحترافية.\n`;
+  if (effectiveSource && String(effectiveSource).trim().length > 80) {
+    userPrompt += `\nنص مستخرج مساعد من المذكرة / الدرس:\n"""\n${String(effectiveSource).slice(0, 30000)}\n"""\n`;
+  } else {
+    userPrompt += `\nيرجى صياغة الأسئلة باللغة العربية الفصحى حول دروس مادة "${subjectName || effectiveTopic}" المقررة على "${stageName}" في النطاق المحدد (من صفحة ${sPage || 1} إلى ${ePage || 5}) وفق المنهج الدراسي المصري الرسمي المعتمد بدقة علمية واحترافية (ملاحظة: إذا كان العنوان يحتوي على كلمة "مذكرة" أو اسم المعلم فهذا اسم الملزمة الدراسية، لذا ضع الأسئلة في المادة العلمية للدرس المقرر نفسه وليس في اسم المذكرة).\n`;
   }
 
   let lastError = null;
@@ -11422,12 +11436,12 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
   // Helper function to call OpenRouter (multi-model with low reasoning effort for fast response)
   async function callOpenRouter() {
     if (!openrouterKey) throw new Error('مفتاح OpenRouter غير متوفر');
-    const orModelsToTry = [...new Set([openrouterModel, 'nvidia/nemotron-3.5-lightning:free', 'openrouter/free'].filter(Boolean))];
+    const orModelsToTry = [...new Set(['openrouter/free', openrouterModel, 'nvidia/nemotron-3.5-lightning:free'].filter(Boolean))];
     let orErrLast = null;
 
     for (const orModel of orModelsToTry) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 50000);
+      const timeoutId = setTimeout(() => controller.abort(), 32000);
       try {
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -11719,7 +11733,7 @@ function extractReadableTextFromPdfBuffer(pdfBuf) {
         const parenMatches = utf8Text.match(/\(([^()]{2,})\)/g) || [];
         for (const pm of parenMatches) {
           const inner = pm.slice(1, -1).replace(/\\n/g, '\n').replace(/[^\x20-\x7E\u0600-\u06FF\n\r\t]/g, ' ').trim();
-          if (inner.length > 2 && /[\u0600-\u06FFa-zA-Z]{2,}/.test(inner)) {
+          if (inner.length > 2 && /[\u0600-\u06FF]{2,}/.test(inner)) {
             chunks.push(inner);
           }
         }
@@ -11731,7 +11745,11 @@ function extractReadableTextFromPdfBuffer(pdfBuf) {
     } catch (_) {}
   }
 
-  return chunks.join(' ').replace(/\s+/g, ' ').trim();
+  const joined = chunks.join(' ').replace(/\s+/g, ' ').trim();
+  if ((joined.match(/[\u0600-\u06FF]/g) || []).length < 30) {
+    return '';
+  }
+  return joined;
 }
 
 async function resolveAiSourceMaterial(clientDb, instId, payload = {}) {
@@ -11808,6 +11826,34 @@ async function resolveAiSourceMaterial(clientDb, instId, payload = {}) {
 
   if (!cleanText && rawCandidateText && !isRawPdfBinaryString(rawCandidateText)) {
     cleanText = String(rawCandidateText);
+  }
+
+  // If the PDF is scanned (no embedded Arabic text), automatically enrich from approved lessons in Firestore for this memo/subject
+  if ((!cleanText || (cleanText.match(/[\u0600-\u06FF]/g) || []).length < 50) && instId && clientDb) {
+    try {
+      const lessonsSnap = await getDocs(collection(clientDb, 'institutions', instId, 'lessons'));
+      const matchedLessons = [];
+      lessonsSnap.forEach(d => {
+        const l = d.data();
+        if (l.status === 'ARCHIVED') return;
+        if ((sourceId && l.sourceId === sourceId) || (payload.subjectId && l.subjectId === payload.subjectId)) {
+          matchedLessons.push(l);
+        }
+      });
+      if (matchedLessons.length > 0) {
+        const chosen = matchedLessons.find(l => (!startPage || !l.pageStart || Number(l.pageStart) === Number(startPage))) || matchedLessons[0];
+        const lessonContext = [
+          chosen.title ? `عنوان الدرس: ${chosen.title}` : '',
+          chosen.outlines ? `العناصر الأساسية:\n${chosen.outlines}` : '',
+          chosen.concepts ? `المفاهيم والتعريفات:\n${chosen.concepts}` : '',
+          chosen.summary ? `ملخص الدرس:\n${chosen.summary}` : '',
+          (!chosen.outlines && !chosen.summary && chosen.description) ? chosen.description : ''
+        ].filter(Boolean).join('\n\n');
+        if (lessonContext.length > 40) {
+          cleanText = lessonContext;
+        }
+      }
+    } catch (_) {}
   }
 
   return {
@@ -12018,10 +12064,10 @@ async function extractLessonExplanationAi(callerToken, payload = {}) {
   }
 
   if (!parsedResult && openrouterKey) {
-    const orModelsToTry = [...new Set([openrouterModel, 'nvidia/nemotron-3.5-lightning:free', 'openrouter/free'].filter(Boolean))];
+    const orModelsToTry = [...new Set(['openrouter/free', openrouterModel, 'nvidia/nemotron-3.5-lightning:free'].filter(Boolean))];
     for (const orModel of orModelsToTry) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 50000);
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
       try {
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
