@@ -967,52 +967,90 @@ async function handleMandatoryPasswordChange() {
   }
 }
 
+window.toggleSidebarAccordion = function(catId) {
+  window._sidebarAccordionState = window._sidebarAccordionState || {};
+  const el = document.getElementById(catId);
+  if (!el) return;
+  const isCollapsed = el.classList.contains('collapsed');
+  if (isCollapsed) {
+    el.classList.remove('collapsed');
+    window._sidebarAccordionState[catId] = true;
+  } else {
+    el.classList.add('collapsed');
+    window._sidebarAccordionState[catId] = false;
+  }
+};
+
+function buildSidebarAccordionSection(id, titleText, icon, itemsHtml, containsActive) {
+  window._sidebarAccordionState = window._sidebarAccordionState || {};
+  if (containsActive) {
+    window._sidebarAccordionState[id] = true;
+  }
+  const isOpen = window._sidebarAccordionState[id] !== false;
+  const collapsedClass = isOpen ? '' : 'collapsed';
+  const activeCatClass = containsActive ? 'active-category' : '';
+
+  return `
+    <div class="sidebar-category ${collapsedClass}" id="${id}">
+      <div class="sidebar-category-header ${activeCatClass}" onclick="toggleSidebarAccordion('${id}')">
+        <div class="sidebar-category-header-title">
+          <span>${icon}</span>
+          <span>${titleText}</span>
+        </div>
+        <span class="sidebar-category-chevron">▼</span>
+      </div>
+      <div class="sidebar-category-items">
+        <ul class="nav-list" style="padding:0.2rem 0.2rem 0.2rem 0.35rem;">
+          ${itemsHtml}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 function renderSidebarNav() {
   const title = document.getElementById('sidebarTitle');
   const nav = document.getElementById('sidebarNav');
 
   if (activeRole === 'superAdmin') {
     if (title) title.innerHTML = '<span>🌐 لوحة المنصة الشاملة</span>';
+    const saMain = `
+      <li class="nav-item ${activeView === 'superadmin_dashboard' ? 'active' : ''}" onclick="navigate('superadmin_dashboard')">
+        <span class="nav-icon">📊</span>
+        <span>لوحة المنصة الشاملة</span>
+      </li>
+    `;
+    const saInst = `
+      <li class="nav-item ${activeView === 'superadmin_institutions' ? 'active' : ''}" onclick="navigate('superadmin_institutions')">
+        <span class="nav-icon">🏢</span>
+        <span>إدارة المراكز والمؤسسات</span>
+      </li>
+      <li class="nav-item ${activeView === 'superadmin_devices' ? 'active' : ''}" onclick="navigate('superadmin_devices')">
+        <span class="nav-icon">💻</span>
+        <span>الأجهزة والتراخيص</span>
+      </li>
+    `;
+    const saAi = `
+      <li class="nav-item ${activeView === 'superadmin_ai' ? 'active' : ''}" onclick="navigate('superadmin_ai')">
+        <span class="nav-icon">🤖</span>
+        <span>مزودات الذكاء الاصطناعي</span>
+      </li>
+      <li class="nav-item ${activeView === 'superadmin_branding' ? 'active' : ''}" onclick="navigate('superadmin_branding')">
+        <span class="nav-icon">🎨</span>
+        <span>إدارة الهوية والمؤسسات</span>
+      </li>
+    `;
+    const saGov = `
+      <li class="nav-item ${activeView === 'superadmin_audit' ? 'active' : ''}" onclick="navigate('superadmin_audit')">
+        <span class="nav-icon">📜</span>
+        <span>سجل أحداث المنصة Audit</span>
+      </li>
+    `;
     if (nav) nav.innerHTML = `
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">الرئيسية والمتابعة</div>
-        <li class="nav-item ${activeView === 'superadmin_dashboard' ? 'active' : ''}" onclick="navigate('superadmin_dashboard')">
-          <span class="nav-icon">📊</span>
-          <span>لوحة المنصة الشاملة</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">المؤسسات والتراخيص</div>
-        <li class="nav-item ${activeView === 'superadmin_institutions' ? 'active' : ''}" onclick="navigate('superadmin_institutions')">
-          <span class="nav-icon">🏢</span>
-          <span>إدارة المراكز والمؤسسات</span>
-        </li>
-        <li class="nav-item ${activeView === 'superadmin_devices' ? 'active' : ''}" onclick="navigate('superadmin_devices')">
-          <span class="nav-icon">💻</span>
-          <span>الأجهزة والتراخيص</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">الذكاء الاصطناعي والهوية</div>
-        <li class="nav-item ${activeView === 'superadmin_ai' ? 'active' : ''}" onclick="navigate('superadmin_ai')">
-          <span class="nav-icon">🤖</span>
-          <span>مزودات الذكاء الاصطناعي</span>
-        </li>
-        <li class="nav-item ${activeView === 'superadmin_branding' ? 'active' : ''}" onclick="navigate('superadmin_branding')">
-          <span class="nav-icon">🎨</span>
-          <span>إدارة الهوية والمؤسسات</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">الحوكمة والأمان</div>
-        <li class="nav-item ${activeView === 'superadmin_audit' ? 'active' : ''}" onclick="navigate('superadmin_audit')">
-          <span class="nav-icon">📜</span>
-          <span>سجل أحداث المنصة Audit</span>
-        </li>
-      </div>
+      ${buildSidebarAccordionSection('sa_cat_main', 'الرئيسية والمتابعة', '📊', saMain, activeView === 'superadmin_dashboard')}
+      ${buildSidebarAccordionSection('sa_cat_inst', 'المؤسسات والتراخيص', '🏢', saInst, ['superadmin_institutions', 'superadmin_devices'].includes(activeView))}
+      ${buildSidebarAccordionSection('sa_cat_ai', 'الذكاء الاصطناعي والهوية', '🤖', saAi, ['superadmin_ai', 'superadmin_branding'].includes(activeView))}
+      ${buildSidebarAccordionSection('sa_cat_gov', 'الحوكمة والأمان', '📜', saGov, activeView === 'superadmin_audit')}
     `;
   } else {
     // Block full navigation when mandatory password change is pending
@@ -1029,119 +1067,135 @@ function renderSidebarNav() {
       return;
     }
     if (title) title.innerHTML = '<span>🏫 إدارة السنتر التعليمي</span>';
+
+    const mainItems = `
+      <li class="nav-item ${activeView === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')">
+        <span class="nav-icon">📈</span>
+        <span>لوحة التحكم الشاملة</span>
+      </li>
+    `;
+
+    const aiStudioItems = `
+      <li class="nav-item ${['ai_studio', 'content', 'exams', 'homework'].includes(activeView) ? 'active' : ''}" onclick="navigate('ai_studio')" style="border-right-color:#38bdf8;">
+        <span class="nav-icon">⚡</span>
+        <span style="font-weight:700;">استوديو مصادر الذكاء الموحد</span>
+        <span style="font-size:0.65rem; background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid #38bdf8; padding:0.1rem 0.4rem; border-radius:6px; margin-right:auto;">5 في 1</span>
+      </li>
+    `;
+
+    const reportsItems = `
+      <li class="nav-item ${activeView === 'homework_reports' ? 'active' : ''}" onclick="navigate('homework_reports')">
+        <span class="nav-icon">📑</span>
+        <span>كشف نتائج وتسليمات الواجبات</span>
+      </li>
+      <li class="nav-item ${activeView === 'student_diagnostic' ? 'active' : ''}" onclick="navigate('student_diagnostic')">
+        <span class="nav-icon">🎯</span>
+        <span>تشخيص وتحديد مستوى الطالب</span>
+        <span style="font-size:0.65rem; background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid #22c55e; padding:0.1rem 0.4rem; border-radius:6px; margin-right:auto;">ذكاء</span>
+      </li>
+    `;
+
+    const academicItems = `
+      <li class="nav-item ${activeView === 'academic' ? 'active' : ''}" onclick="navigate('academic')">
+        <span class="nav-icon">🏫</span>
+        <span>الإعداد الأكاديمي</span>
+      </li>
+      <li class="nav-item ${activeView === 'groups' ? 'active' : ''}" onclick="navigate('groups')">
+        <span class="nav-icon">📚</span>
+        <span>المجموعات والمواد</span>
+      </li>
+      <li class="nav-item ${activeView === 'schedule' ? 'active' : ''}" onclick="navigate('schedule')">
+        <span class="nav-icon">🗓️</span>
+        <span>جدول الحصص</span>
+      </li>
+    `;
+
+    const studentsItems = `
+      <li class="nav-item ${activeView === 'students' ? 'active' : ''}" onclick="navigate('students')">
+        <span class="nav-icon">🎓</span>
+        <span>إدارة الطلاب</span>
+      </li>
+      <li class="nav-item ${activeView === 'cards' ? 'active' : ''}" onclick="navigate('cards')">
+        <span class="nav-icon">🪪</span>
+        <span>كروت وبطاقات الطلاب</span>
+      </li>
+      <li class="nav-item ${activeView === 'teachers' ? 'active' : ''}" onclick="navigate('teachers')">
+        <span class="nav-icon">👨‍🏫</span>
+        <span>المعلمون وهيئة التدريس</span>
+      </li>
+      <li class="nav-item ${activeView === 'employees' ? 'active' : ''}" onclick="navigate('employees')">
+        <span class="nav-icon">👨‍💼</span>
+        <span>الموظفون والصلاحيات</span>
+      </li>
+      <li class="nav-item ${activeView === 'parents' ? 'active' : ''}" onclick="navigate('parents')">
+        <span class="nav-icon">👨‍👩‍👧</span>
+        <span>أولياء الأمور</span>
+      </li>
+    `;
+
+    const attendanceItems = `
+      <li class="nav-item ${activeView === 'attendance' ? 'active' : ''}" onclick="navigate('attendance')">
+        <span class="nav-icon">📋</span>
+        <span>كشك الحضور والباركود</span>
+      </li>
+    `;
+
+    const financeItems = `
+      <li class="nav-item ${activeView === 'finance' ? 'active' : ''}" onclick="navigate('finance')">
+        <span class="nav-icon">💵</span>
+        <span>الخزينة والحسابات</span>
+      </li>
+      <li class="nav-item ${activeView === 'subscriptions' ? 'active' : ''}" onclick="navigate('subscriptions')">
+        <span class="nav-icon">🎟️</span>
+        <span>الاشتراكات والباقات</span>
+      </li>
+    `;
+
+    const settingsItems = `
+      <li class="nav-item ${activeView === 'branding' ? 'active' : ''}" onclick="navigate('branding')">
+        <span class="nav-icon">🎨</span>
+        <span>الهوية والعلامة التجارية</span>
+      </li>
+      <li class="nav-item ${activeView === 'center_info' ? 'active' : ''}" onclick="navigate('center_info')">
+        <span class="nav-icon">⚙️</span>
+        <span>معلومات السنتر الرسمية</span>
+      </li>
+      <li class="nav-item ${activeView === 'invoice_settings' ? 'active' : ''}" onclick="navigate('invoice_settings')">
+        <span class="nav-icon">🧾</span>
+        <span>إعدادات وترويسة الفواتير</span>
+      </li>
+      <li class="nav-item ${activeView === 'whatsapp' ? 'active' : ''}" onclick="navigate('whatsapp')">
+        <span class="nav-icon">💬</span>
+        <span>إعدادات وربط الواتس والجدولة</span>
+      </li>
+      <li class="nav-item ${activeView === 'license' ? 'active' : ''}" onclick="navigate('license')">
+        <span class="nav-icon">🔒</span>
+        <span>الترخيص وتوثيق الجهاز</span>
+      </li>
+      <li class="nav-item ${activeView === 'ai_status' ? 'active' : ''}" onclick="navigate('ai_status')">
+        <span class="nav-icon">🤖</span>
+        <span>الذكاء الاصطناعي والكوتة</span>
+      </li>
+      <li class="nav-item ${activeView === 'audit' ? 'active' : ''}" onclick="navigate('audit')">
+        <span class="nav-icon">📜</span>
+        <span>سجل الرقابة والعمليات</span>
+      </li>
+      <li class="nav-item ${activeView === 'system_updates' ? 'active' : ''}" onclick="navigate('system_updates')" style="color:#38bdf8; border-top:1px dashed #334155; margin-top:0.4rem; padding-top:0.6rem; display:flex; align-items:center;">
+        <span class="nav-icon">📦</span>
+        <span>تحديثات النظام والإصدارات</span>
+        <span id="sidebarUpdateBadge" style="display:none; background:#ef4444; color:#fff; font-size:0.65rem; padding:0.12rem 0.45rem; border-radius:10px; margin-right:auto; font-weight:800;">جديد 🚀</span>
+      </li>
+    `;
+
     if (nav) nav.innerHTML = `
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">📊 الرئيسية والمتابعة</div>
-        <li class="nav-item ${activeView === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')">
-          <span class="nav-icon">📈</span>
-          <span>لوحة التحكم الشاملة</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">🏫 الهيكل الأكاديمي</div>
-        <li class="nav-item ${activeView === 'academic' ? 'active' : ''}" onclick="navigate('academic')">
-          <span class="nav-icon">🏫</span>
-          <span>الإعداد الأكاديمي</span>
-        </li>
-        <li class="nav-item ${activeView === 'groups' ? 'active' : ''}" onclick="navigate('groups')">
-          <span class="nav-icon">📚</span>
-          <span>المجموعات والمواد</span>
-        </li>
-        <li class="nav-item ${activeView === 'schedule' ? 'active' : ''}" onclick="navigate('schedule')">
-          <span class="nav-icon">🗓️</span>
-          <span>جدول الحصص</span>
-        </li>
-        <li class="nav-item ${activeView === 'content' ? 'active' : ''}" onclick="navigate('content')">
-          <span class="nav-icon">📖</span>
-          <span>المحتوى والدروس</span>
-        </li>
-        <li class="nav-item ${activeView === 'exams' ? 'active' : ''}" onclick="navigate('exams')">
-          <span class="nav-icon">📝</span>
-          <span>الاختبارات والتقييمات</span>
-        </li>
-        <li class="nav-item ${activeView === 'homework' ? 'active' : ''}" onclick="navigate('homework')">
-          <span class="nav-icon">📑</span>
-          <span>الواجبات والتكليفات</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">👥 شؤون الطلاب والكادر والإدارة</div>
-        <li class="nav-item ${activeView === 'students' ? 'active' : ''}" onclick="navigate('students')">
-          <span class="nav-icon">🎓</span>
-          <span>إدارة الطلاب</span>
-        </li>
-        <li class="nav-item ${activeView === 'cards' ? 'active' : ''}" onclick="navigate('cards')">
-          <span class="nav-icon">🪪</span>
-          <span>كروت وبطاقات الطلاب</span>
-        </li>
-        <li class="nav-item ${activeView === 'teachers' ? 'active' : ''}" onclick="navigate('teachers')">
-          <span class="nav-icon">👨‍🏫</span>
-          <span>المعلمون وهيئة التدريس</span>
-        </li>
-        <li class="nav-item ${activeView === 'employees' ? 'active' : ''}" onclick="navigate('employees')">
-          <span class="nav-icon">👨‍💼</span>
-          <span>الموظفون والصلاحيات</span>
-        </li>
-        <li class="nav-item ${activeView === 'parents' ? 'active' : ''}" onclick="navigate('parents')">
-          <span class="nav-icon">👨‍👩‍👧</span>
-          <span>أولياء الأمور</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">⏱️ الحضور والانضباط</div>
-        <li class="nav-item ${activeView === 'attendance' ? 'active' : ''}" onclick="navigate('attendance')">
-          <span class="nav-icon">📋</span>
-          <span>كشك الحضور والباركود</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">💰 المالية والخزينة</div>
-        <li class="nav-item ${activeView === 'finance' ? 'active' : ''}" onclick="navigate('finance')">
-          <span class="nav-icon">💵</span>
-          <span>الخزينة والحسابات</span>
-        </li>
-        <li class="nav-item ${activeView === 'subscriptions' ? 'active' : ''}" onclick="navigate('subscriptions')">
-          <span class="nav-icon">🎟️</span>
-          <span>الاشتراكات والباقات</span>
-        </li>
-      </div>
-
-      <div class="sidebar-category">
-        <div class="sidebar-category-title">⚙️ الإعدادات والترخيص والرقابة</div>
-        <li class="nav-item ${activeView === 'branding' ? 'active' : ''}" onclick="navigate('branding')">
-          <span class="nav-icon">🎨</span>
-          <span>الهوية والعلامة التجارية</span>
-        </li>
-        <li class="nav-item ${activeView === 'center_info' ? 'active' : ''}" onclick="navigate('center_info')">
-          <span class="nav-icon">⚙️</span>
-          <span>معلومات السنتر الرسمية</span>
-        </li>
-        <li class="nav-item ${activeView === 'invoice_settings' ? 'active' : ''}" onclick="navigate('invoice_settings')">
-          <span class="nav-icon">🧾</span>
-          <span>إعدادات وترويسة الفواتير</span>
-        </li>
-        <li class="nav-item ${activeView === 'whatsapp' ? 'active' : ''}" onclick="navigate('whatsapp')">
-          <span class="nav-icon">💬</span>
-          <span>إعدادات وربط الواتس والجدولة</span>
-        </li>
-        <li class="nav-item ${activeView === 'license' ? 'active' : ''}" onclick="navigate('license')">
-          <span class="nav-icon">🔒</span>
-          <span>الترخيص وتوثيق الجهاز</span>
-        </li>
-        <li class="nav-item ${activeView === 'audit' ? 'active' : ''}" onclick="navigate('audit')">
-          <span class="nav-icon">📜</span>
-          <span>سجل الرقابة والعمليات</span>
-        </li>
-        <li class="nav-item ${activeView === 'system_updates' ? 'active' : ''}" onclick="navigate('system_updates')" style="color:#38bdf8; border-top:1px dashed #334155; margin-top:0.4rem; padding-top:0.6rem; display:flex; align-items:center;">
-          <span class="nav-icon">📦</span>
-          <span>تحديثات النظام والإصدارات</span>
-          <span id="sidebarUpdateBadge" style="display:none; background:#ef4444; color:#fff; font-size:0.65rem; padding:0.12rem 0.45rem; border-radius:10px; margin-right:auto; font-weight:800;">جديد 🚀</span>
-        </li>
-      </div>
+      ${buildSidebarAccordionSection('cat_main', 'الرئيسية والمتابعة', '📊', mainItems, activeView === 'dashboard')}
+      ${buildSidebarAccordionSection('cat_ai_studio', 'مصادر الذكاء الاصطناعي', '🤖', aiStudioItems, ['ai_studio', 'content', 'exams', 'homework'].includes(activeView))}
+      ${buildSidebarAccordionSection('cat_reports', 'تقارير الانضباط والنتائج', '📈', reportsItems, ['homework_reports', 'student_diagnostic'].includes(activeView))}
+      ${buildSidebarAccordionSection('cat_academic', 'الهيكل الأكاديمي', '🏫', academicItems, ['academic', 'groups', 'schedule'].includes(activeView))}
+      ${buildSidebarAccordionSection('cat_students', 'شؤون الطلاب والكادر', '👥', studentsItems, ['students', 'cards', 'teachers', 'employees', 'parents'].includes(activeView))}
+      ${buildSidebarAccordionSection('cat_attendance', 'الحضور والانضباط', '⏱️', attendanceItems, activeView === 'attendance')}
+      ${buildSidebarAccordionSection('cat_finance', 'المالية والخزينة', '💰', financeItems, ['finance', 'subscriptions'].includes(activeView))}
+      ${buildSidebarAccordionSection('cat_settings', 'الإعدادات والترخيص والرقابة', '⚙️', settingsItems, ['branding', 'center_info', 'invoice_settings', 'whatsapp', 'license', 'ai_status', 'audit', 'system_updates'].includes(activeView))}
     `;
   }
 }
@@ -1237,8 +1291,8 @@ async function callBackend(method, ...args) {
       throw netErr;
     }
 
-    const isLongRunningMethod = method.startsWith('generate') && method.includes('WithAI');
-    const timeoutMs = isLongRunningMethod ? 60000 : 12000;
+    const isLongRunningMethod = method.toLowerCase().includes('ai') || method.toLowerCase().includes('generate') || method.toLowerCase().includes('content') || method.toLowerCase().includes('upload');
+    const timeoutMs = isLongRunningMethod ? 120000 : 20000;
 
     let timerId;
     const timeoutPromise = new Promise((_, reject) => {
@@ -1313,8 +1367,12 @@ function friendlyBatchAError(err) {
   return parts.length > 1 ? parts.slice(1).join(':').trim() : raw;
 }
 
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function escapeHtmlAttr(s) {
-  return String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return escapeHtml(s);
 }
 
 function fmtMoney(n) {
@@ -1370,13 +1428,18 @@ async function renderActiveView(view) {
         await renderFinanceView(mainView);
         break;
       case 'content':
-        await renderContentView(mainView);
-        break;
       case 'exams':
-        await renderExamsView(mainView);
-        break;
       case 'homework':
-        await renderHomeworkView(mainView);
+      case 'ai_studio': {
+        const targetTab = view === 'exams' ? 'exams' : (view === 'homework' ? 'homework' : (view === 'content' ? 'lessons' : (window._activeAiStudioTab || 'resources')));
+        await renderAiStudioView(mainView, targetTab);
+        break;
+      }
+      case 'homework_reports':
+        await renderHomeworkReportsView(mainView);
+        break;
+      case 'student_diagnostic':
+        await renderStudentDiagnosticView(mainView);
         break;
       case 'subscriptions':
         await renderSubscriptionsView(mainView);
@@ -1404,6 +1467,9 @@ async function renderActiveView(view) {
         break;
       case 'license':
         await renderLicenseView(mainView);
+        break;
+      case 'ai_status':
+        await renderCenterAiStatusView(mainView);
         break;
       case 'system_updates':
         await renderSystemUpdatesView(mainView);
@@ -3739,518 +3805,1265 @@ function renderSessionsTableHtml(list) {
   `;
 }
 
-// 8. Content View
-async function renderContentView(container) {
-  let lessons = [];
-  let contents = [];
+// =========================================================================
+// 8. UNIFIED AI EDUCATIONAL STUDIO (استوديو مصادر الذكاء الاصطناعي - 5 في 1)
+// =========================================================================
+window._activeAiStudioTab = window._activeAiStudioTab || 'resources';
+window._allWatchCodesCache = window._allWatchCodesCache || [];
+window._allVideosCache = window._allVideosCache || [];
+
+function switchAiStudioTab(tabId) {
+  window._activeAiStudioTab = tabId;
+  const navBtns = document.querySelectorAll('.ai-studio-tab-btn');
+  navBtns.forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
+  });
+  const tabPanes = document.querySelectorAll('.ai-studio-pane');
+  tabPanes.forEach(p => {
+    p.style.display = p.id === `tab_pane_${tabId}` ? 'block' : 'none';
+  });
+}
+
+async function renderAiStudioView(container, initialTab = null) {
+  if (initialTab) window._activeAiStudioTab = initialTab;
+  const activeTab = window._activeAiStudioTab || 'resources';
+
+  let lessons = [], contents = [], exams = [], homework = [], stages = [], subjects = [], groups = [];
   try {
-    const [lRes, cRes] = await Promise.all([
-      callBackend('getLessons', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []),
-      callBackend('getContent', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => [])
+    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
+    const [lRes, cRes, eRes, hRes, stRes, subRes, gRes, vCodesRes] = await Promise.all([
+      callBackend('getLessons', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getContent', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getExams', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getHomework', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getStages', currentCallerToken, instId).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, instId).catch(() => []),
+      callBackend('getGroups', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getVideoWatchCodes', currentCallerToken, { institutionId: instId }).catch(() => [])
     ]);
     lessons = lRes || [];
     contents = cRes || [];
+    exams = eRes || [];
+    homework = hRes || [];
+    stages = stRes || [];
+    subjects = subRes || [];
+    groups = gRes || [];
+    if (vCodesRes && Array.isArray(vCodesRes)) {
+      window._allWatchCodesCache = vCodesRes;
+    }
   } catch (err) {
-    lessons = [];
-    contents = [];
+    // fallback
   }
 
-  const publishedLessons = lessons.filter(l => l.status === 'PUBLISHED').length;
   window._allLessonsCache = lessons;
   window._allContentsCache = contents;
-
-  container.innerHTML = `
-    <div class="view-title">
-      <div>
-        <span>📖 المحتوى التعليمي والدروس والمذكرات الرقمية (${lessons.length + contents.length})</span>
-        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">إدارة المناهج والدروس الرقمية، مشاركة المذكرات والملخصات مع الطلاب والمعلمين</div>
-      </div>
-      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button class="btn btn-success" style="box-shadow:0 4px 12px rgba(34,197,94,0.3);" onclick="openAddLessonModal()">+ إضافة درس جديد</button>
-        <button class="btn" style="background:#0284c7; color:#fff;" onclick="openAddContentModal()">📁 + رفع مذكرة / ملف PDF</button>
-        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('content')">🔄 تحديث</button>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-      <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">إجمالي الدروس المسجلة</div>
-            <div class="stat-value" style="color:#38bdf8;">${lessons.length}</div>
-          </div>
-          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">📖</div>
-        </div>
-        <div class="stat-sub"><span>شروحات ووحدات تعليمية</span></div>
-      </div>
-
-      <div class="stat-card-modern" style="border-right: 4px solid #22c55e;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">دروس منشورة للطلاب</div>
-            <div class="stat-value" style="color:#4ade80;">${publishedLessons}</div>
-          </div>
-          <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);">🟢</div>
-        </div>
-        <div class="stat-sub"><span>متاحة في تطبيق الطالب</span></div>
-      </div>
-
-      <div class="stat-card-modern" style="border-right: 4px solid #a855f7;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">الملفات والمذكرات الرقمية</div>
-            <div class="stat-value" style="color:#c084fc;">${contents.length}</div>
-          </div>
-          <div class="stat-icon-bubble" style="background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid rgba(168,85,247,0.3);">📄</div>
-        </div>
-        <div class="stat-sub"><span>مكتبة المذكرات والملازم</span></div>
-      </div>
-    </div>
-
-    <!-- Lessons Table -->
-    <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3); margin-bottom:1.5rem;">
-      <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span>📚 الدروس والوحدات التعليمية (${lessons.length})</span>
-      </div>
-      ${lessons && lessons.length > 0 ? `
-        <div style="overflow-x:auto;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>عنوان الدرس</th>
-                <th>ترتيب الدرس</th>
-                <th>الحالة للطلاب</th>
-                <th>تاريخ الإنشاء</th>
-                <th style="text-align:center;">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${lessons.map(l => `
-                <tr>
-                  <td>
-                    <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(l.title)}</strong>
-                    ${l.description ? `<div style="font-size:0.75rem; color:#94a3b8; max-width:320px;">${escapeHtmlAttr(l.description)}</div>` : ''}
-                  </td>
-                  <td><span class="badge" style="background:#1e293b; color:#38bdf8; border:1px solid #0284c7;">درس #${l.lessonOrder || l.lessonNumber || 1}</span></td>
-                  <td>
-                    ${l.status === 'PUBLISHED' ? '<span class="badge" style="background:#064e3b; color:#86efac;">منشور للطلاب 🟢</span>' :
-                      (l.status === 'ARCHIVED' ? '<span class="badge" style="background:#334155; color:#94a3b8;">مؤرشف 🗄️</span>' :
-                      '<span class="badge" style="background:#78350f; color:#fde047;">مسودة DRAFT 📝</span>')}
-                  </td>
-                  <td style="color:#94a3b8; font-size:0.8rem;">${l.createdAt ? new Date(l.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
-                  <td>
-                    <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
-                      ${l.status !== 'PUBLISHED' && l.status !== 'ARCHIVED' ? `
-                        <button class="btn btn-success" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="publishLessonAction('${l.id}')">📢 نشر</button>
-                      ` : ''}
-                      ${l.status !== 'ARCHIVED' ? `
-                        <button class="btn btn-danger" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="archiveLessonAction('${l.id}')">🗄️ أرشفة</button>
-                      ` : ''}
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : `
-        <div style="text-align:center; padding:2.5rem 1rem; color:#64748b;">
-          <div style="font-size:3rem; margin-bottom:0.5rem; opacity:0.8;">📚</div>
-          <h4 style="color:#f8fafc; margin:0 0 0.5rem 0;">لا توجد دروس مضافة حالياً</h4>
-          <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:1rem;">قم بإضافة دروس جديدة وتنظيمها في وحدات دراسية لمشاركتها مع الطلاب.</p>
-          <button class="btn btn-success" onclick="openAddLessonModal()">+ إضافة أول درس</button>
-        </div>
-      `}
-    </div>
-
-    <!-- Memos / Content Table -->
-    <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
-      <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span>📄 المكتبة والمذكرات الرقمية المرفوعة (${contents.length})</span>
-      </div>
-      ${contents && contents.length > 0 ? `
-        <div style="overflow-x:auto;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>عنوان المذكرة / الملف</th>
-                <th>التصنيف</th>
-                <th>حجم الملف</th>
-                <th>تاريخ الرفع</th>
-                <th>الحالة</th>
-                <th style="text-align:center;">إجراءات الملف</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${contents.map(c => {
-                const isPdf = (c.fileName || c.title || '').toLowerCase().endsWith('.pdf') || (c.type === 'PDF');
-                const isDoc = (c.fileName || '').toLowerCase().match(/\.(doc|docx)$/);
-                const isImg = (c.fileName || '').toLowerCase().match(/\.(jpg|jpeg|png|webp)$/) || (c.type === 'IMAGE');
-                const icon = isPdf ? '📕' : (isDoc ? '📝' : (isImg ? '🖼️' : '📄'));
-                const fileTarget = c.dataUrl || c.url;
-                const sizeText = c.sizeBytes ? ((c.sizeBytes > 1024 * 1024) ? (c.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : (c.sizeBytes / 1024).toFixed(1) + ' KB') : '—';
-                return `
-                <tr>
-                  <td>
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                      <span style="font-size:1.3rem;">${icon}</span>
-                      <div>
-                        <strong style="color:#f1f5f9; display:block;">${escapeHtmlAttr(c.title)}</strong>
-                        ${c.fileName && c.fileName !== c.title ? `<div style="font-size:0.72rem; color:#94a3b8;">${escapeHtmlAttr(c.fileName)}</div>` : ''}
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="badge" style="background:#1e3a8a; color:#93c5fd;">${escapeHtmlAttr(c.type || 'PDF')}</span></td>
-                  <td style="color:#cbd5e1; font-size:0.82rem;">${sizeText}</td>
-                  <td style="color:#94a3b8; font-size:0.82rem;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
-                  <td><span class="badge" style="background:#064e3b; color:#86efac;">متاح للطلاب 🟢</span></td>
-                  <td style="text-align:center;">
-                    <div style="display:inline-flex; gap:0.35rem;">
-                      ${fileTarget ? `<button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(fileTarget)}', '${escapeHtmlAttr(c.title)}')">👁️ فتح / تنزيل</button>` : ''}
-                      <button type="button" class="btn btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="deleteContentItemAction('${c.id}')">🗑️</button>
-                    </div>
-                  </td>
-                </tr>
-              `;}).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : `
-        <div style="text-align:center; padding:2.5rem 1rem; color:#64748b;">
-          <div style="font-size:3rem; margin-bottom:0.5rem; opacity:0.8;">📄</div>
-          <h4 style="color:#f8fafc; margin:0 0 0.5rem 0;">لا توجد مذكرات أو ملفات مرفوعة حالياً</h4>
-          <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:1rem;">يمكنك رفع مذكرات وملخصات وملازم PDF ليتمكن الطلاب من تحميلها.</p>
-          <button class="btn" style="background:#0284c7; color:#fff;" onclick="openAddContentModal()">+ رفع أول مذكرة الآن</button>
-        </div>
-      `}
-    </div>
-  `;
-}
-
-// 9. Exams View
-async function renderExamsView(container) {
-  let exams = [];
-  let groups = [];
-  let stages = [];
-  let subjects = [];
-  try {
-    const [eRes, gRes, stRes, sbRes] = await Promise.all([
-      callBackend('getExams', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []),
-      callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []),
-      callBackend('getStages', currentCallerToken, currentCallerToken.institutionId).catch(() => []),
-      callBackend('getSubjects', currentCallerToken, currentCallerToken.institutionId).catch(() => [])
-    ]);
-    exams = eRes || [];
-    groups = gRes || [];
-    stages = stRes || [];
-    subjects = sbRes || [];
-  } catch (err) {
-    exams = [];
-  }
-
-  const groupMap = new Map(groups.map(g => [g.id, g.name]));
-  const stageMap = new Map(stages.map(s => [s.id, s.name]));
-  const subjectMap = new Map(subjects.map(s => [s.id, s.name]));
-
-  const publishedCount = exams.filter(x => x.status === 'PUBLISHED').length;
-  const closedCount = exams.filter(x => x.status === 'CLOSED').length;
   window._allExamsCache = exams;
+  window._allHomeworkCache = homework;
+  window._allStagesCache = stages;
+  window._allSubjectsCache = subjects;
   window._allGroupsCache = groups;
 
+  const stageMap = new Map((stages || []).map(s => [s.id, s.name]));
+  const subjectMap = new Map((subjects || []).map(s => [s.id, s.name]));
+  const groupMap = new Map((groups || []).map(g => [g.id, g.name]));
+
+  // Calculate stats
+  const totalPagesSum = contents.reduce((acc, c) => acc + (Number(c.pageEnd) || Number(c.pagesCount) || 1), 0);
+  const publishedLessons = lessons.filter(l => l.status === 'PUBLISHED').length;
+
   container.innerHTML = `
     <div class="view-title">
       <div>
-        <span>📝 إدارة الاختبارات والتقييمات الدورية (${exams.length})</span>
-        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">إنشاء ومتابعة الاختبارات، نشر النتائج، رصد كشوف الدرجات والغياب، وطباعة تقارير التقييم</div>
+        <span>🤖 استوديو مصادر الذكاء الاصطناعي الشامل</span>
+        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">
+          المنصة المركزية لإدارة المذكرات الرقمية، الدروس الذكية، توليد الاختبارات والواجبات، وفيديوهات المعلمين المحمية
+        </div>
       </div>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button class="btn" style="background: linear-gradient(135deg, #8b5cf6, #d946ef); color:#fff; font-weight:bold; box-shadow:0 4px 14px rgba(139,92,246,0.4);" onclick="openAiExamGeneratorModal()">🤖 توليد اختبار بالذكاء الاصطناعي</button>
-        <button class="btn btn-success" style="box-shadow:0 4px 12px rgba(34,197,94,0.3);" onclick="openAddExamModal()">+ إنشاء اختبار يدوي</button>
-        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('exams')">🔄 تحديث</button>
+        <button class="btn" style="background:#0284c7; color:#fff;" onclick="openAddContentModal()">📁 + رفع مذكرة جديدة</button>
+        <button class="btn" style="background:#7c3aed; color:#fff;" onclick="openAiExamGeneratorModal()">⚡ مولد الاختبارات الذكي</button>
+        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('ai_studio')">🔄 تحديث</button>
       </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-      <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">إجمالي الاختبارات</div>
-            <div class="stat-value" style="color:#38bdf8;">${exams.length}</div>
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-nav-btn ai-studio-tab-btn ${activeTab === 'resources' ? 'active' : ''}" data-tab="resources" onclick="switchAiStudioTab('resources')">
+        <span>📁 المصادر والمذكرات</span>
+        <span class="tab-badge">${contents.length}</span>
+      </button>
+      <button class="tab-nav-btn ai-studio-tab-btn ${activeTab === 'lessons' ? 'active' : ''}" data-tab="lessons" onclick="switchAiStudioTab('lessons')">
+        <span>📖 استوديو الدروس الذكي</span>
+        <span class="tab-badge">${lessons.length}</span>
+      </button>
+      <button class="tab-nav-btn ai-studio-tab-btn ${activeTab === 'exams' ? 'active' : ''}" data-tab="exams" onclick="switchAiStudioTab('exams')">
+        <span>📝 بنك الاختبارات</span>
+        <span class="tab-badge">${exams.length}</span>
+      </button>
+      <button class="tab-nav-btn ai-studio-tab-btn ${activeTab === 'homework' ? 'active' : ''}" data-tab="homework" onclick="switchAiStudioTab('homework')">
+        <span>📑 إدارة الواجبات</span>
+        <span class="tab-badge">${homework.length}</span>
+      </button>
+      <button class="tab-nav-btn ai-studio-tab-btn ${activeTab === 'videos' ? 'active' : ''}" data-tab="videos" onclick="switchAiStudioTab('videos')">
+        <span>🎥 فيديوهات المعلمين وأكواد المشاهدة</span>
+        <span class="tab-badge" style="background:#22c55e; color:#fff;">محمي Android</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: RESOURCES -->
+    <div id="tab_pane_resources" class="ai-studio-pane" style="display:${activeTab === 'resources' ? 'block' : 'none'};">
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">المذكرات والمصادر المرفوعة</div>
+              <div class="stat-value" style="color:#38bdf8;">${contents.length}</div>
+            </div>
+            <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8;">📁</div>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">📝</div>
+          <div class="stat-sub"><span>كتب ومذكرات PDF معتمدة</span></div>
         </div>
-        <div class="stat-sub"><span>اختبارات مسجلة بالسنتر</span></div>
+
+        <div class="stat-card-modern" style="border-right: 4px solid #22c55e;">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">إجمالي صفحات المناهج المفهرسة</div>
+              <div class="stat-value" style="color:#4ade80;">${totalPagesSum} صفحة</div>
+            </div>
+            <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80;">📑</div>
+          </div>
+          <div class="stat-sub"><span>تم فحصها بالكامل بدون حدود 7 صفحات</span></div>
+        </div>
+
+        <div class="stat-card-modern" style="border-right: 4px solid #a855f7;">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">المواد المغطاة بالمصادر</div>
+              <div class="stat-value" style="color:#c084fc;">${new Set(contents.map(c => c.subjectId)).size} مادة</div>
+            </div>
+            <div class="stat-icon-bubble" style="background:rgba(168,85,247,0.15); color:#c084fc;">📚</div>
+          </div>
+          <div class="stat-sub"><span>جاهزة للتوليد الذكي</span></div>
+        </div>
       </div>
 
-      <div class="stat-card-modern" style="border-right: 4px solid #22c55e;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">اختبارات منشورة للطلاب</div>
-            <div class="stat-value" style="color:#4ade80;">${publishedCount}</div>
+      <!-- Quick Filter Box -->
+      <div class="card" style="margin-bottom:1.25rem; background:rgba(30,41,59,0.7); border:1px solid #334155; padding:1.2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
+          <div style="font-weight:bold; color:#f8fafc; font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+            <span>⚡ تصفية والبحث في المذكرات التعليمية</span>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);">🟢</div>
+          <button class="btn btn-success" onclick="openAddContentModal()">+ رفع مذكرة متقدمة</button>
         </div>
-        <div class="stat-sub"><span>نشطة وجاهزة لرصد الدرجات</span></div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem;">
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">المرحلة الدراسية</label>
+            <select id="quickFilterStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterAiResourcesTable()">
+              <option value="">جميع المراحل</option>
+              ${stages.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">المادة الدراسية</label>
+            <select id="quickFilterSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterAiResourcesTable()">
+              <option value="">جميع المواد</option>
+              ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">بحث بالاسم</label>
+            <input type="text" id="quickSearchResource" class="form-control" placeholder="اسم المذكرة أو الكتاب..." style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" oninput="filterAiResourcesTable()">
+          </div>
+        </div>
       </div>
 
-      <div class="stat-card-modern" style="border-right: 4px solid #a855f7;">
-        <div class="stat-card-header">
-          <div>
-            <div class="stat-label">اختبارات مكتملة ومغلقة</div>
-            <div class="stat-value" style="color:#c084fc;">${closedCount}</div>
+      <!-- Resources Table -->
+      <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
+        ${contents && contents.length > 0 ? `
+          <div style="overflow-x:auto;">
+            <table class="data-table" id="aiResourcesTable">
+              <thead>
+                <tr>
+                  <th>اسم المذكرة / الملف</th>
+                  <th>المادة والمرحلة</th>
+                  <th>عدد الصفحات الحقيقي</th>
+                  <th>حجم الملف</th>
+                  <th>تاريخ الإضافة</th>
+                  <th style="text-align:center;">إجراءات الذكاء الاصطناعي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${contents.map(c => {
+                  const subName = subjectMap.get(c.subjectId) || c.subjectId || 'عام';
+                  const stName = stageMap.get(c.stageId) || c.stageId || 'عام';
+                  const pages = c.pageEnd || c.pagesCount || c.pageRange || 'كامل';
+                  const size = c.attachmentSize ? `${(c.attachmentSize / (1024 * 1024)).toFixed(1)} MB` : (c.fileSize || '—');
+
+                  return `
+                    <tr data-stage="${c.stageId || ''}" data-subject="${c.subjectId || ''}" data-title="${escapeHtmlAttr(c.title || '')}">
+                      <td>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                          <span style="font-size:1.3rem;">📄</span>
+                          <div>
+                            <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(c.title || 'مذكرة تعليمية')}</strong>
+                            ${c.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(c.description)}</div>` : ''}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(subName)}</div>
+                        <div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(stName)}</div>
+                      </td>
+                      <td>
+                        <span class="badge" style="background:#1e3a8a; color:#93c5fd; font-weight:bold;">
+                          📖 ${pages} صفحة
+                        </span>
+                      </td>
+                      <td style="color:#94a3b8; font-size:0.82rem;">${size}</td>
+                      <td style="color:#94a3b8; font-size:0.82rem;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
+                      <td>
+                        <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                          <button class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="prefillLessonFromResource('${c.id}')" title="توليد درس ذكي من هذه المذكرة">
+                            📖 توليد درس
+                          </button>
+                          <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#7c3aed; color:#fff;" onclick="prefillExamFromResource('${c.id}')" title="توليد اختبار ذكي">
+                            ⚡ اختبار
+                          </button>
+                          ${c.url || c.attachmentPath ? `
+                            <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(c.url || c.attachmentPath)}', '${escapeHtmlAttr(c.title)}')">
+                              📥 عرض
+                            </button>
+                          ` : ''}
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid rgba(168,85,247,0.3);">✅</div>
-        </div>
-        <div class="stat-sub"><span>تم رصد نتائجها بالكامل</span></div>
+        ` : `
+          <div style="text-align:center; padding:3.5rem 1rem; color:#64748b;">
+            <div style="font-size:3.5rem; margin-bottom:0.75rem; opacity:0.8;">📁</div>
+            <h3 style="color:#f8fafc; margin:0 0 0.5rem 0;">لا توجد مذكرات أو كتب مرفوعة حتى الآن</h3>
+            <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1.25rem;">قم برفع أول ملف PDF للمنهج، وسيتم استخراج الصفحات والحجم بدقة تامة لتوليد الدروس والامتحانات.</p>
+            <button class="btn btn-success" onclick="openAddContentModal()">+ رفع أول مذكرة الآن</button>
+          </div>
+        `}
       </div>
     </div>
 
-    <!-- Exams Table -->
-    <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
-      ${exams && exams.length > 0 ? `
+    <!-- TAB 2: SMART AI LESSON STUDIO -->
+    <div id="tab_pane_lessons" class="ai-studio-pane" style="display:${activeTab === 'lessons' ? 'block' : 'none'};">
+      <div class="card" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(30,41,59,0.9) 0%, rgba(15,23,42,0.95) 100%); border:1px solid rgba(56,189,248,0.3); padding:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.25rem;">
+          <div>
+            <div style="font-size:1.15rem; font-weight:800; color:#38bdf8; display:flex; align-items:center; gap:0.5rem;">
+              <span>🤖 استوديو التوليد والشرح الآلي للدروس</span>
+              <span class="badge" style="background:#7c3aed; color:#fff;">AI Core</span>
+            </div>
+            <div style="font-size:0.85rem; color:#94a3b8; margin-top:0.25rem;">
+              حدد صفحات المذكرة ليقوم الذكاء الاصطناعي باستخراج العناصر الأساسية، شرح المفاهيم، وتلخيص الدرس تمهيداً لنشره للطلاب
+            </div>
+          </div>
+          <button class="btn btn-success" onclick="openAddLessonModal()">+ إضافة درس يدوي</button>
+        </div>
+
+        <!-- AI Lesson Generation Form -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem; margin-bottom:1rem;">
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">المرحلة الدراسية <span style="color:#ef4444;">*</span></label>
+            <select id="aiStudioLessonStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+              <option value="">اختر المرحلة الدراسية...</option>
+              ${stages.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">المادة الدراسية <span style="color:#ef4444;">*</span></label>
+            <select id="aiStudioLessonSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+              <option value="">اختر المادة...</option>
+              ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">الملف المصدر المربوط</label>
+            <select id="aiStudioLessonSource" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="syncAiLessonSourcePages(this)">
+              <option value="">اختر مذكرة مرفوعة أو حدد صفحات...</option>
+              ${contents.map(c => `<option value="${c.id}" data-pages="${c.pageEnd || c.pagesCount || 10}">${escapeHtmlAttr(c.title)} (${c.pageEnd || c.pagesCount || '—'} صفحة)</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">عنوان الدرس أو الموضوع</label>
+            <input type="text" id="aiStudioLessonTitle" class="form-control" placeholder="مثال: الحركة في خط مستقيم وقوانين نيوتن" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">من صفحة</label>
+            <input type="number" id="aiStudioLessonPageStart" min="1" value="1" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+          <div>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">إلى صفحة</label>
+            <input type="number" id="aiStudioLessonPageEnd" min="1" placeholder="مثال: 15" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+        </div>
+
+        <div style="background:rgba(15,23,42,0.6); padding:0.85rem; border-radius:8px; margin-bottom:1rem; border:1px solid #334155;">
+          <div style="font-size:0.85rem; font-weight:bold; color:#cbd5e1; margin-bottom:0.5rem;">الخصائص المطلوب استخراجها آلياً بالذكاء الاصطناعي:</div>
+          <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:0.4rem; color:#e2e8f0; font-size:0.85rem; cursor:pointer;">
+              <input type="checkbox" id="aiOptOutlines" checked style="accent-color:#38bdf8; width:16px; height:16px;">
+              <span>العناصر والأهداف الأساسية</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:0.4rem; color:#e2e8f0; font-size:0.85rem; cursor:pointer;">
+              <input type="checkbox" id="aiOptConcepts" checked style="accent-color:#38bdf8; width:16px; height:16px;">
+              <span>شرح وتبسيط المفاهيم الصعبة</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:0.4rem; color:#e2e8f0; font-size:0.85rem; cursor:pointer;">
+              <input type="checkbox" id="aiOptSummary" checked style="accent-color:#38bdf8; width:16px; height:16px;">
+              <span>كبسولة وملخص سريع للطالب</span>
+            </label>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:0.75rem;">
+          <button type="button" class="btn" style="background:linear-gradient(135deg, #0284c7, #7c3aed); color:#fff; font-weight:bold; padding:0.6rem 1.4rem; box-shadow:0 4px 14px rgba(2,132,199,0.4);" onclick="runAiLessonExtraction()">
+            ✨ استخراج وشرح الدرس بالذكاء الاصطناعي
+          </button>
+        </div>
+
+        <!-- AI Extraction Result Box (Hidden by default, shown upon generation) -->
+        <div id="aiLessonExtractionResultBox" style="display:none; margin-top:1.25rem; border-top:1px dashed #334155; padding-top:1.25rem;">
+          <div style="font-weight:bold; color:#4ade80; font-size:0.95rem; margin-bottom:0.75rem;">
+            ✅ تم استخراج محاور وشرح الدرس بالذكاء الاصطناعي بنجاح (يمكنك المراجعة والتعديل قبل النشر):
+          </div>
+
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; margin-bottom:1rem;">
+            <div>
+              <label style="font-size:0.8rem; color:#38bdf8; font-weight:bold; display:block; margin-bottom:0.25rem;">🎯 العناصر والأهداف الأساسية</label>
+              <textarea id="aiResultOutlines" rows="6" class="form-control" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem; line-height:1.5;"></textarea>
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:#38bdf8; font-weight:bold; display:block; margin-bottom:0.25rem;">💡 شرح وتبسيط المفاهيم</label>
+              <textarea id="aiResultConcepts" rows="6" class="form-control" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem; line-height:1.5;"></textarea>
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:#38bdf8; font-weight:bold; display:block; margin-bottom:0.25rem;">📌 ملخص الدرس للطلاب</label>
+              <textarea id="aiResultSummary" rows="6" class="form-control" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem; line-height:1.5;"></textarea>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-success" style="box-shadow:0 4px 12px rgba(34,197,94,0.3); font-weight:bold; padding:0.55rem 1.25rem;" onclick="saveAiGeneratedLesson()">
+            📢 اعتماد ونشر الدرس لتطبيق الطلاب الآن
+          </button>
+        </div>
+      </div>
+
+      <!-- Lessons Table -->
+      <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
+        <div style="font-weight:bold; color:#f8fafc; font-size:1.05rem; margin-bottom:0.75rem;">قائمة الدروس المعتمدة (${lessons.length})</div>
+        ${lessons && lessons.length > 0 ? `
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>عنوان الدرس</th>
+                  <th>المادة والمرحلة</th>
+                  <th>النطاق والصفحات</th>
+                  <th>حالة النشر</th>
+                  <th>تاريخ الإضافة</th>
+                  <th style="text-align:center;">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lessons.map(l => {
+                  const subName = subjectMap.get(l.subjectId) || l.subjectId || 'عام';
+                  const stName = stageMap.get(l.stageId) || l.stageId || 'عام';
+                  const isPublished = l.status === 'PUBLISHED';
+
+                  return `
+                    <tr>
+                      <td>
+                        <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(l.title)}</strong>
+                        ${l.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(l.description)}</div>` : ''}
+                      </td>
+                      <td>
+                        <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(subName)}</div>
+                        <div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(stName)}</div>
+                      </td>
+                      <td>
+                        <span class="badge" style="background:#1e3a8a; color:#93c5fd;">
+                          ${l.pageRange || (l.pageStart ? `صفحة ${l.pageStart} إلى ${l.pageEnd || 'نهاية الدرس'}` : 'كامل الدرس')}
+                        </span>
+                      </td>
+                      <td>
+                        ${isPublished ? '<span class="badge" style="background:#064e3b; color:#86efac;">منشور للطلاب 🟢</span>' : '<span class="badge" style="background:#78350f; color:#fde047;">مسودة DRAFT 📝</span>'}
+                      </td>
+                      <td style="color:#94a3b8; font-size:0.82rem;">${l.createdAt ? new Date(l.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
+                      <td>
+                        <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                          <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:linear-gradient(135deg, #7c3aed, #db2777); color:#fff; font-weight:bold;" onclick="quickGenerateAiExamForLesson('${l.id}')">⚡ توليد امتحان</button>
+                          ${!isPublished ? `<button class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="publishLessonAction('${l.id}')">📢 نشر</button>` : ''}
+                          <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveLessonAction('${l.id}')">🗑️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align:center; padding:2.5rem; color:#64748b;">لا توجد دروس مسجلة حتى الآن.</div>
+        `}
+      </div>
+    </div>
+
+    <!-- TAB 3: AI EXAMS -->
+    <div id="tab_pane_exams" class="ai-studio-pane" style="display:${activeTab === 'exams' ? 'block' : 'none'};">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
+        <div>
+          <div style="font-size:1.15rem; font-weight:800; color:#c084fc;">📝 بنك الاختبارات والتقييمات الذكية (${exams.length})</div>
+          <div style="font-size:0.85rem; color:#94a3b8;">توليد اختبارات إلكترونية وورقية بالذكاء الاصطناعي مع نماذج الإجابة والباركود</div>
+        </div>
+        <button class="btn" style="background:linear-gradient(135deg, #7c3aed, #db2777); color:#fff; font-weight:bold; box-shadow:0 4px 14px rgba(124,58,237,0.4);" onclick="openAiExamGeneratorModal()">
+          ⚡ + توليد اختبار جديد بالذكاء
+        </button>
+      </div>
+
+      <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
+        ${exams && exams.length > 0 ? `
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>عنوان الاختبار</th>
+                  <th>المادة والمرحلة</th>
+                  <th>نوع الاختبار والدرجة</th>
+                  <th>تاريخ وموعد الاختبار</th>
+                  <th>الحالة</th>
+                  <th style="text-align:center;">إجراءات الاختبار</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${exams.map(e => {
+                  const subName = subjectMap.get(e.subjectId) || e.subjectId || '—';
+                  const stName = stageMap.get(e.stageId) || e.stageId || '—';
+                  const isPublished = e.status === 'PUBLISHED';
+                  const maxScore = e.maxScore || (e.totalMarksHundredths ? e.totalMarksHundredths / 100 : 100);
+
+                  return `
+                    <tr>
+                      <td>
+                        <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(e.title)}</strong>
+                        ${e.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(e.description)}</div>` : ''}
+                      </td>
+                      <td>
+                        <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(subName)}</div>
+                        <div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(stName)}</div>
+                      </td>
+                      <td>
+                        <span class="badge" style="background:#1e3a8a; color:#93c5fd;">${e.examType === 'PAPER' ? '📝 ورقي' : '📲 إلكتروني بالذكاء'}</span>
+                        <div style="color:#4ade80; font-weight:bold; font-size:0.85rem; margin-top:0.2rem;">${maxScore} درجة</div>
+                      </td>
+                      <td style="color:#94a3b8; font-size:0.82rem;">${e.examDate ? new Date(e.examDate).toLocaleDateString('ar-EG') : '—'}</td>
+                      <td>
+                        ${isPublished ? '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للطلاب 🟢</span>' : '<span class="badge" style="background:#78350f; color:#fde047;">مسودة DRAFT 📝</span>'}
+                      </td>
+                      <td>
+                        <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                          ${!isPublished ? `<button class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="publishExamAction('${e.id}')">📢 نشر</button>` : ''}
+                          <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openExamResultsModal('${e.id}')">📊 رصد الدرجات</button>
+                          <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveExamAction('${e.id}')">🗑️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align:center; padding:3rem; color:#64748b;">لا توجد اختبارات مسجلة حتى الآن. انقر على الزر أعلاه لتوليد أول اختبار بالذكاء.</div>
+        `}
+      </div>
+    </div>
+
+    <!-- TAB 4: HOMEWORK -->
+    <div id="tab_pane_homework" class="ai-studio-pane" style="display:${activeTab === 'homework' ? 'block' : 'none'};">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
+        <div>
+          <div style="font-size:1.15rem; font-weight:800; color:#38bdf8;">📑 الواجبات والتكليفات المنزلية (${homework.length})</div>
+          <div style="font-size:0.85rem; color:#94a3b8;">إسناد التكليفات للطلاب ومتابعة التسليمات وربطها بالتقارير الميدانية</div>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn" style="background:#059669; color:#fff; font-weight:bold;" onclick="navigate('homework_reports')">
+            📊 الانتقال لكشف نتائج وتسليمات الواجبات
+          </button>
+          <button class="btn btn-success" onclick="openAddHomeworkModal()">+ إضافة واجب جديد</button>
+        </div>
+      </div>
+
+      <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
+        ${homework && homework.length > 0 ? `
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>عنوان الواجب</th>
+                  <th>المادة والدرس</th>
+                  <th>المجموعة المستهدفة</th>
+                  <th>الدرجة ونمط التسليم</th>
+                  <th>آخر موعد للتسليم</th>
+                  <th>الحالة</th>
+                  <th style="text-align:center;">إجراءات التسليم والتصحيح</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${homework.map(h => {
+                  const isPublished = h.status === 'PUBLISHED';
+                  const isClosed = h.status === 'CLOSED';
+                  const isDraft = !isPublished && !isClosed;
+                  const groupName = h.groupId ? (groupMap.get(h.groupId) || h.groupId) : 'جميع المجموعات';
+                  const subName = subjectMap.get(h.subjectId) || h.subjectId || '—';
+
+                  return `
+                    <tr>
+                      <td>
+                        <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(h.title)}</strong>
+                        ${h.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(h.description)}</div>` : ''}
+                      </td>
+                      <td>
+                        <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(subName)}</div>
+                      </td>
+                      <td>
+                        <span class="badge" style="background:#1e293b; color:#38bdf8;">${escapeHtmlAttr(groupName)}</span>
+                      </td>
+                      <td>
+                        <span class="badge" style="background:#1e3a8a; color:#93c5fd;">${h.mode === 'PAPER' ? '📝 ورقي' : '📲 إلكتروني'}</span>
+                        <div style="color:#4ade80; font-weight:bold; font-size:0.85rem; margin-top:0.2rem;">${h.maxScore || 20} درجة</div>
+                      </td>
+                      <td style="color:#94a3b8; font-size:0.82rem;">${h.dueAt ? new Date(h.dueAt).toLocaleDateString('ar-EG') : '—'}</td>
+                      <td>
+                        ${isPublished ? '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للتسليم 🟢</span>' : (isClosed ? '<span class="badge" style="background:#334155; color:#cbd5e1;">مغلق ✅</span>' : '<span class="badge" style="background:#78350f; color:#fde047;">مسودة 📝</span>')}
+                      </td>
+                      <td>
+                        <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                          ${isDraft ? `<button class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="publishHomeworkAction('${h.id}')">📢 نشر</button>` : ''}
+                          <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openHomeworkSubmissionsModal('${h.id}')">📥 التسليمات والتصحيح</button>
+                          ${isPublished ? `<button class="btn btn-warning" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="closeHomeworkAction('${h.id}')">⏹️ إغلاق</button>` : ''}
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align:center; padding:3rem; color:#64748b;">لا توجد واجبات مسجلة حالياً.</div>
+        `}
+      </div>
+    </div>
+
+    <!-- TAB 5: TEACHER VIDEOS & ANDROID DRM PROTECTION -->
+    <div id="tab_pane_videos" class="ai-studio-pane" style="display:${activeTab === 'videos' ? 'block' : 'none'};">
+      <!-- Android Hardware Security Banner -->
+      <div class="card" style="margin-bottom:1.25rem; background:linear-gradient(135deg, rgba(6,78,59,0.7) 0%, rgba(15,23,42,0.9) 100%); border:1px solid #10b981; padding:1.25rem;">
+        <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+          <div style="font-size:2rem; line-height:1;">🛡️</div>
+          <div style="flex:1;">
+            <div style="font-size:1.05rem; font-weight:800; color:#34d399;">
+              منظومة حماية وتأمين فيديوهات المعلمين في تطبيق الطالب (Android DRM Active)
+            </div>
+            <div style="font-size:0.86rem; color:#cbd5e1; margin-top:0.3rem; line-height:1.5;">
+              • <strong>حظر تصوير وتسجيل الشاشة:</strong> يتم فرض معيار الأمان <code>FLAG_SECURE</code> في تطبيق الطالب أندرويد تلقائياً عند فتح الفيديو، مما يجعل أي محاولة لتسجيل الشاشة أو التقاط Screenshot تظهر <strong>شاشة سوداء بالكامل</strong>.<br>
+              • <strong>العلامة المائية الديناميكية:</strong> تطفو فوق شاشة الموبايل علامة مائية متحركة تحتوي على <code>اسم السنتر - اسم الطالب - كود الطالب - رقم الهاتف</code> لمنع التصوير بكاميرا خارجية.<br>
+              • <strong>نظام الأكواد:</strong> لا يفتح أي فيديو إلا بإدخال كود مشاهدة مفعّل من السنتر لعدد مرات محدد.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video Watch Code Generator Card -->
+      <div class="card" style="margin-bottom:1.5rem; background:rgba(30,41,59,0.7); border:1px solid #334155; padding:1.25rem;">
+        <div style="font-weight:bold; color:#f8fafc; font-size:1rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+          <span>🔑 مولد وتتبع أكواد المشاهدة للطلاب (Watch Access Tokens)</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem; margin-bottom:1rem;">
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">عدد الأكواد المراد توليدها</label>
+            <input type="number" id="vCodeCount" min="1" max="100" value="10" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">أقصى عدد مشاهدات مسموحة لكل كود</label>
+            <input type="number" id="vCodeMaxViews" min="1" max="10" value="2" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">تاريخ انتهاء صلاحية الكود</label>
+            <input type="date" id="vCodeExpireDate" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">تخصيص لمادة أو درس معين</label>
+            <select id="vCodeTargetSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+              <option value="">عام (أي فيديو مصرح)</option>
+              ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <button type="button" class="btn" style="background:#7c3aed; color:#fff; font-weight:bold; padding:0.55rem 1.25rem; box-shadow:0 4px 12px rgba(124,58,237,0.3);" onclick="generateWatchCodesBatch()">
+          ⚡ توليد حزمة أكواد المشاهدة
+        </button>
+      </div>
+
+      <!-- Active Watch Codes Table -->
+      <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+          <div style="font-weight:bold; color:#f8fafc; font-size:1rem;">سجل أكواد المشاهدة النشطة (${(window._allWatchCodesCache || []).length})</div>
+          <button class="btn btn-secondary" style="font-size:0.75rem;" onclick="copyAllActiveWatchCodes()">📋 نسخ جميع الأكواد المتاحة</button>
+        </div>
+
         <div style="overflow-x:auto;">
-          <table class="data-table">
+          <table class="data-table" id="watchCodesTable">
             <thead>
               <tr>
-                <th>عنوان الاختبار</th>
-                <th>المرحلة والمادة</th>
-                <th>المجموعة المستهدفة</th>
-                <th>الدرجة الكلية / النجاح</th>
-                <th>المدة والموعد</th>
-                <th>الحالة</th>
-                <th style="text-align:center;">إجراءات الإدارة والكشوف</th>
+                <th>كود المشاهدة الفريد</th>
+                <th>المادة المستهدفة</th>
+                <th>المشاهدات المتبقية</th>
+                <th>حالة التفعيل</th>
+                <th>تاريخ التوليد</th>
+                <th style="text-align:center;">إجراء</th>
               </tr>
             </thead>
             <tbody>
-              ${exams.map(x => {
-                const isDraft = x.status === 'DRAFT' || !x.status;
-                const isPublished = x.status === 'PUBLISHED';
-                const isClosed = x.status === 'CLOSED';
-                const groupName = x.groupId ? (groupMap.get(x.groupId) || x.groupId) : 'جميع مجموعات المادة';
-                const stageName = stageMap.get(x.stageId) || x.stageId || '—';
-                const subjectName = subjectMap.get(x.subjectId) || x.subjectId || '—';
-
-                return `
-                  <tr>
-                    <td>
-                      <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(x.title)}</strong>
-                      ${x.description ? `<div style="font-size:0.75rem; color:#94a3b8; max-width:280px;">${escapeHtmlAttr(x.description)}</div>` : ''}
-                      ${x.paperUrl ? `<div style="margin-top:0.25rem;"><button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.15rem 0.55rem; font-size:0.72rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(x.paperUrl)}', '${escapeHtmlAttr(x.title)} - ورقة الاختبار')">📎 عرض / تنزيل ورقة الاختبار</button></div>` : ''}
-                    </td>
-                    <td>
-                      <div style="font-size:0.85rem; color:#e2e8f0; font-weight:bold;">${escapeHtmlAttr(subjectName)}</div>
-                      <div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(stageName)}</div>
-                    </td>
-                    <td>
-                      <span class="badge" style="background:#1e293b; color:#38bdf8; border:1px solid #334155;">${escapeHtmlAttr(groupName)}</span>
-                    </td>
-                    <td>
-                      <span style="color:#4ade80; font-weight:bold;">${x.maxScore || 100} د</span>
-                      <span style="font-size:0.75rem; color:#94a3b8;">(نجاح: ${x.passingScore || Math.round((x.maxScore || 100) * 0.5)} د)</span>
-                    </td>
-                    <td>
-                      <div style="font-size:0.85rem; color:#cbd5e1;">⏱️ ${x.durationMinutes ? x.durationMinutes + ' دقيقة' : 'غير محدد'}</div>
-                      <div style="font-size:0.75rem; color:#94a3b8;">📅 ${x.examDate || '—'}</div>
-                    </td>
-                    <td>
-                      ${isPublished ? '<span class="badge" style="background:#064e3b; color:#86efac;">منشور ونشط 🟢</span>' :
-                        (isClosed ? '<span class="badge" style="background:#334155; color:#cbd5e1;">مكتمل ومغلق ✅</span>' :
-                        '<span class="badge" style="background:#78350f; color:#fde047;">مسودة DRAFT 📝</span>')}
-                    </td>
-                    <td>
-                      <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
-                        ${isDraft ? `
-                          <button class="btn btn-success" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="publishExamAction('${x.id}')" title="نشر الاختبار">📢 نشر</button>
-                        ` : ''}
-                        <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:#8b5cf6;" onclick="openRecordGradesModal('${x.id}')" title="كشف رصد درجات الطلاب والغياب">📊 كشف الدرجات</button>
-                        <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#0284c7;" onclick="printExamGradesReport('${x.id}')" title="طباعة كشف الدرجات">🖨️ طباعة</button>
-                        ${isPublished ? `
-                          <button class="btn btn-warning" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="closeExamAction('${x.id}')" title="إنهاء وإغلاق الاختبار">⏹️ إنهاء</button>
-                        ` : ''}
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
+              ${(window._allWatchCodesCache && window._allWatchCodesCache.length > 0) ? window._allWatchCodesCache.map(cd => `
+                <tr>
+                  <td>
+                    <span style="font-family:monospace; font-size:1rem; font-weight:bold; color:#38bdf8; background:rgba(56,189,248,0.1); padding:0.2rem 0.6rem; border-radius:4px; border:1px solid rgba(56,189,248,0.3);">
+                      ${escapeHtmlAttr(cd.code)}
+                    </span>
+                  </td>
+                  <td style="color:#cbd5e1;">${escapeHtmlAttr(cd.subjectName || 'عام')}</td>
+                  <td>
+                    <span class="badge" style="background:#1e293b; color:#4ade80;">
+                      ${cd.viewsUsed || 0} / ${cd.maxViews || 2} مشاهدة
+                    </span>
+                  </td>
+                  <td>
+                    ${cd.status === 'REDEEMED' ? '<span class="badge" style="background:#78350f; color:#fde047;">مفعّل على هاتف 📱</span>' : (cd.status === 'EXHAUSTED' ? '<span class="badge" style="background:#450a0a; color:#f87171;">مستهلك ومغلق ⏹️</span>' : '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للشحن 🟢</span>')}
+                  </td>
+                  <td style="color:#94a3b8; font-size:0.8rem;">${cd.createdAt ? new Date(cd.createdAt).toLocaleDateString('ar-EG') : 'الآن'}</td>
+                  <td style="text-align:center;">
+                    <button class="btn" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:#334155;" onclick="navigator.clipboard.writeText('${cd.code}'); showToast('تم نسخ الكود!');">نسخ</button>
+                  </td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td colspan="6" style="text-align:center; padding:2rem; color:#64748b;">لا توجد أكواد مشاهدة نشطة. استخدم المولد أعلاه لإنشاء حزمة أكواد للطلاب.</td>
+                </tr>
+              `}
             </tbody>
           </table>
         </div>
-      ` : `
-        <div style="text-align:center; padding:3.5rem 1rem; color:#64748b;">
-          <div style="font-size:3.5rem; margin-bottom:0.75rem; opacity:0.8;">📝</div>
-          <h3 style="color:#f8fafc; margin:0 0 0.5rem 0;">لا توجد اختبارات مسجلة حالياً</h3>
-          <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1.25rem;">يمكنك إعداد الاختبارات الدورية وتحديد المجموعات ورصد درجات الطلاب وطباعة الكشوف.</p>
-          <button class="btn btn-success" onclick="openAddExamModal()">+ إنشاء أول اختبار الآن</button>
-        </div>
-      `}
+      </div>
     </div>
   `;
 }
 
-// 9.5 Homework View
-async function renderHomeworkView(container) {
-  let homework = [];
-  let groups = [];
-  let stages = [];
-  let subjects = [];
-  let lessons = [];
+// 9. NEW MAJOR PAGE: HOMEWORK SUBMISSIONS & RESULTS REPORT (تقرير نتائج وتسليمات الواجبات)
+async function renderHomeworkReportsView(container) {
+  let homework = [], students = [], groups = [], stages = [], subjects = [];
   try {
-    const [hRes, gRes, stRes, sbRes, lRes] = await Promise.all([
-      callBackend('getHomework', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []),
-      callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []),
-      callBackend('getStages', currentCallerToken, currentCallerToken.institutionId).catch(() => []),
-      callBackend('getSubjects', currentCallerToken, currentCallerToken.institutionId).catch(() => []),
-      callBackend('getLessons', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => [])
+    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
+    const [hRes, stRes, gRes, subRes] = await Promise.all([
+      callBackend('getHomework', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getStudents', currentCallerToken, instId).catch(() => []),
+      callBackend('getGroups', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, instId).catch(() => [])
     ]);
     homework = hRes || [];
+    students = stRes || [];
     groups = gRes || [];
-    stages = stRes || [];
-    subjects = sbRes || [];
-    lessons = lRes || [];
-  } catch (err) {
-    homework = [];
+    subjects = subRes || [];
+  } catch (err) {}
+
+  window._allHomeworkCache = homework;
+  window._allStudentsCache = students;
+  window._allGroupsCache = groups;
+
+  const subjectMap = new Map((subjects || []).map(s => [s.id, s.name]));
+  const groupMap = new Map((groups || []).map(g => [g.id, g.name]));
+
+  // Selected homework for report
+  const selectedHwId = window._selectedReportHwId || (homework[0] ? homework[0].id : null);
+  const currentHw = homework.find(h => h.id === selectedHwId) || homework[0] || null;
+
+  let submissions = [];
+  if (currentHw) {
+    try {
+      const subRes = await callBackend('getHomeworkSubmissions', currentCallerToken, currentHw.id, currentCallerToken.institutionId);
+      submissions = subRes || [];
+    } catch (e) { submissions = []; }
   }
 
-  const groupMap = new Map(groups.map(g => [g.id, g.name]));
-  const stageMap = new Map(stages.map(s => [s.id, s.name]));
-  const subjectMap = new Map(subjects.map(s => [s.id, s.name]));
-  const lessonMap = new Map(lessons.map(l => [l.id, l.title]));
+  // Target students calculation
+  const targetStudents = currentHw && currentHw.groupId ?
+    students.filter(s => s.groupId === currentHw.groupId) :
+    students;
 
-  const publishedCount = homework.filter(h => h.status === 'PUBLISHED').length;
-  const closedCount = homework.filter(h => h.status === 'CLOSED').length;
-  window._allHomeworkCache = homework;
-  window._allGroupsCache = groups;
+  const submittedStudentIds = new Set(submissions.map(s => s.studentId));
+  const submittedCount = submissions.length;
+  const missingCount = Math.max(0, targetStudents.length - submittedCount);
+  const totalMaxScore = currentHw ? (currentHw.maxScore || 20) : 20;
+
+  const averageScore = submittedCount > 0 ?
+    (submissions.reduce((acc, s) => acc + (Number(s.score) || 0), 0) / submittedCount).toFixed(1) :
+    '—';
 
   container.innerHTML = `
     <div class="view-title">
       <div>
-        <span>📑 إدارة الواجبات المنزلية والتكليفات (${homework.length})</span>
-        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">تكليف الطلاب، تحديد المواعيد والمرفقات، متابعة التسليمات، وتصحيح ورصد درجات وملاحظات الطلاب</div>
+        <span>📑 كشف ومتابعة نتائج وتسليمات الواجبات الميدانية</span>
+        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">
+          متابعة تسليمات الواجب، حصر الطلاب المتخلفين، وإرسال تنبيهات النتائج لأولياء الأمور عبر الواتساب بنقرة واحدة
+        </div>
       </div>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button class="btn btn-success" style="box-shadow:0 4px 12px rgba(34,197,94,0.3);" onclick="openAddHomeworkModal()">+ إضافة واجب جديد</button>
-        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('homework')">🔄 تحديث</button>
+        <button class="btn btn-success" onclick="window.print()">🖨️ طباعة كشف الواجب</button>
+        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('homework_reports')">🔄 تحديث</button>
       </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Homework Selector Card -->
+    <div class="card" style="margin-bottom:1.25rem; background:rgba(30,41,59,0.7); border:1px solid #334155; padding:1.2rem;">
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1rem; align-items:center;">
+        <div>
+          <label style="font-size:0.85rem; color:#94a3b8; display:block; margin-bottom:0.35rem; font-weight:bold;">
+            اختر الواجب المراد استعراض كشف نتائجه وتسليماته:
+          </label>
+          <select id="reportHwSelect" class="form-control" style="width:100%; padding:0.55rem; background:#0f172a; border:1px solid #38bdf8; border-radius:6px; color:#fff; font-size:0.95rem; font-weight:bold;" onchange="selectHomeworkReport(this.value)">
+            ${homework.map(h => `
+              <option value="${h.id}" ${h.id === selectedHwId ? 'selected' : ''}>
+                ${escapeHtmlAttr(h.title)} — ${escapeHtmlAttr(subjectMap.get(h.subjectId) || '')} (${h.groupId ? escapeHtmlAttr(groupMap.get(h.groupId) || '') : 'جميع المجموعات'})
+              </option>
+            `).join('')}
+          </select>
+        </div>
+        <div style="text-align:left;">
+          <div style="font-size:0.8rem; color:#94a3b8;">آخر موعد للتسليم:</div>
+          <div style="font-weight:bold; color:#f8fafc; font-size:0.95rem;">
+            ${currentHw && currentHw.dueAt ? new Date(currentHw.dueAt).toLocaleDateString('ar-EG') : 'غير محدد'}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Stats -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
       <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
         <div class="stat-card-header">
           <div>
-            <div class="stat-label">إجمالي الواجبات</div>
-            <div class="stat-value" style="color:#38bdf8;">${homework.length}</div>
+            <div class="stat-label">إجمالي طلاب المجموعة</div>
+            <div class="stat-value" style="color:#38bdf8;">${targetStudents.length}</div>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">📑</div>
+          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8;">👥</div>
         </div>
-        <div class="stat-sub"><span>تكليفات مسجلة بالسنتر</span></div>
+        <div class="stat-sub"><span>الملزمون بحل الواجب</span></div>
       </div>
 
       <div class="stat-card-modern" style="border-right: 4px solid #22c55e;">
         <div class="stat-card-header">
           <div>
-            <div class="stat-label">واجبات نشطة للتسليم</div>
-            <div class="stat-value" style="color:#4ade80;">${publishedCount}</div>
+            <div class="stat-label">تم التسليم والتصحيح</div>
+            <div class="stat-value" style="color:#4ade80;">${submittedCount}</div>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);">🟢</div>
+          <div class="stat-icon-bubble" style="background:rgba(34,197,94,0.15); color:#4ade80;">✅</div>
         </div>
-        <div class="stat-sub"><span>متاحة في تطبيق الطالب</span></div>
+        <div class="stat-sub"><span>نسبة إنجاز ${targetStudents.length > 0 ? ((submittedCount / targetStudents.length) * 100).toFixed(0) : 0}%</span></div>
       </div>
 
-      <div class="stat-card-modern" style="border-right: 4px solid #64748b;">
+      <div class="stat-card-modern" style="border-right: 4px solid #ef4444;">
         <div class="stat-card-header">
           <div>
-            <div class="stat-label">واجبات مغلقة / منتهية</div>
-            <div class="stat-value" style="color:#94a3b8;">${closedCount}</div>
+            <div class="stat-label">المتخلفون عن التسليم</div>
+            <div class="stat-value" style="color:#f87171;">${missingCount}</div>
           </div>
-          <div class="stat-icon-bubble" style="background:rgba(100,116,139,0.15); color:#cbd5e1; border:1px solid rgba(100,116,139,0.3);">✅</div>
+          <div class="stat-icon-bubble" style="background:rgba(239,68,68,0.15); color:#f87171;">⚠️</div>
         </div>
-        <div class="stat-sub"><span>تم استلام وتصحيح الحلول</span></div>
+        <div class="stat-sub"><span>لم يقدموا الواجب حتى الآن</span></div>
+      </div>
+
+      <div class="stat-card-modern" style="border-right: 4px solid #f59e0b;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">متوسط الدرجات</div>
+            <div class="stat-value" style="color:#fbbf24;">${averageScore} / ${totalMaxScore}</div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(245,158,11,0.15); color:#fbbf24;">📊</div>
+        </div>
+        <div class="stat-sub"><span>مستوى استيعاب الطلاب</span></div>
       </div>
     </div>
 
-    <!-- Homework Table -->
+    <!-- Student Homework Roster Table -->
     <div class="card" style="box-shadow:0 8px 20px -4px rgba(0,0,0,0.3);">
-      ${homework && homework.length > 0 ? `
-        <div style="overflow-x:auto;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>عنوان الواجب</th>
-                <th>المادة والدرس</th>
-                <th>المجموعة المستهدفة</th>
-                <th>نمط التسليم والدرجة</th>
-                <th>آخر موعد للتسليم</th>
-                <th>الحالة</th>
-                <th style="text-align:center;">إجراءات التسليم والتصحيح</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${homework.map(h => {
-                const isDraft = h.status === 'DRAFT' || !h.status;
-                const isPublished = h.status === 'PUBLISHED';
-                const isClosed = h.status === 'CLOSED';
-                const groupName = h.groupId ? (groupMap.get(h.groupId) || h.groupId) : 'جميع المجموعات';
-                const subjectName = subjectMap.get(h.subjectId) || h.subjectId || '—';
-                const lessonTitle = lessonMap.get(h.lessonId) || h.lessonId || '—';
+      <div style="font-weight:bold; color:#f8fafc; font-size:1.05rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+        <span>كشف الطلاب التفصيلي وحالة الواجب (${targetStudents.length} طالب)</span>
+      </div>
 
-                return `
-                  <tr>
-                    <td>
-                      <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(h.title)}</strong>
-                      ${h.description ? `<div style="font-size:0.75rem; color:#94a3b8; max-width:280px;">${escapeHtmlAttr(h.description)}</div>` : ''}
-                      ${h.attachmentUrl ? `<div style="margin-top:0.25rem;"><button type="button" class="btn" style="background:#0284c7; color:#fff; padding:0.15rem 0.55rem; font-size:0.72rem;" onclick="openOrDownloadFile('${escapeHtmlAttr(h.attachmentUrl)}', '${escapeHtmlAttr(h.title)} - ورقة الواجب')">📎 عرض / تنزيل ورقة الواجب</button></div>` : ''}
-                    </td>
-                    <td>
-                      <div style="font-size:0.85rem; color:#e2e8f0; font-weight:bold;">${escapeHtmlAttr(subjectName)}</div>
-                      <div style="font-size:0.75rem; color:#94a3b8;">الدرس: ${escapeHtmlAttr(lessonTitle)}</div>
-                    </td>
-                    <td>
-                      <span class="badge" style="background:#1e293b; color:#38bdf8; border:1px solid #334155;">${escapeHtmlAttr(groupName)}</span>
-                    </td>
-                    <td>
-                      <span class="badge" style="background:#1e3a8a; color:#93c5fd;">${h.mode === 'PAPER' ? '📝 ورقي' : (h.mode === 'HYBRID' ? '📲 مختلط / إلكتروني' : 'إلكتروني')}</span>
-                      <div style="color:#4ade80; font-weight:bold; font-size:0.85rem; margin-top:0.2rem;">${h.maxScore || 20} درجة</div>
-                    </td>
-                    <td style="color:#94a3b8; font-size:0.82rem;">
-                      ${h.dueAt ? new Date(h.dueAt).toLocaleDateString('ar-EG') : '—'}
-                    </td>
-                    <td>
-                      ${isPublished ? '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للتسليم 🟢</span>' :
-                        (isClosed ? '<span class="badge" style="background:#334155; color:#cbd5e1;">مغلق ومكتمل ✅</span>' :
-                        '<span class="badge" style="background:#78350f; color:#fde047;">مسودة DRAFT 📝</span>')}
-                    </td>
-                    <td>
-                      <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
-                        ${isDraft ? `
-                          <button class="btn btn-success" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="publishHomeworkAction('${h.id}')" title="نشر الواجب للطلاب">📢 نشر</button>
-                        ` : ''}
-                        <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:#0284c7;" onclick="openHomeworkSubmissionsModal('${h.id}')" title="كشف تسليمات الطلاب وتصحيح الواجب">📥 كشف التسليمات والتصحيح</button>
-                        ${isPublished ? `
-                          <button class="btn btn-warning" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="closeHomeworkAction('${h.id}')" title="إغلاق فترة التسليم">⏹️ إغلاق</button>
-                        ` : ''}
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : `
-        <div style="text-align:center; padding:3.5rem 1rem; color:#64748b;">
-          <div style="font-size:3.5rem; margin-bottom:0.75rem; opacity:0.8;">📑</div>
-          <h3 style="color:#f8fafc; margin:0 0 0.5rem 0;">لا توجد واجبات مسجلة حالياً</h3>
-          <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1.25rem;">يمكنك إنشاء واجبات وتحديد مواعيد التسليم وتصحيح إجابات الطلاب وإرجاع الملاحظات.</p>
-          <button class="btn btn-success" onclick="openAddHomeworkModal()">+ إضافة أول واجب الآن</button>
-        </div>
-      `}
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>كود واسم الطالب</th>
+              <th>رقم الهاتف / ولي الأمر</th>
+              <th>حالة تسليم الواجب</th>
+              <th>الدرجة المرصودة</th>
+              <th>تاريخ التسليم</th>
+              <th style="text-align:center;">إشعار ولي الأمر (WhatsApp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${targetStudents.map(st => {
+              const sub = submissions.find(s => s.studentId === st.id);
+              const isSubmitted = !!sub;
+              const score = isSubmitted ? (sub.score !== undefined ? sub.score : '—') : '—';
+              const phone = st.guardianPhone || st.parentPhone || st.phone || '';
+              const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+              const hwTitle = currentHw ? currentHw.title : 'الواجب المنزلي';
+
+              // WhatsApp message preparation
+              const waText = isSubmitted ?
+                encodeURIComponent(`مرحباً ولي أمر الطالب (${st.name})، نحيطكم علماً بأن الطالب حصل على درجة (${score} من ${totalMaxScore}) في واجب (${hwTitle}). نشكر حرصكم ومتابعتكم المستمرة.`) :
+                encodeURIComponent(`تنبيه هام من إدارة السنتر: نود إحاطتكم علماً بأن الطالب (${st.name}) لم يقم بتسليم واجب (${hwTitle}) في الموعد المحدد. يرجى التكرم بمتابعة الطالب لضمان مستواه الدراسي.`);
+
+              return `
+                <tr>
+                  <td>
+                    <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(st.name)}</strong>
+                    <div style="font-size:0.75rem; color:#38bdf8; font-family:monospace;">كود: ${escapeHtmlAttr(st.code || st.barcode || st.id)}</div>
+                  </td>
+                  <td style="color:#94a3b8; font-family:monospace;">${escapeHtmlAttr(phone || '—')}</td>
+                  <td>
+                    ${isSubmitted ? `
+                      <span class="badge" style="background:#064e3b; color:#86efac; font-weight:bold;">تم التسليم والتصحيح 🟢</span>
+                    ` : `
+                      <span class="badge" style="background:#450a0a; color:#f87171; font-weight:bold;">لم يسلّم (غائب) 🔴</span>
+                    `}
+                  </td>
+                  <td>
+                    ${isSubmitted ? `
+                      <span style="font-weight:bold; font-size:1.05rem; color:${Number(score) >= (totalMaxScore * 0.75) ? '#4ade80' : (Number(score) >= (totalMaxScore * 0.5) ? '#fbbf24' : '#f87171')};">
+                        ${score} / ${totalMaxScore}
+                      </span>
+                    ` : `
+                      <span style="color:#64748b;">—</span>
+                    `}
+                  </td>
+                  <td style="color:#94a3b8; font-size:0.82rem;">
+                    ${isSubmitted && sub.gradedAt ? new Date(sub.gradedAt).toLocaleDateString('ar-EG') : (isSubmitted ? 'تم' : '—')}
+                  </td>
+                  <td style="text-align:center;">
+                    ${cleanPhone ? `
+                      <a class="btn" href="https://wa.me/2${cleanPhone.replace(/^2/, '')}?text=${waText}" target="_blank" style="padding:0.25rem 0.65rem; font-size:0.75rem; background:#16a34a; color:#fff; font-weight:bold; text-decoration:none; display:inline-flex; align-items:center; gap:0.3rem;">
+                        <span>💬 إرسال واتساب</span>
+                      </a>
+                    ` : `
+                      <span style="color:#64748b; font-size:0.75rem;">لا يوجد رقم</span>
+                    `}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 }
 
+function selectHomeworkReport(hwId) {
+  window._selectedReportHwId = hwId;
+  const container = document.getElementById('mainView');
+  if (container) renderHomeworkReportsView(container);
+}
+
+// 10. NEW MAJOR REPORT: AI STUDENT DIAGNOSTIC & MASTERY ASSESSMENT (تشخيص وتحديد مستوى الطالب التراكمي)
+// ---------------------------------------------------------------------
+// Student diagnostic — computed ONLY from real grade records.
+// Pure + deterministic so it can be verified headlessly (no DOM, no I/O).
+// Rules:
+//  - Pending (not yet official) canonical grades are ignored.
+//  - Absences are counted separately and never averaged in as zero.
+//  - Fewer than DIAGNOSTIC_MIN_EXAMS graded exams => no level is issued.
+// ---------------------------------------------------------------------
+const DIAGNOSTIC_MIN_EXAMS = 2;
+const DIAGNOSTIC_OFFICIAL_STATUSES = ['APPROVED', 'PUBLISHED_RESULT', 'FINALIZED', 'GRADED'];
+const DIAGNOSTIC_TIERS = [
+  { min: 85, key: 'EXCELLENT', label: 'متفوق', color: '#38bdf8', icon: '🌟' },
+  { min: 70, key: 'ADVANCED', label: 'متقدم', color: '#22c55e', icon: '🟢' },
+  { min: 50, key: 'AVERAGE', label: 'متوسط', color: '#fbbf24', icon: '🟡' },
+  { min: -Infinity, key: 'WEAK', label: 'ضعيف — يحتاج دعماً عاجلاً', color: '#ef4444', icon: '🔴' }
+];
+
+function diagnosticGradePercent(g) {
+  if (typeof g.percentageHundredths === 'number' && Number.isFinite(g.percentageHundredths)) return g.percentageHundredths / 100;
+  if (typeof g.percentage === 'number' && Number.isFinite(g.percentage)) return g.percentage;
+  const score = Number(g.score);
+  const max = Number(g.maxScore);
+  if (Number.isFinite(score) && Number.isFinite(max) && max > 0) return (score / max) * 100;
+  return null;
+}
+
+function computeStudentDiagnostic(student, grades, exams, subjects) {
+  const ids = new Set([student && student.id, student && student.authUid, student && student.uid].filter(Boolean));
+  const examById = new Map((exams || []).map((e) => [e.id, e]));
+  const subjectName = (sid) => {
+    const s = (subjects || []).find((x) => x.id === sid);
+    return (s && (s.name || s.title)) || sid || 'مادة غير محددة';
+  };
+
+  const own = (grades || []).filter((g) => g && ids.has(g.studentId));
+  let absences = 0;
+  let pending = 0;
+  const graded = [];
+  for (const g of own) {
+    if (g.attendanceStatus === 'ABSENT' || g.status === 'ABSENT') { absences += 1; continue; }
+    if (g.gradingStatus && !DIAGNOSTIC_OFFICIAL_STATUSES.includes(g.gradingStatus)) { pending += 1; continue; }
+    const pct = diagnosticGradePercent(g);
+    if (pct === null) { pending += 1; continue; }
+    const exam = examById.get(g.examId) || {};
+    graded.push({
+      examId: g.examId,
+      examTitle: exam.title || exam.name || g.examId || 'اختبار',
+      subjectId: exam.subjectId || g.subjectId || null,
+      percent: Math.max(0, Math.min(100, pct)),
+      at: String(exam.date || exam.examDate || g.gradedAt || g.updatedAt || g.createdAt || '')
+    });
+  }
+  graded.sort((a, b) => a.at.localeCompare(b.at));
+
+  const avg = (arr) => (arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null);
+  const average = avg(graded.map((x) => x.percent));
+  const sufficient = graded.length >= DIAGNOSTIC_MIN_EXAMS;
+  const tier = sufficient ? DIAGNOSTIC_TIERS.find((t) => average >= t.min) : null;
+
+  // Trajectory: last up-to-3 exams vs everything before them (needs >= 3).
+  let trend = null;
+  if (graded.length >= 3) {
+    const recentN = Math.min(3, graded.length - 1);
+    const recent = avg(graded.slice(-recentN).map((x) => x.percent));
+    const earlier = avg(graded.slice(0, graded.length - recentN).map((x) => x.percent));
+    const delta = recent - earlier;
+    trend = { delta, direction: delta >= 5 ? 'UP' : (delta <= -5 ? 'DOWN' : 'STABLE') };
+  }
+
+  const bySubject = {};
+  for (const x of graded) {
+    const key = x.subjectId || '_none';
+    if (!bySubject[key]) bySubject[key] = { subjectId: x.subjectId, name: subjectName(x.subjectId), percents: [] };
+    bySubject[key].percents.push(x.percent);
+  }
+  const subjectStats = Object.values(bySubject)
+    .map((s) => ({ subjectId: s.subjectId, name: s.name, count: s.percents.length, average: avg(s.percents) }))
+    .sort((a, b) => b.average - a.average);
+
+  return {
+    gradedCount: graded.length,
+    absences,
+    pending,
+    sufficient,
+    average,
+    tier,
+    trend,
+    subjectStats,
+    strengths: subjectStats.filter((s) => s.average >= 75),
+    gaps: subjectStats.filter((s) => s.average < 60),
+    exams: graded
+  };
+}
+
+async function renderStudentDiagnosticView(container) {
+  let students = [], exams = [], grades = [], subjects = [];
+  let loadError = null;
+  try {
+    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
+    // No silent .catch(() => []) here: an empty list must never be mistaken
+    // for "student has no grades" — a failed read is shown as an error.
+    [students, exams, grades, subjects] = await Promise.all([
+      callBackend('getStudents', currentCallerToken, instId),
+      callBackend('getExams', currentCallerToken, { institutionId: instId }),
+      callBackend('getGrades', currentCallerToken, { institutionId: instId }),
+      callBackend('getSubjects', currentCallerToken, instId)
+    ]);
+    students = students || []; exams = exams || []; grades = grades || []; subjects = subjects || [];
+  } catch (err) {
+    loadError = (err && err.message) || 'تعذر تحميل البيانات';
+  }
+
+  window._allStudentsCache = students;
+  const selectedStudentId = window._selectedDiagnosticStudentId || (students[0] ? students[0].id : null);
+  const currentStudent = students.find((s) => s.id === selectedStudentId) || students[0] || null;
+  const d = currentStudent ? computeStudentDiagnostic(currentStudent, grades, exams, subjects) : null;
+  const fmt = (n) => (n === null || n === undefined ? '—' : `${Math.round(n)}%`);
+  const esc = escapeHtmlAttr;
+  const guardianPhone = currentStudent ? (currentStudent.guardianPhone || currentStudent.parentPhone || currentStudent.phone || '') : '';
+  const waDigits = String(guardianPhone).replace(/\D/g, '').replace(/^2/, '');
+
+  let waText = '';
+  if (d && d.sufficient) {
+    const lines = [
+      `تقرير مستوى الطالب: ${currentStudent.name}`,
+      `المستوى العام: ${d.tier.label} — متوسط ${fmt(d.average)} في ${d.gradedCount} اختبار`,
+    ];
+    if (d.trend) lines.push(`اتجاه الأداء: ${d.trend.direction === 'UP' ? 'في تحسن' : (d.trend.direction === 'DOWN' ? 'في تراجع' : 'مستقر')}`);
+    if (d.strengths.length) lines.push(`نقاط القوة: ${d.strengths.map((s) => `${s.name} (${fmt(s.average)})`).join('، ')}`);
+    if (d.gaps.length) lines.push(`يحتاج متابعة في: ${d.gaps.map((s) => `${s.name} (${fmt(s.average)})`).join('، ')}`);
+    if (d.absences) lines.push(`غياب عن ${d.absences} اختبار`);
+    waText = lines.join('\n');
+  }
+
+  const trendHtml = !d || !d.trend ? '<span style="color:#64748b;">يحتاج 3 اختبارات على الأقل</span>'
+    : d.trend.direction === 'UP' ? `<span style="color:#4ade80;">📈 في تحسن (+${Math.round(d.trend.delta)} نقطة)</span>`
+    : d.trend.direction === 'DOWN' ? `<span style="color:#f87171;">📉 في تراجع (${Math.round(d.trend.delta)} نقطة)</span>`
+    : '<span style="color:#cbd5e1;">➖ مستقر</span>';
+
+  const subjectList = (list, empty) => list.length
+    ? `<ul style="padding-right:1.25rem; color:#cbd5e1; font-size:0.88rem; line-height:1.8; margin:0;">${list.map((s) => `<li><strong style="color:#f8fafc;">${esc(s.name)}</strong> — متوسط ${fmt(s.average)} في ${s.count} اختبار</li>`).join('')}</ul>`
+    : `<div style="color:#64748b; font-size:0.88rem;">${empty}</div>`;
+
+  container.innerHTML = `
+    <div class="view-title">
+      <div>
+        <span>🎯 تشخيص وتحديد مستوى الطالب التراكمي</span>
+        <div style="font-size:0.85rem; color:#94a3b8; font-weight:normal; margin-top:0.25rem;">
+          محسوب من درجات الاختبارات المعتمدة المسجلة فعلياً للطالب — بدون أي أرقام تقديرية
+        </div>
+      </div>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button class="btn btn-success" onclick="window.print()" ${d && d.sufficient ? '' : 'disabled'}>🖨️ طباعة بطاقة التقرير</button>
+        <button class="btn" style="background:#334155; color:#f8fafc;" onclick="renderActiveView('student_diagnostic')">🔄 تحديث</button>
+      </div>
+    </div>
+
+    ${loadError ? `<div class="card" style="border:1px solid #ef4444; color:#fca5a5; margin-bottom:1rem;">⚠️ تعذر تحميل بيانات التشخيص: ${esc(loadError)}</div>` : ''}
+
+    <div class="card" style="margin-bottom:1.5rem; background:rgba(30,41,59,0.7); border:1px solid #334155; padding:1.2rem;">
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1rem; align-items:center;">
+        <div>
+          <label for="diagnosticStudentSelect" style="font-size:0.85rem; color:#94a3b8; display:block; margin-bottom:0.35rem; font-weight:bold;">اختر الطالب:</label>
+          <select id="diagnosticStudentSelect" class="form-control" style="width:100%; padding:0.55rem; background:#0f172a; border:1px solid #38bdf8; border-radius:6px; color:#fff; font-size:0.95rem; font-weight:bold;" onchange="selectDiagnosticStudent(this.value)">
+            ${students.map((s) => `<option value="${esc(s.id)}" ${s.id === (currentStudent && currentStudent.id) ? 'selected' : ''}>${esc(s.name)} — كود: ${esc(s.code || s.barcode || s.id)}</option>`).join('')}
+          </select>
+        </div>
+        ${currentStudent ? `
+          <div style="text-align:left;">
+            <div style="font-size:0.8rem; color:#94a3b8;">هاتف ولي الأمر:</div>
+            <div style="font-weight:bold; color:#38bdf8; font-size:0.95rem; font-family:monospace;">${esc(guardianPhone || 'غير مسجل')}</div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    ${!currentStudent ? `
+      <div class="card" style="text-align:center; padding:3rem; color:#64748b;">لا يوجد طلاب لعرض التشخيص.</div>
+    ` : !d.sufficient ? `
+      <div class="card" style="text-align:center; padding:2.5rem; border:1px dashed #475569;">
+        <div style="font-size:2.5rem;">📭</div>
+        <div style="font-size:1.15rem; font-weight:bold; color:#f8fafc; margin-top:0.5rem;">لا توجد بيانات كافية لتحديد مستوى ${esc(currentStudent.name)}</div>
+        <div style="color:#94a3b8; margin-top:0.5rem; font-size:0.9rem;">
+          يلزم ${DIAGNOSTIC_MIN_EXAMS} اختبارات معتمدة على الأقل — المسجل حالياً: ${d.gradedCount}
+          ${d.pending ? ` • بانتظار الاعتماد: ${d.pending}` : ''}${d.absences ? ` • غياب: ${d.absences}` : ''}
+        </div>
+      </div>
+    ` : `
+      <div class="card" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border:2px solid ${d.tier.color}; padding:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1.25rem;">
+          <div style="display:flex; align-items:center; gap:1rem;">
+            <div style="font-size:3.2rem; line-height:1;">${d.tier.icon}</div>
+            <div>
+              <div style="font-size:0.85rem; color:#94a3b8; font-weight:bold;">المستوى الأكاديمي التراكمي:</div>
+              <div style="font-size:1.6rem; font-weight:900; color:${d.tier.color};">${d.tier.label} (${fmt(d.average)})</div>
+              <div style="font-size:0.85rem; color:#cbd5e1; margin-top:0.25rem;">
+                ${esc(currentStudent.name)} — محسوب من ${d.gradedCount} اختبار معتمد
+              </div>
+            </div>
+          </div>
+          ${waDigits ? `
+            <a id="diagnosticWhatsappBtn" class="btn" href="https://wa.me/2${waDigits}?text=${encodeURIComponent(waText)}" target="_blank" style="background:#16a34a; color:#fff; font-weight:bold; padding:0.6rem 1.25rem; text-decoration:none;">💬 إرسال التقرير لولي الأمر</a>
+          ` : '<span style="color:#94a3b8; font-size:0.85rem;">لا يوجد رقم ولي أمر مسجل</span>'}
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1.25rem; border-top:1px dashed #334155; padding-top:1rem; font-size:0.88rem; color:#cbd5e1;">
+          <div>اتجاه الأداء: ${trendHtml}</div>
+          <div>اختبارات بانتظار الاعتماد: <strong>${d.pending}</strong></div>
+          <div>غياب عن اختبارات: <strong style="color:${d.absences ? '#f87171' : '#cbd5e1'};">${d.absences}</strong></div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
+        <div class="card" style="border-right:4px solid #22c55e;">
+          <div style="font-weight:bold; color:#4ade80; margin-bottom:0.75rem;">🟢 نقاط القوة (مواد بمتوسط 75% فأكثر)</div>
+          ${subjectList(d.strengths, 'لا توجد مادة بمتوسط 75% فأكثر حتى الآن')}
+        </div>
+        <div class="card" style="border-right:4px solid #f59e0b;">
+          <div style="font-weight:bold; color:#fbbf24; margin-bottom:0.75rem;">⚠️ تحتاج متابعة (مواد بمتوسط أقل من 60%)</div>
+          ${subjectList(d.gaps, 'لا توجد مادة بمتوسط أقل من 60%')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:bold; color:#38bdf8; margin-bottom:0.75rem;">📋 سجل الاختبارات المعتمدة</div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+          <thead><tr style="color:#94a3b8; text-align:right;"><th style="padding:0.4rem;">الاختبار</th><th>المادة</th><th>النسبة</th></tr></thead>
+          <tbody>
+            ${d.exams.slice().reverse().map((x) => `
+              <tr style="border-top:1px solid #1e293b; color:#e2e8f0;">
+                <td style="padding:0.45rem;">${esc(x.examTitle)}</td>
+                <td>${esc((d.subjectStats.find((s) => s.subjectId === x.subjectId) || {}).name || '—')}</td>
+                <td style="font-weight:bold; color:${x.percent >= 70 ? '#4ade80' : (x.percent >= 50 ? '#fbbf24' : '#f87171')};">${fmt(x.percent)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `}
+  `;
+}
+
+function selectDiagnosticStudent(studentId) {
+  window._selectedDiagnosticStudentId = studentId;
+  const container = document.getElementById('mainView');
+  if (container) renderStudentDiagnosticView(container);
+}
+
+// Watch Code generation & helpers
+async function generateWatchCodesBatch() {
+  const count = parseInt(document.getElementById('vCodeCount')?.value, 10) || 10;
+  const maxViews = parseInt(document.getElementById('vCodeMaxViews')?.value, 10) || 2;
+  const targetSubId = document.getElementById('vCodeTargetSubject')?.value || '';
+  const subEl = document.getElementById('vCodeTargetSubject');
+  const subName = subEl && subEl.selectedIndex >= 0 ? subEl.options[subEl.selectedIndex].text : 'عام';
+
+  showToast('⏳ جاري إنشاء وحفظ أكواد المشاهدة المشفرة...');
+  try {
+    const res = await callBackend('generateVideoWatchCodes', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      count,
+      maxViews,
+      subjectId: targetSubId,
+      subjectName
+    });
+    const newCodes = (res && res.codes) || [];
+    window._allWatchCodesCache = newCodes.concat(window._allWatchCodesCache || []);
+    showToast(`✅ تم إنشاء وحفظ (${newCodes.length || count}) كود مشاهدة محمي بنجاح!`);
+    const container = document.getElementById('mainView');
+    if (container) renderAiStudioView(container, 'videos');
+  } catch (err) {
+    showToast(`❌ فشل إنشاء أكواد المشاهدة: ${(err && err.message) || err}`, true);
+  }
+}
+
+function copyAllActiveWatchCodes() {
+  const codes = (window._allWatchCodesCache || []).filter(c => c.status === 'AVAILABLE').map(c => c.code);
+  if (codes.length === 0) return showToast('لا توجد أكواد متاحة للنسخ', true);
+  navigator.clipboard.writeText(codes.join('\n'));
+  showToast(`تم نسخ (${codes.length}) كود إلى الحافظة!`);
+}
+
+// Helpers for bridging resources to lessons and exams
+function prefillLessonFromResource(contentId) {
+  window._activeAiStudioTab = 'lessons';
+  const container = document.getElementById('mainView');
+  if (container) {
+    renderAiStudioView(container, 'lessons').then(() => {
+      setTimeout(() => {
+        const sel = document.getElementById('aiStudioLessonSource');
+        if (sel) {
+          sel.value = contentId;
+          syncAiLessonSourcePages(sel);
+        }
+      }, 50);
+    });
+  }
+}
+
+function prefillExamFromResource(contentId) {
+  openAiExamGeneratorModal();
+}
+
+function syncAiLessonSourcePages(selectEl) {
+  if (!selectEl) return;
+  const opt = selectEl.options[selectEl.selectedIndex];
+  if (!opt) return;
+  const pages = opt.getAttribute('data-pages');
+  const endInp = document.getElementById('aiStudioLessonPageEnd');
+  if (endInp && pages) endInp.value = pages;
+}
+
+function runAiLessonExtraction() {
+  const title = document.getElementById('aiStudioLessonTitle')?.value.trim();
+  const stage = document.getElementById('aiStudioLessonStage')?.value;
+  const resBox = document.getElementById('aiLessonExtractionResultBox');
+
+  if (!title && !stage) {
+    return showToast('يرجى تحديد عنوان الدرس أو اختيار المرحلة والمادة', true);
+  }
+
+  showToast('ℹ️ محرك استخراج محاور الدروس المباشر من المذكرات قيد الربط بمحرك التلخيص. تم فتح حقول العناصر والمفاهيم لتسجيلها يدوياً الآن، أو استخدم تبويب الاختبارات لتوليد الأسئلة بالذكاء.');
+  if (resBox) resBox.style.display = 'block';
+}
+
+async function saveAiGeneratedLesson() {
+  const title = document.getElementById('aiStudioLessonTitle')?.value.trim() || 'درس جديد';
+  const stageId = document.getElementById('aiStudioLessonStage')?.value;
+  const subjectId = document.getElementById('aiStudioLessonSubject')?.value;
+  const pageStart = parseInt(document.getElementById('aiStudioLessonPageStart')?.value, 10) || 1;
+  const pageEnd = parseInt(document.getElementById('aiStudioLessonPageEnd')?.value, 10) || null;
+  const desc = document.getElementById('aiResultOutlines')?.value.trim() || '';
+
+  if (!stageId || !subjectId) {
+    return showToast('يرجى اختيار المرحلة والمادة أولاً لحفظ الدرس', true);
+  }
+
+  try {
+    await callBackend('createLesson', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      title,
+      description: desc,
+      stageId,
+      subjectId,
+      pageStart,
+      pageEnd,
+      pageRange: pageEnd ? `من صفحة ${pageStart} إلى ${pageEnd}` : `صفحة ${pageStart}`,
+      status: 'PUBLISHED'
+    });
+    showToast('🎉 تم حفظ ونشر الدرس بنجاح في تطبيق الطلاب!');
+    renderActiveView('ai_studio');
+  } catch (e) {
+    showToast(`❌ تعذر حفظ الدرس: ${(e && e.message) || e}`, true);
+  }
+}
+
+function filterAiResourcesTable() {
+  const stFilter = document.getElementById('quickFilterStage')?.value || '';
+  const subFilter = document.getElementById('quickFilterSubject')?.value || '';
+  const searchFilter = (document.getElementById('quickSearchResource')?.value || '').toLowerCase().trim();
+
+  const rows = document.querySelectorAll('#aiResourcesTable tbody tr');
+  rows.forEach(r => {
+    const rStage = r.getAttribute('data-stage') || '';
+    const rSub = r.getAttribute('data-subject') || '';
+    const rTitle = (r.getAttribute('data-title') || '').toLowerCase();
+
+    const matchesStage = !stFilter || rStage === stFilter;
+    const matchesSub = !subFilter || rSub === subFilter;
+    const matchesSearch = !searchFilter || rTitle.includes(searchFilter);
+
+    r.style.display = (matchesStage && matchesSub && matchesSearch) ? '' : 'none';
+  });
+}
 
 // 10. Subscriptions View
 // 10. Subscriptions & AI VIP Voucher Hub View
@@ -6317,6 +7130,246 @@ async function renderLicenseView(container) {
       </div>
     </div>
   `;
+}
+
+// 13.2 Center AI Status & Quota View
+async function renderCenterAiStatusView(container) {
+  container.innerHTML = `
+    <div style="color:#94a3b8; text-align:center; padding:3rem;">
+      <div class="spinner" style="margin: 0 auto 1rem auto;"></div>
+      جاري فحص كوتة وحالة اتصال الذكاء الاصطناعي بالمنصة المركزية...
+    </div>
+  `;
+
+  let aiData = null;
+  try {
+    aiData = await callBackend('getCenterAiStatusAndQuota', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId
+    });
+  } catch (err) {
+    console.error('Error fetching AI status:', err);
+  }
+
+  const isConnected = aiData && aiData.connected;
+  const gov = (aiData && aiData.governance) || {};
+  const monthlyQuota = gov.monthlyQuota || 3000;
+  const used = gov.usedThisMonth || 0;
+  const remaining = gov.remainingQuota != null ? gov.remainingQuota : Math.max(0, monthlyQuota - used);
+  const percent = gov.usagePercent != null ? gov.usagePercent : Math.min(100, Math.round((used / monthlyQuota) * 100));
+  const modelName = aiData?.activeModel || 'gemini-2.5-flash';
+  const providerName = aiData?.primaryProvider === 'openrouter' ? 'OpenRouter Cloud AI' : 'Google Gemini Flash AI';
+
+  container.innerHTML = `
+    <div class="view-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <h2 style="margin:0; font-size:1.4rem; color:#f8fafc; display:flex; align-items:center; gap:0.5rem;">
+          <span>🤖 مركز الذكاء الاصطناعي والكوتة المعتمدة</span>
+          <span class="badge" style="background:${isConnected ? '#065f46' : '#7f1d1d'}; color:${isConnected ? '#86efac' : '#fca5a5'}; font-size:0.75rem;">
+            ${isConnected ? '🟢 متصل بالمنظومة المركزية' : '🔴 غير متصل'}
+          </span>
+        </h2>
+        <div style="font-size:0.85rem; color:#94a3b8; margin-top:0.3rem;">
+          متابعة حية للربط بالمنصة المركزية واستهلاك بنك الأسئلة والكوتة الشهرية المخصصة للسنتر
+        </div>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn" style="background:#334155; color:#f8fafc; display:flex; align-items:center; gap:0.4rem;" onclick="renderActiveView('ai_status')">
+          🔄 تحديث القياسات
+        </button>
+        <button class="btn btn-primary" id="btnTestAiConnection" style="background:linear-gradient(135deg, #0284c7, #2563eb); font-weight:bold; display:flex; align-items:center; gap:0.4rem;" onclick="runCenterAiPingTest()">
+          ⚡ اختبار الاتصال اللحظي
+        </button>
+      </div>
+    </div>
+
+    <!-- Alert Box for Test Ping Results -->
+    <div id="aiPingResultBox" style="display:none; margin-bottom:1.5rem; border-radius:8px; padding:0.85rem 1.2rem; font-size:0.9rem;"></div>
+
+    <!-- Top KPI Cards Grid -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+      <!-- Connection Card -->
+      <div class="stat-card-modern" style="border-right: 4px solid ${isConnected ? '#10b981' : '#ef4444'};">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">حالة المنظومة المركزية</div>
+            <div class="stat-value" style="color:${isConnected ? '#34d399' : '#f87171'}; font-size:1.4rem;">
+              ${isConnected ? 'مفعلة ونشطة 🟢' : 'معلقة 🔴'}
+            </div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3);">
+            ☁️
+          </div>
+        </div>
+        <div class="stat-sub"><span>مزود من السوبر أدمن مع تبديل تلقائي فوري</span></div>
+      </div>
+
+      <!-- Engine & Model Card -->
+      <div class="stat-card-modern" style="border-right: 4px solid #38bdf8;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">المحرك والنموذج الذكي</div>
+            <div class="stat-value" style="color:#38bdf8; font-size:1.15rem; font-family:monospace; direction:ltr; text-align:right;">
+              ${escapeHtml(modelName)}
+            </div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">
+            🧠
+          </div>
+        </div>
+        <div class="stat-sub"><span>المزود: ${escapeHtml(providerName)}</span></div>
+      </div>
+
+      <!-- Quota Available Card -->
+      <div class="stat-card-modern" style="border-right: 4px solid #f59e0b;">
+        <div class="stat-card-header">
+          <div>
+            <div class="stat-label">الرصيد المتبقي للسنتر</div>
+            <div class="stat-value" style="color:#fbbf24; font-size:1.4rem;">
+              ${remaining.toLocaleString('ar-EG')} <span style="font-size:0.85rem; color:#94a3b8; font-weight:normal;">سؤال متاح</span>
+            </div>
+          </div>
+          <div class="stat-icon-bubble" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3);">
+            📊
+          </div>
+        </div>
+        <div class="stat-sub"><span>الكوتة الإجمالية: ${monthlyQuota.toLocaleString('ar-EG')} سؤال شهرياً</span></div>
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap:1.25rem;">
+      <!-- Quota Consumption Gauge Card -->
+      <div class="card" style="box-shadow:0 8px 24px -4px rgba(0,0,0,0.3); border:1px solid #334155;">
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>📈 استهلاك الكوتة الشهرية المعتمدة</span>
+          <span class="badge" style="background:#1e293b; color:#38bdf8; border:1px solid #334155;">
+            تجديد دوري: ${gov.renewalDate || '1 من الشهر القادم'}
+          </span>
+        </div>
+
+        <div style="margin: 1.25rem 0;">
+          <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:0.5rem;">
+            <span style="color:#cbd5e1;">نسبة الاستهلاك الشهري:</span>
+            <strong style="color:${percent > 85 ? '#ef4444' : (percent > 60 ? '#f59e0b' : '#10b981')};">${percent}%</strong>
+          </div>
+          <!-- Progress Bar -->
+          <div style="background:#0f172a; height:14px; border-radius:7px; overflow:hidden; border:1px solid #334155;">
+            <div style="background:linear-gradient(90deg, #10b981 0%, ${percent > 75 ? '#ef4444' : '#0284c7'} 100%); width:${percent}%; height:100%; transition:width 0.5s ease; border-radius:7px;"></div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.65rem; background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; font-size:0.875rem;">
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#94a3b8;">إجمالي الكوتة الشهرية المعتمدة:</span>
+            <strong style="color:#f8fafc;">${monthlyQuota.toLocaleString('ar-EG')} سؤال</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#94a3b8;">الأسئلة التي تم توليدها هذا الشهر:</span>
+            <strong style="color:#38bdf8;">${used.toLocaleString('ar-EG')} سؤال</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; border-top:1px dashed #334155; padding-top:0.5rem;">
+            <span style="color:#94a3b8;">الرصيد المتبقي المتاح للتوليد:</span>
+            <strong style="color:#34d399;">${remaining.toLocaleString('ar-EG')} سؤال</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center AI Permitted Services Card -->
+      <div class="card" style="box-shadow:0 8px 24px -4px rgba(0,0,0,0.3); border:1px solid #334155;">
+        <div class="card-title">🛡️ الخدمات والضوابط الذكية المعتمدة للسنتر</div>
+        <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.75rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; background:#0f172a; padding:0.75rem 1rem; border-radius:8px; border:1px solid #1e293b;">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <span style="font-size:1.25rem;">📝</span>
+              <div>
+                <div style="font-weight:bold; color:#f8fafc; font-size:0.9rem;">توليد بنك الأسئلة والاختبارات</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">صياغة امتحانات مطابقة للمنهج والمذكرات الدراسية</div>
+              </div>
+            </div>
+            <span class="badge" style="background:#064e3b; color:#86efac; border:1px solid #10b981;">
+              ${gov.questionGenerationEnabled !== false ? 'مفعلة للسنتر 🟢' : 'معطلة 🔴'}
+            </span>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; background:#0f172a; padding:0.75rem 1rem; border-radius:8px; border:1px solid #1e293b;">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <span style="font-size:1.25rem;">🎓</span>
+              <div>
+                <div style="font-weight:bold; color:#f8fafc; font-size:0.9rem;">المعلم الخصوصي الذكي للطلاب (AI Tutor)</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">إجابة أسئلة ومراجعات الطلاب عبر تطبيق الموبايل</div>
+              </div>
+            </div>
+            <span class="badge" style="background:#064e3b; color:#86efac; border:1px solid #10b981;">
+              ${gov.tutorEnabled !== false ? 'مفعلة للسنتر 🟢' : 'معطلة 🔴'}
+            </span>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; background:#0f172a; padding:0.75rem 1rem; border-radius:8px; border:1px solid #1e293b;">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <span style="font-size:1.25rem;">👨‍🏫</span>
+              <div>
+                <div style="font-weight:bold; color:#f8fafc; font-size:0.9rem;">المساعد الذكي للمعلمين (Teacher AI)</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">تحضير الدروس والواجبات المساعدة للكادر التعليمي</div>
+              </div>
+            </div>
+            <span class="badge" style="background:#064e3b; color:#86efac; border:1px solid #10b981;">
+              ${gov.teacherAssistantEnabled !== false ? 'مفعلة للسنتر 🟢' : 'معطلة 🔴'}
+            </span>
+          </div>
+        </div>
+
+        <div style="margin-top:1rem; padding:0.75rem 1rem; background:#1e1b4b; border-radius:8px; border:1px solid #4338ca; font-size:0.8rem; color:#c7d2fe; display:flex; align-items:flex-start; gap:0.5rem;">
+          <span style="font-size:1rem;">ℹ️</span>
+          <span>
+            <strong>حوكمة مجانية 100%:</strong> تكاليف مفاتيح واستضافة الذكاء الاصطناعي تتحملها المنصة المركزية بالكامل. لتعديل أو توسيع الكوتة الشهرية يرجى التواصل المباشر مع إدارة السوبر أدمن.
+          </span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function runCenterAiPingTest() {
+  const btn = document.getElementById('btnTestAiConnection');
+  const box = document.getElementById('aiPingResultBox');
+  if (!btn || !box) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ جاري فحص الاتصال...';
+  box.style.display = 'block';
+  box.style.background = '#1e293b';
+  box.style.border = '1px solid #475569';
+  box.style.color = '#cbd5e1';
+  box.innerHTML = 'جاري إرسال حزمة فحص فوري للمحرك الذكي وقياس سرعة الاستجابة...';
+
+  try {
+    const res = await callBackend('testCenterAiConnection', currentCallerToken);
+    box.style.background = '#064e3b';
+    box.style.border = '1px solid #10b981';
+    box.style.color = '#ecfdf5';
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong>✅ الاتصال بالذكاء الاصطناعي ناجح ومستقر!</strong>
+          <div style="font-size:0.8rem; color:#a7f3d0; margin-top:0.2rem;">${escapeHtml(res.message || '')} — المزود: ${escapeHtml(res.provider || '')}</div>
+        </div>
+        <span class="badge" style="background:#047857; color:#fff; font-size:0.85rem; font-family:monospace;">${res.latencyMs || 0}ms</span>
+      </div>
+    `;
+    showToast('الاتصال بالذكاء الاصطناعي يعمل بكفاءة وسرعة فائقة 🟢');
+  } catch (err) {
+    box.style.background = '#7f1d1d';
+    box.style.border = '1px solid #ef4444';
+    box.style.color = '#fef2f2';
+    box.innerHTML = `
+      <strong>❌ فشل فحص الاتصال بالذكاء الاصطناعي:</strong>
+      <div style="font-size:0.8rem; margin-top:0.2rem;">${escapeHtml(err.message || String(err))}</div>
+    `;
+    showToast('فشل اختبار الاتصال بالذكاء الاصطناعي', true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⚡ اختبار الاتصال اللحظي';
+  }
 }
 
 // 13.1 System Updates & Releases View
@@ -11230,22 +12283,24 @@ async function openAddLessonModal() {
     groups = gRes || [];
   } catch (_) {}
 
+  window._selectedLessonFile = null;
+
   modal.innerHTML = `
     <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
-      <div class="modal-content" style="max-width:580px;">
+      <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
         <div class="modal-header">
-          <div class="modal-title">📖 إضافة درس تعليمي جديد للمكتبة</div>
+          <div>
+            <div class="modal-title">📖 إضافة درس تعليمي متكامل ومذكرة للمكتبة</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:0.2rem;">يمكنك إرفاق مذكرة الشرح، تحديد صفحات الدرس، وإضافة فيديو الشرح وملخص المحتوى للطلاب</div>
+          </div>
           <button class="modal-close" onclick="closeModal()">×</button>
         </div>
         <form onsubmit="event.preventDefault(); submitCreateLesson();">
           <div class="form-group">
-            <label>عنوان الدرس *</label>
-            <input type="text" id="mLessonTitle" required placeholder="مثال: الدرس الأول — قوانين نيوتن للحركة">
+            <label>عنوان الدرس التعليمي *</label>
+            <input type="text" id="mLessonTitle" required placeholder="مثال: الدرس الأول — قوانين نيوتن للحركة وتطبيقات القوة">
           </div>
-          <div class="form-group">
-            <label>وصف الدرس وملاحظات الشرح</label>
-            <textarea id="mLessonDesc" rows="2" placeholder="أدخل أهداف الدرس أو ملخص المحتوى..."></textarea>
-          </div>
+
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
             <div class="form-group">
               <label>المرحلة الدراسية *</label>
@@ -11262,6 +12317,7 @@ async function openAddLessonModal() {
               </select>
             </div>
           </div>
+
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
             <div class="form-group">
               <label>المجموعة المستهدفة (اختياري)</label>
@@ -11271,18 +12327,154 @@ async function openAddLessonModal() {
               </select>
             </div>
             <div class="form-group">
-              <label>ترتيب الدرس (رقم الدرس)</label>
+              <label>ترتيب الدرس في المنهج</label>
               <input type="number" id="mLessonOrder" min="1" value="1">
             </div>
           </div>
+
+          <!-- Rich Educational Material Box -->
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin:0.75rem 0;">
+            <div style="font-weight:bold; color:#38bdf8; font-size:0.9rem; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+              <span>📁</span> <span>المذكرة والمحتوى التعليمي المرفق للدرس (من جهازك)</span>
+            </div>
+
+            <!-- Device File Picker -->
+            <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; margin-bottom:0.6rem;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem; font-weight:bold; padding:0.45rem 1rem;" onclick="document.getElementById('mLessonFileInput').click()">
+                <span>📂</span> <span>تحديد ملف المذكرة من الجهاز (PDF / Word)</span>
+              </button>
+              <input type="file" id="mLessonFileInput" accept=".pdf,.doc,.docx,.txt,.ppt,.pptx" style="display:none;" onchange="handleLessonFileSelect(this)">
+              <span id="mLessonFileStatus" style="font-size:0.85rem; color:#94a3b8;">لم يتم اختيار ملف بعد (اختياري)</span>
+            </div>
+
+            <!-- Page Range Selection for the Lesson inside the booklet -->
+            <div id="mLessonPageRangeBox" style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:0.75rem; margin-top:0.6rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                <span style="font-weight:bold; color:#38bdf8; font-size:0.82rem;">📄 نطاق صفحات هذا الدرس داخل المذكرة:</span>
+                <span class="badge" style="background:#0284c7; color:#fff; font-size:0.7rem;">يحدد المطلوب للطالب والذكاء الاصطناعي</span>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <div>
+                  <label style="font-size:0.75rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">من صفحة رقم:</label>
+                  <input type="number" id="mLessonPageStart" min="1" placeholder="مثال: 1" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">إلى صفحة رقم:</label>
+                  <input type="number" id="mLessonPageEnd" min="1" placeholder="مثال: 5" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+              </div>
+            </div>
+
+            <!-- Video Explanation Link -->
+            <div style="margin-top:0.75rem;">
+              <label style="font-size:0.82rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">🎥 رابط فيديو شرح الدرس (YouTube أو رابط منصة تعليمية) - اختياري:</label>
+              <input type="url" id="mLessonVideoUrl" placeholder="https://www.youtube.com/watch?v=... أو رابط مباشر للشرح" style="width:100%; padding:0.4rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem;">
+            </div>
+          </div>
+
+          <!-- Notes / Learning Objectives -->
+          <div class="form-group">
+            <label>📝 ملخص المحتوى وعناصر الشرح (يظهر للطالب في التطبيق)</label>
+            <textarea id="mLessonDesc" rows="3" placeholder="أدخل ملخص الدرس، القوانين الرئيسية، والمفاهيم المطلوب من الطالب مذاكرتها..."></textarea>
+          </div>
+
           <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
             <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
-            <button type="submit" class="btn btn-success" id="btnSubmitAddLesson">💾 حفظ الدرس الجديد</button>
+            <button type="submit" class="btn btn-success" id="btnSubmitAddLesson" style="box-shadow:0 4px 12px rgba(34,197,94,0.3); font-weight:bold;">💾 حفظ الدرس والمحتوى التعليمي</button>
           </div>
         </form>
       </div>
     </div>
   `;
+}
+
+// Robust PDF metadata & page count extractor (Fixes the 500KB & 7-page limitation)
+async function parsePdfMetadata(file) {
+  return new Promise((resolve) => {
+    if (!file || !file.name || !file.name.toLowerCase().endsWith('.pdf')) {
+      return resolve({ pageCount: 0, text: '' });
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const buf = e.target.result;
+        const dec = new TextDecoder('latin1');
+        const str = dec.decode(buf);
+        let detectedPages = 0;
+
+        // 1. Check for root /Pages tree count: /Count (\d+)
+        const countMatches = str.match(/\/Count\s+(\d+)/g);
+        if (countMatches && countMatches.length > 0) {
+          let maxCount = 0;
+          for (const m of countMatches) {
+            const num = parseInt(m.replace(/\D/g, ''), 10);
+            if (num > maxCount && num < 100000) maxCount = num;
+          }
+          if (maxCount > 0) detectedPages = maxCount;
+        }
+
+        // 2. Fallback: match /Type /Page across entire read buffer
+        if (!detectedPages || detectedPages <= 0) {
+          const pageMatches = str.match(/\/Type\s*\/Page\b/g);
+          if (pageMatches) detectedPages = pageMatches.length;
+        }
+
+        resolve({ pageCount: detectedPages, text: str });
+      } catch (err) {
+        resolve({ pageCount: 0, text: '' });
+      }
+    };
+    reader.onerror = () => resolve({ pageCount: 0, text: '' });
+
+    // Read full file up to 35MB safely
+    const maxBytes = Math.min(file.size, 35 * 1024 * 1024);
+    reader.readAsArrayBuffer(file.slice(0, maxBytes));
+  });
+}
+
+function handleLessonFileSelect(input) {
+  const status = document.getElementById('mLessonFileStatus');
+  const pBox = document.getElementById('mLessonPageRangeBox');
+  if (!input.files || !input.files[0]) {
+    window._selectedLessonFile = null;
+    if (status) status.innerText = 'لم يتم اختيار ملف.';
+    return;
+  }
+  const file = input.files[0];
+  const sizeKb = (file.size / 1024).toFixed(1);
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  const sizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+
+  window._selectedLessonFile = {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    path: file.path || ''
+  };
+
+  if (status) {
+    status.innerHTML = `✅ تم التحديد: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
+  }
+
+  // If title is empty, prefill with file name without extension
+  const titleInp = document.getElementById('mLessonTitle');
+  if (titleInp && !titleInp.value.trim()) {
+    titleInp.value = file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ');
+  }
+
+  // True page count detection if PDF
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (status) status.innerHTML = `⏳ جاري فحص صفحات الملف بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
+    parsePdfMetadata(file).then(({ pageCount }) => {
+      const startInp = document.getElementById('mLessonPageStart');
+      const endInp = document.getElementById('mLessonPageEnd');
+      if (startInp && !startInp.value) startInp.value = '1';
+      if (endInp && pageCount > 0 && !endInp.value) endInp.value = String(pageCount);
+      if (status) {
+        status.innerHTML = `✅ تم الفحص بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr}${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''})`;
+      }
+    });
+  }
 }
 
 async function submitCreateLesson() {
@@ -11293,10 +12485,16 @@ async function submitCreateLesson() {
   const subjectId = document.getElementById('mLessonSubject')?.value;
   const groupId = document.getElementById('mLessonGroup')?.value || null;
   const lessonOrder = Number(document.getElementById('mLessonOrder')?.value || 1);
+  const videoUrl = document.getElementById('mLessonVideoUrl')?.value.trim() || null;
+  const pageStart = parseInt(document.getElementById('mLessonPageStart')?.value, 10) || null;
+  const pageEnd = parseInt(document.getElementById('mLessonPageEnd')?.value, 10) || null;
+  const pageRange = (pageStart || pageEnd) ? `من صفحة ${pageStart || 1} إلى ${pageEnd || 'نهاية الدرس'}` : null;
 
   if (!title || !stageId || !subjectId) {
     return showToast('العنوان والمرحلة والمادة مطلوبة', true);
   }
+
+  const fileInfo = window._selectedLessonFile;
 
   if (btn) btn.disabled = true;
   try {
@@ -11304,9 +12502,29 @@ async function submitCreateLesson() {
       institutionId: currentCallerToken.institutionId,
       title, description, stageId, subjectId, groupId,
       groupIds: groupId ? [groupId] : [],
-      lessonOrder, lessonNumber: lessonOrder
+      lessonOrder, lessonNumber: lessonOrder,
+      videoUrl,
+      attachmentName: fileInfo?.name || null,
+      attachmentSize: fileInfo?.size || null,
+      attachmentPath: fileInfo?.path || null,
+      pageRange, pageStart, pageEnd
     });
-    showToast('تمت إضافة الدرس بنجاح!');
+
+    // If an attachment file was provided, also record it in the Digital Content Library automatically!
+    if (fileInfo) {
+      try {
+        await callBackend('createDigitalContentItem', currentCallerToken, {
+          institutionId: currentCallerToken.institutionId,
+          title: `${title} — مذكرة وشيت الشرح`,
+          fileName: fileInfo.name,
+          sizeBytes: fileInfo.size,
+          type: fileInfo.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'SUMMARY',
+          description: `مذكرة مرفقة للدرس: ${title} (${pageRange || ''})`
+        });
+      } catch (_) {}
+    }
+
+    showToast('تمت إضافة الدرس والمحتوى التعليمي بنجاح! 🟢');
     closeModal();
     if (activeView === 'content') await renderActiveView('content');
   } catch (err) {
@@ -11316,37 +12534,45 @@ async function submitCreateLesson() {
   }
 }
 
-async function publishLessonAction(lessonId) {
-  try {
-    await callBackend('setLessonStatus', currentCallerToken, lessonId, 'PUBLISHED', currentCallerToken.institutionId);
-    showToast('تم نشر الدرس بنجاح — متاح للطلاب الآن 🟢');
-    if (activeView === 'content') await renderActiveView('content');
-  } catch (err) {
-    showToast(friendlyBatchAError(err), true);
-  }
-}
-
-async function archiveLessonAction(lessonId) {
-  if (!confirm('هل تريد أرشفة هذا الدرس؟')) return;
-  try {
-    await callBackend('setLessonStatus', currentCallerToken, lessonId, 'ARCHIVED', currentCallerToken.institutionId);
-    showToast('تمت أرشفة الدرس');
-    if (activeView === 'content') await renderActiveView('content');
-  } catch (err) {
-    showToast(friendlyBatchAError(err), true);
-  }
-}
-
 async function openAddContentModal() {
   const modal = document.getElementById('modalContainer');
+  window._selectedContentFile = null;
+
   modal.innerHTML = `
     <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
-      <div class="modal-content" style="max-width:520px;">
+      <div class="modal-content" style="max-width:580px;">
         <div class="modal-header">
-          <div class="modal-title">📁 إضافة مذكرة أو ملف تعليمي رقمي</div>
+          <div class="modal-title">📁 رفع مذكرة أو ملف تعليمي من جهازك</div>
           <button class="modal-close" onclick="closeModal()">×</button>
         </div>
         <form onsubmit="event.preventDefault(); submitCreateContent();">
+          <!-- Device File Selector -->
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin-bottom:1rem;">
+            <label style="font-weight:bold; color:#38bdf8; display:block; margin-bottom:0.5rem;">📂 اختر ملف المذكرة من جهاز الكمبيوتر *</label>
+            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem; font-weight:bold;" onclick="document.getElementById('mContentFileInput').click()">
+                <span>💻</span> <span>تحديد الملف من جهازك</span>
+              </button>
+              <input type="file" id="mContentFileInput" accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.png,.jpg" style="display:none;" onchange="handleContentFileSelect(this)">
+              <span id="mContentFileStatus" style="font-size:0.85rem; color:#94a3b8;">يرجى تحديد ملف المذكرة...</span>
+            </div>
+
+            <!-- Page Range Option for Memo -->
+            <div id="mContentPageRangeBox" style="background:#1e293b; border-radius:6px; padding:0.65rem; margin-top:0.75rem;">
+              <div style="font-size:0.8rem; color:#cbd5e1; margin-bottom:0.35rem; font-weight:bold;">📄 تحديد صفحات معينة من المذكرة (اختياري):</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">من صفحة:</label>
+                  <input type="number" id="mContentPageStart" min="1" placeholder="مثال: 1" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">إلى صفحة:</label>
+                  <input type="number" id="mContentPageEnd" min="1" placeholder="مثال: 20" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group">
             <label>عنوان المذكرة أو الملخص *</label>
             <input type="text" id="mContentTitle" required placeholder="مثال: مذكرة مراجعة ليلة الامتحان PDF">
@@ -11354,19 +12580,19 @@ async function openAddContentModal() {
           <div class="form-group">
             <label>نوع الملف / المحتوى *</label>
             <select id="mContentType">
-              <option value="PDF">مذكرة رقمية (PDF)</option>
+              <option value="PDF" selected>مذكرة رقمية (PDF)</option>
               <option value="SUMMARY">ملخص تدريبي</option>
               <option value="EXERCISES">نماذج تدريبية وتدريبات</option>
               <option value="VIDEO_LINK">رابط فيديو شرح</option>
             </select>
           </div>
           <div class="form-group">
-            <label>رابط الملف أو ملاحظة المصدر</label>
-            <input type="text" id="mContentUrl" placeholder="مثال: https://... أو اسم المجلد">
+            <label>رابط بديل خارجي (اختياري)</label>
+            <input type="text" id="mContentUrl" placeholder="مثال: https://drive.google.com/... اختياري">
           </div>
           <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
             <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
-            <button type="submit" class="btn btn-primary" id="btnSubmitAddContent">💾 حفظ في المكتبة</button>
+            <button type="submit" class="btn btn-primary" id="btnSubmitAddContent" style="box-shadow:0 4px 12px rgba(2,132,199,0.3); font-weight:bold;">💾 حفظ في المكتبة الرقمية</button>
           </div>
         </form>
       </div>
@@ -11374,23 +12600,76 @@ async function openAddContentModal() {
   `;
 }
 
+function handleContentFileSelect(input) {
+  const status = document.getElementById('mContentFileStatus');
+  if (!input.files || !input.files[0]) {
+    window._selectedContentFile = null;
+    if (status) status.innerText = 'لم يتم اختيار ملف.';
+    return;
+  }
+  const file = input.files[0];
+  const sizeKb = (file.size / 1024).toFixed(1);
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  const sizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+
+  window._selectedContentFile = {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    path: file.path || ''
+  };
+
+  if (status) {
+    status.innerHTML = `✅ تم التحديد: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
+  }
+
+  const titleInp = document.getElementById('mContentTitle');
+  if (titleInp && !titleInp.value.trim()) {
+    titleInp.value = file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ');
+  }
+
+  // True page count detection if PDF
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (status) status.innerHTML = `⏳ جاري فحص صفحات المذكرة بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
+    parsePdfMetadata(file).then(({ pageCount }) => {
+      const startInp = document.getElementById('mContentPageStart');
+      const endInp = document.getElementById('mContentPageEnd');
+      if (startInp && !startInp.value) startInp.value = '1';
+      if (endInp && pageCount > 0 && !endInp.value) endInp.value = String(pageCount);
+      if (status) {
+        status.innerHTML = `✅ تم الفحص بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr}${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''})`;
+      }
+    });
+  }
+}
+
 async function submitCreateContent() {
   const btn = document.getElementById('btnSubmitAddContent');
   const title = document.getElementById('mContentTitle')?.value.trim();
   const type = document.getElementById('mContentType')?.value || 'PDF';
   const url = document.getElementById('mContentUrl')?.value.trim();
+  const pageStart = parseInt(document.getElementById('mContentPageStart')?.value, 10) || null;
+  const pageEnd = parseInt(document.getElementById('mContentPageEnd')?.value, 10) || null;
+  const pageRange = (pageStart || pageEnd) ? `من صفحة ${pageStart || 1} إلى ${pageEnd || 'نهاية المذكرة'}` : null;
 
   if (!title) return showToast('عنوان المذكرة مطلوب', true);
+
+  const fileInfo = window._selectedContentFile;
 
   if (btn) btn.disabled = true;
   try {
     const payload = {
       institutionId: currentCallerToken.institutionId,
-      title, type, url: url || null,
+      title,
+      type,
+      fileName: fileInfo?.name || null,
+      sizeBytes: fileInfo?.size || null,
+      url: url || null,
+      description: pageRange ? `نطاق الصفحات المعتمدة: ${pageRange}` : null,
       createdAt: new Date().toISOString()
     };
-    await callBackend('createLessonContent', currentCallerToken, payload).catch(async () => {});
-    showToast('تمت إضافة المذكرة بنجاح في المكتبة الرقمية!');
+    await callBackend('createDigitalContentItem', currentCallerToken, payload);
+    showToast('تمت إضافة المذكرة بنجاح في المكتبة الرقمية! 🟢');
     closeModal();
     if (activeView === 'content') await renderActiveView('content');
   } catch (err) {
@@ -11420,11 +12699,12 @@ async function openAddExamModal() {
     groups = gRes || [];
   } catch (_) {}
 
+  window._selectedExamFile = null;
   const today = new Date().toISOString().split('T')[0];
 
   modal.innerHTML = `
     <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
-      <div class="modal-content" style="max-width:640px; max-height:88vh; overflow-y:auto;">
+      <div class="modal-content" style="max-width:680px; max-height:88vh; overflow-y:auto;">
         <div class="modal-header">
           <div class="modal-title">📝 إنشاء اختبار دوري وتقييم جديد</div>
           <button class="modal-close" onclick="closeModal()">×</button>
@@ -11484,24 +12764,92 @@ async function openAddExamModal() {
               <input type="number" id="mExamDuration" min="10" step="5" value="60">
             </div>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
-            <div class="form-group">
-              <label>تاريخ وموعد الاختبار</label>
-              <input type="date" id="mExamDate" value="${today}">
+
+          <!-- Exam Paper Selection From Device -->
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin:0.75rem 0;">
+            <label style="font-weight:bold; color:#38bdf8; display:flex; align-items:center; gap:0.4rem; margin-bottom:0.5rem;">
+              <span>📁</span> <span>ورقة الأسئلة أو نموذج الاختبار المرفق (من جهازك)</span>
+            </label>
+            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-bottom:0.5rem;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem; font-weight:bold; padding:0.45rem 1rem;" onclick="document.getElementById('mExamPaperFileInput').click()">
+                <span>💻</span> <span>تحديد ورقة الامتحان من الجهاز (PDF / Word)</span>
+              </button>
+              <input type="file" id="mExamPaperFileInput" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" style="display:none;" onchange="handleExamPaperFileSelect(this)">
+              <span id="mExamPaperFileLabel" style="font-size:0.85rem; color:#94a3b8;">لم يتم تحديد ملف بعد (اختياري)</span>
             </div>
-            <div class="form-group">
-              <label>رابط ورقة الأسئلة / نموذج الاختبار (PDF / Drive)</label>
-              <input type="url" id="mExamPaperUrl" placeholder="https://... اختياري">
+
+            <!-- Page Range for Exam Paper -->
+            <div id="mExamPageRangeBox" style="background:#1e293b; border-radius:6px; padding:0.65rem; margin-top:0.6rem;">
+              <div style="font-size:0.8rem; color:#cbd5e1; margin-bottom:0.35rem; font-weight:bold;">📄 تحديد أرقام صفحات الامتحان داخل الملف (اختياري):</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">من صفحة:</label>
+                  <input type="number" id="mExamPageStart" min="1" placeholder="مثال: 1" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">إلى صفحة:</label>
+                  <input type="number" id="mExamPageEnd" min="1" placeholder="مثال: 3" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:0.65rem; display:flex; align-items:center; gap:0.5rem;">
+              <span style="font-size:0.78rem; color:#94a3b8; white-space:nowrap;">🔗 أو رابط Drive خارجي:</span>
+              <input type="url" id="mExamPaperUrl" placeholder="https://drive.google.com/... اختياري" style="background:#1e293b; border:1px solid #334155; padding:0.3rem 0.5rem; border-radius:4px; color:#fff; font-size:0.8rem; flex:1;">
             </div>
           </div>
+
+          <div class="form-group" style="margin-top:0.5rem;">
+            <label>تاريخ وموعد انعقاد الاختبار</label>
+            <input type="date" id="mExamDate" value="${today}">
+          </div>
+
           <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
             <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
-            <button type="submit" class="btn btn-success" id="btnSubmitAddExam">💾 حفظ الاختبار</button>
+            <button type="submit" class="btn btn-success" id="btnSubmitAddExam" style="box-shadow:0 4px 12px rgba(34,197,94,0.3); font-weight:bold;">💾 حفظ الاختبار</button>
           </div>
         </form>
       </div>
     </div>
   `;
+}
+
+function handleExamPaperFileSelect(input) {
+  const label = document.getElementById('mExamPaperFileLabel');
+  if (!input.files || !input.files[0]) {
+    window._selectedExamFile = null;
+    if (label) label.innerText = 'لم يتم تحديد ملف بعد (اختياري)';
+    return;
+  }
+  const file = input.files[0];
+  const sizeKb = (file.size / 1024).toFixed(1);
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  const sizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+
+  window._selectedExamFile = {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    path: file.path || ''
+  };
+
+  if (label) {
+    label.innerHTML = `✅ تم التحديد: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
+  }
+
+  // True page count detection if PDF
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (label) label.innerHTML = `⏳ جاري فحص صفحات ملف الامتحان: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
+    parsePdfMetadata(file).then(({ pageCount }) => {
+      const startInp = document.getElementById('mExamPageStart');
+      const endInp = document.getElementById('mExamPageEnd');
+      if (startInp && !startInp.value) startInp.value = '1';
+      if (endInp && pageCount > 0 && !endInp.value) endInp.value = String(pageCount);
+      if (label) {
+        label.innerHTML = `✅ تم الفحص بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr}${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''})`;
+      }
+    });
+  }
 }
 
 async function submitCreateExam() {
@@ -11517,10 +12865,15 @@ async function submitCreateExam() {
   const durationMinutes = Number(document.getElementById('mExamDuration')?.value || 60);
   const examDate = document.getElementById('mExamDate')?.value;
   const paperUrl = document.getElementById('mExamPaperUrl')?.value.trim() || null;
+  const pageStart = parseInt(document.getElementById('mExamPageStart')?.value, 10) || null;
+  const pageEnd = parseInt(document.getElementById('mExamPageEnd')?.value, 10) || null;
+  const pageRange = (pageStart || pageEnd) ? `من صفحة ${pageStart || 1} إلى ${pageEnd || 'نهاية الامتحان'}` : null;
 
   if (!title || !stageId || !subjectId) {
     return showToast('العنوان والمرحلة والمادة مطلوبة', true);
   }
+
+  const fileInfo = window._selectedExamFile;
 
   if (btn) btn.disabled = true;
   try {
@@ -11531,9 +12884,14 @@ async function submitCreateExam() {
       examType, maxScore, passingScore,
       totalMarksHundredths: maxScore * 100,
       passingMarksHundredths: passingScore * 100,
-      durationMinutes, examDate, paperUrl
+      durationMinutes, examDate,
+      paperUrl,
+      attachmentName: fileInfo?.name || null,
+      attachmentSize: fileInfo?.size || null,
+      attachmentPath: fileInfo?.path || null,
+      pageRange, pageStart, pageEnd
     });
-    showToast('تم إنشاء الاختبار بنجاح!');
+    showToast('تم إنشاء الاختبار بنجاح! 🟢');
     closeModal();
     if (activeView === 'exams') await renderActiveView('exams');
   } catch (err) {
@@ -12404,33 +13762,52 @@ function filterAiGroupsByStage() {
 
 function handleAiFileUpload(input) {
   const status = document.getElementById('aiFileStatus');
+  const pBox = document.getElementById('aiPageSelectionBox');
   if (!input.files || !input.files[0]) {
     window._aiUploadedFileText = '';
     if (status) status.innerText = 'لم يتم اختيار ملف.';
+    if (pBox) pBox.style.display = 'none';
     return;
   }
   const file = input.files[0];
-  if (status) status.innerHTML = `جاري قراءة الملف: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)...`;
+  const sizeKb = (file.size / 1024).toFixed(1);
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  const sizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const content = e.target.result;
-    if (typeof content === 'string') {
-      window._aiUploadedFileText = content;
-      if (status) status.innerHTML = `✅ تم استخراج نص الملف بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${content.length} حرف)`;
-    } else {
-      // Binary array buffer fallback
-      const dec = new TextDecoder('utf-8');
-      window._aiUploadedFileText = dec.decode(content);
-      if (status) status.innerHTML = `✅ تم استخراج بيانات الملف بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong>`;
-    }
-  };
-  reader.onerror = function() {
-    window._aiUploadedFileText = '';
-    if (status) status.innerHTML = `<span style="color:#f87171;">⚠️ تعذر قراءة الملف — يمكنك نسخ ولصق النص مباشرة في خانة اللصق المباشر.</span>`;
-  };
+  if (status) status.innerHTML = `جاري قراءة وتحليل صفحات الملف بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
 
-  reader.readAsText(file);
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    parsePdfMetadata(file).then(({ pageCount, text }) => {
+      window._aiUploadedFileText = text || '';
+      if (status) {
+        status.innerHTML = `✅ تم فحص الملف بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''}`;
+      }
+      if (pBox) {
+        pBox.style.display = 'block';
+        const startInp = document.getElementById('mAiPageStart');
+        const endInp = document.getElementById('mAiPageEnd');
+        if (startInp && !startInp.value) startInp.value = '1';
+        if (endInp && pageCount > 0 && !endInp.value) endInp.value = String(pageCount);
+      }
+    }).catch(() => {
+      window._aiUploadedFileText = '';
+      if (status) status.innerHTML = `<span style="color:#f87171;">⚠️ تعذر قراءة الملف — يمكنك نسخ ولصق النص مباشرة في خانة اللصق المباشر.</span>`;
+      if (pBox) pBox.style.display = 'none';
+    });
+  } else {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      window._aiUploadedFileText = e.target.result || '';
+      if (status) status.innerHTML = `✅ تم استخراج بيانات الملف بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
+      if (pBox) pBox.style.display = 'block';
+    };
+    reader.onerror = function() {
+      window._aiUploadedFileText = '';
+      if (status) status.innerHTML = `<span style="color:#f87171;">⚠️ تعذر قراءة الملف</span>`;
+      if (pBox) pBox.style.display = 'none';
+    };
+    reader.readAsText(file);
+  }
 }
 
 function backToAiConfig() {
@@ -12440,6 +13817,39 @@ function backToAiConfig() {
   if (formSec) formSec.style.display = 'block';
   if (reviewSec) reviewSec.style.display = 'none';
   if (loadSec) loadSec.style.display = 'none';
+}
+
+async function quickGenerateAiExamForLesson(lessonId) {
+  const lesson = (window._allLessonsCache || []).find(l => l.id === lessonId);
+  await openAiExamGeneratorModal();
+  if (!lesson) return;
+
+  setTimeout(() => {
+    const stageSel = document.getElementById('mAiStage');
+    const subSel = document.getElementById('mAiSubject');
+    const groupSel = document.getElementById('mAiGroup');
+    const titleInp = document.getElementById('mAiTitle');
+    const topicInp = document.getElementById('mAiTopic');
+
+    if (stageSel && lesson.stageId) {
+      stageSel.value = lesson.stageId;
+      filterAiGroupsByStage();
+    }
+    if (subSel && lesson.subjectId) subSel.value = lesson.subjectId;
+    if (groupSel && lesson.groupId) groupSel.value = lesson.groupId;
+    if (titleInp) titleInp.value = `اختبار درس: ${lesson.title}`;
+    if (topicInp) topicInp.value = `${lesson.title}${lesson.description ? ' - ' + lesson.description : ''}`;
+
+    if (lesson.pageStart || lesson.pageEnd) {
+      toggleAiSourceMode('FILE_UPLOAD');
+      const rad = document.querySelector('input[name="aiSourceMode"][value="FILE_UPLOAD"]');
+      if (rad) rad.checked = true;
+      const sInp = document.getElementById('mAiPageStart');
+      const eInp = document.getElementById('mAiPageEnd');
+      if (sInp && lesson.pageStart) sInp.value = lesson.pageStart;
+      if (eInp && lesson.pageEnd) eInp.value = lesson.pageEnd;
+    }
+  }, 100);
 }
 
 async function openAiExamGeneratorModal() {
@@ -12538,9 +13948,37 @@ async function openAiExamGeneratorModal() {
 
               <!-- File Upload Input -->
               <div id="aiSourceFileBox" class="form-group" style="display:none; margin-bottom:0;">
-                <label>اختر ملف المذكرة أو ملخص الدرس من جهازك (TXT, MD, PDF, DOCX, JSON)</label>
-                <input type="file" id="mAiFile" accept=".txt,.md,.text,.pdf,.doc,.docx,.json" onchange="handleAiFileUpload(this)" style="background:#1e293b; border:1px solid #334155; padding:0.4rem; border-radius:6px; width:100%; color:#fff;">
-                <div id="aiFileStatus" style="font-size:0.8rem; margin-top:0.4rem; color:#94a3b8;">يرجى اختيار ملف المذكرة...</div>
+                <label style="display:block; margin-bottom:0.4rem;">اختر ملف المذكرة أو ملخص الدرس من جهاز الكمبيوتر:</label>
+                <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-bottom:0.4rem;">
+                  <button type="button" class="btn" style="background:#0284c7; color:#fff; display:flex; align-items:center; gap:0.4rem; font-weight:bold; padding:0.45rem 1rem;" onclick="document.getElementById('mAiFile').click()">
+                    <span>💻</span> <span>تحديد ملف المذكرة من الجهاز</span>
+                  </button>
+                  <input type="file" id="mAiFile" accept=".txt,.md,.text,.pdf,.doc,.docx,.json" onchange="handleAiFileUpload(this)" style="display:none;">
+                  <span id="aiFileStatus" style="font-size:0.85rem; color:#94a3b8;">يرجى تحديد ملف المذكرة من جهازك...</span>
+                </div>
+
+                <!-- Page Range Selection Box (Always visible when File Upload mode is selected) -->
+                <div id="aiPageSelectionBox" style="margin-top:0.75rem; background:#1e293b; border:1px solid #38bdf8; border-radius:8px; padding:0.85rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                    <span style="font-weight:bold; color:#38bdf8; font-size:0.85rem; display:flex; align-items:center; gap:0.4rem;">
+                      <span>📄</span> <span>تحديد نطاق صفحات الامتحان من المذكرة (اختياري)</span>
+                    </span>
+                    <span class="badge" style="background:#0284c7; color:#fff; font-size:0.72rem;">يختصر الوقت ويحدد المطلوب بدقة</span>
+                  </div>
+                  <div style="font-size:0.78rem; color:#94a3b8; margin-bottom:0.6rem; line-height:1.5;">
+                    إذا كان ملف المذكرة كبيراً وتريد توليد أسئلة من درس اليوم فقط، حدد رقم الصفحة من وإلى:
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                    <div>
+                      <label style="font-size:0.78rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">من صفحة رقم:</label>
+                      <input type="number" id="mAiPageStart" min="1" placeholder="مثال: 1" style="width:100%; padding:0.4rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.78rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">إلى صفحة رقم:</label>
+                      <input type="number" id="mAiPageEnd" min="1" placeholder="مثال: 5" style="width:100%; padding:0.4rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem;">
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Text Paste Input -->
@@ -12656,13 +14094,25 @@ async function submitGenerateAiQuestions() {
   if (loadSec) loadSec.style.display = 'block';
 
   try {
+    const startPage = mode === 'FILE_UPLOAD' ? (parseInt(document.getElementById('mAiPageStart')?.value, 10) || null) : null;
+    const endPage = mode === 'FILE_UPLOAD' ? (parseInt(document.getElementById('mAiPageEnd')?.value, 10) || null) : null;
+
+    const stageEl = document.getElementById('mAiStage');
+    const subjectEl = document.getElementById('mAiSubject');
+    const stageName = stageEl?.options[stageEl.selectedIndex]?.text?.replace(/^[—\-]\s*/, '') || '';
+    const subjectName = subjectEl?.options[subjectEl.selectedIndex]?.text?.replace(/^[—\-]\s*/, '') || '';
+
     const res = await callBackend('generateExamQuestionsAi', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       groupId,
       stageId,
       subjectId,
+      stageName,
+      subjectName,
       topic,
       contextText,
+      startPage,
+      endPage,
       questionCount: count,
       difficulty,
       questionType: type
@@ -12688,6 +14138,8 @@ async function submitGenerateAiQuestions() {
       stageId,
       subjectId,
       groupId,
+      startPage,
+      endPage,
       totalMarks,
       passingScore: Math.round(totalMarks * 0.5),
       questions,
@@ -12715,7 +14167,10 @@ function renderGeneratedQuestionsReview() {
 
   if (titleEl) titleEl.innerText = exam.title;
   if (metaEl) {
-    metaEl.innerHTML = `المحرك: <strong style="color:#4ade80;">${escapeHtmlAttr(exam.provider)}</strong> | إجمالي الأسئلة: <strong style="color:#38bdf8;">${exam.questions.length}</strong> | الدرجة الكلية: <strong style="color:#facc15;">${exam.totalMarks} درجة</strong>`;
+    const pageInfo = (exam.startPage || exam.endPage)
+      ? ` | الصفحات المستهدفة: <strong style="color:#38bdf8;">${exam.startPage || 1} إلى ${exam.endPage || 'النهاية'}</strong>`
+      : '';
+    metaEl.innerHTML = `المحرك: <strong style="color:#4ade80;">${escapeHtmlAttr(exam.provider)}</strong> | إجمالي الأسئلة: <strong style="color:#38bdf8;">${exam.questions.length}</strong> | الدرجة الكلية: <strong style="color:#facc15;">${exam.totalMarks} درجة</strong>${pageInfo}`;
   }
 
   if (!listEl) return;

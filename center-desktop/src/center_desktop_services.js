@@ -5553,6 +5553,14 @@ async function createLesson(callerToken, payload = {}) {
     description: payload.description ? String(payload.description).trim().slice(0, 2000) : null,
     lessonNumber: Number.isInteger(payload.lessonNumber) ? payload.lessonNumber : 1,
     lessonOrder: Number.isInteger(payload.lessonOrder) ? payload.lessonOrder : (Number.isInteger(payload.lessonNumber) ? payload.lessonNumber : 1),
+    videoUrl: payload.videoUrl || null,
+    attachmentName: payload.attachmentName || payload.fileName || null,
+    attachmentSize: payload.attachmentSize || payload.fileSize || null,
+    attachmentPath: payload.attachmentPath || payload.filePath || null,
+    pageRange: payload.pageRange || null,
+    pageStart: payload.pageStart || null,
+    pageEnd: payload.pageEnd || null,
+    contentBody: payload.contentBody || null,
     status: 'DRAFT', publishedAt: null, archivedAt: null,
     createdAt: now, updatedAt: now, createdBy: actor, updatedBy: actor
   };
@@ -6382,6 +6390,13 @@ async function createExam(callerToken, payload = {}) {
     // Legacy-compat mirrors (one version): keep maxScore/examDate readable.
     maxScore: Number(payload.maxScore) || 100,
     examDate: payload.examDate || null,
+    paperUrl: payload.paperUrl || null,
+    attachmentName: payload.attachmentName || payload.fileName || null,
+    attachmentSize: payload.attachmentSize || payload.fileSize || null,
+    attachmentPath: payload.attachmentPath || payload.filePath || null,
+    pageRange: payload.pageRange || null,
+    pageStart: payload.pageStart || null,
+    pageEnd: payload.pageEnd || null,
     createdAt: now, updatedAt: now,
     createdByUid: token.uid, updatedBy: { uid: token.uid, role: token.role, institutionId: instId }
   };
@@ -10762,38 +10777,193 @@ async function testAiKeyConnection(callerToken, apiKeyToTest) {
 async function generateExamQuestionsAi(callerToken, payload = {}) {
   const token = resolveCallerToken(callerToken);
   const clientDb = await getClientFirestoreDb(token);
+  const instId = token.institutionId || payload.institutionId;
+
+  // 1. Fetch Central AI Configuration & Provider Routing
   let config = {};
+  let provMeta = {};
   try {
     const snap = await getDoc(doc(clientDb, 'system', 'aiConfig'));
     if (snap.exists()) config = snap.data();
+  } catch (err) {
+    console.warn('Could not read system/aiConfig:', err);
+  }
+
+  try {
+    const pSnap = await getDoc(doc(clientDb, 'system', 'aiProviders'));
+    if (pSnap.exists()) provMeta = pSnap.data();
   } catch (_) {}
 
-  const keys = [];
+  // 2. Fetch Center AI Governance & Quota
+  let instConfig = null;
+  if (instId) {
+    try {
+      const instSnap = await getDoc(doc(clientDb, 'institutions', instId, 'aiConfig', 'config'));
+      if (instSnap.exists()) instConfig = instSnap.data();
+    } catch (_) {}
+  }
+
+  // Validate Center Permissions
+  if (instConfig && instConfig.aiEnabled === false) {
+    throw arabicServiceError('FORBIDDEN', 'خدمات الذكاء الاصطناعي معلقة لهذا السنتر بقرار إداري من السوبر أدمن.');
+  }
+  if (instConfig && instConfig.features?.questionGeneration?.enabled === false) {
+    throw arabicServiceError('FORBIDDEN', 'خاصية توليد الأسئلة غير مصرح بها لهذا السنتر. يرجى مراجعة إدارة المنصة.');
+  }
+
+  // Check Monthly Quota
+  const now = new Date();
+  const periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let currentMonthQuestions = 0;
+  if (instId) {
+    try {
+      const usageSnap = await getDoc(doc(clientDb, 'institutions', instId, 'aiUsage', periodKey));
+      if (usageSnap.exists()) {
+        currentMonthQuestions = Number(usageSnap.data().questionsGenerated || 0);
+      }
+    } catch (_) {}
+  }
+
+  const monthlyLimit = (instConfig && (instConfig.features?.questionGeneration?.monthlyLimit || instConfig.monthlyLimit)) || 3000;
+  if (currentMonthQuestions >= monthlyLimit) {
+    throw arabicServiceError('QUOTA_EXCEEDED', `تم استنفاد الكوتة الشهرية المخصصة للسنتر (${currentMonthQuestions}/${monthlyLimit} سؤال). يمكنك طلب زيادة الكوتة من السوبر أدمن.`);
+  }
+
+  // 3. Extract Multi-Provider Keys
+  const geminiKeys = [];
   if (config.geminiKey && typeof config.geminiKey === 'string' && config.geminiKey.trim()) {
-    keys.push(config.geminiKey.trim());
+    geminiKeys.push(config.geminiKey.trim());
   }
   if (Array.isArray(config.geminiKeys)) {
     for (const k of config.geminiKeys) {
-      if (typeof k === 'string' && k.trim() && !keys.includes(k.trim())) keys.push(k.trim());
+      if (typeof k === 'string' && k.trim() && !geminiKeys.includes(k.trim())) geminiKeys.push(k.trim());
     }
   }
 
-  if (keys.length === 0) {
-    throw arabicServiceError('AI_NOT_CONFIGURED', 'لم يتم ضبط مفاتيح الذكاء الاصطناعي المجانية من قِبل السوبر أدمن بعد. يرجى إدخال مفتاح Gemini من لوحة السوبر أدمن أولاً.');
+  const openrouterKey = (config.openrouterKey || '').trim();
+  const openrouterModel = config.openrouterModel || provMeta.openrouter?.model || 'nvidia/nemotron-3.5-lightning:free';
+  const primaryProvider = provMeta.primaryProvider || 'gemini';
+
+  const hasAnyKey = geminiKeys.length > 0 || openrouterKey.length > 0;
+  if (!hasAnyKey) {
+    throw arabicServiceError('AI_NOT_CONFIGURED', 'لم يتم ضبط مفاتيح الذكاء الاصطناعي المجانية من قِبل السوبر أدمن بعد. يرجى إدخال مفتاح Gemini أو OpenRouter من لوحة السوبر أدمن أولاً.');
+  }
+
+  // Helper to slice text based on requested page numbers
+  function extractPageRangeFromContent(rawText, startPage, endPage) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    if (!startPage && !endPage) return rawText;
+
+    const sPage = Math.max(1, Number(startPage) || 1);
+    const ePage = endPage ? Math.max(sPage, Number(endPage)) : null;
+
+    // 1. Form Feed page break (\f)
+    if (rawText.includes('\f')) {
+      const pages = rawText.split('\f');
+      const startIdx = sPage - 1;
+      const endIdx = ePage ? ePage : pages.length;
+      const sliced = pages.slice(startIdx, endIdx).join('\n\n--- صفحة جديدة ---\n\n');
+      if (sliced.trim().length > 30) return sliced;
+    }
+
+    // 2. Explicit Arabic/English page headers e.g. "صفحة 5" or "Page 5"
+    const pageHeaderRegex = /(?:(?:\r?\n){2,}|^)(?:صفحة|الصفحة|Page|PAGE)\s*[:#-]?\s*(\d+)/g;
+    const matches = [...rawText.matchAll(pageHeaderRegex)];
+    if (matches.length >= 2) {
+      let startCharIdx = 0;
+      let endCharIdx = rawText.length;
+      let foundStart = false;
+
+      for (const match of matches) {
+        const pNum = parseInt(match[1], 10);
+        if (!foundStart && pNum >= sPage) {
+          startCharIdx = match.index;
+          foundStart = true;
+        }
+        if (ePage && pNum > ePage) {
+          endCharIdx = match.index;
+          break;
+        }
+      }
+      const sliced = rawText.slice(startCharIdx, endCharIdx);
+      if (sliced.trim().length > 50) return sliced;
+    }
+
+    // 3. PDF Page objects /Type /Page
+    const pdfPageRegex = /\/Type\s*\/Page\b/g;
+    const pdfMatches = [...rawText.matchAll(pdfPageRegex)];
+    if (pdfMatches.length >= 2) {
+      const totalPdfPages = pdfMatches.length;
+      const startIdx = Math.min(sPage - 1, totalPdfPages - 1);
+      const endIdx = ePage ? Math.min(ePage, totalPdfPages) : totalPdfPages;
+
+      const startChar = pdfMatches[startIdx] ? pdfMatches[startIdx].index : 0;
+      const endChar = (endIdx < totalPdfPages && pdfMatches[endIdx]) ? pdfMatches[endIdx].index : rawText.length;
+      const sliced = rawText.slice(startChar, endChar);
+      if (sliced.trim().length > 50) return sliced;
+    }
+
+    // 4. Proportional slicing fallback based on document length
+    const estimatedTotalPages = Math.max(ePage || sPage, Math.ceil(rawText.length / 2500));
+    const charPerPage = Math.floor(rawText.length / estimatedTotalPages);
+
+    const startChar = Math.max(0, (sPage - 1) * charPerPage);
+    const endChar = ePage ? Math.min(rawText.length, ePage * charPerPage) : rawText.length;
+
+    return rawText.slice(startChar, endChar);
+  }
+
+  function sanitizeDocumentText(text) {
+    if (!text || typeof text !== 'string') return '';
+    if (text.includes('stream') && text.includes('endstream')) {
+      text = text.replace(/stream[\r\n]+[\s\S]*?[\r\n]+endstream/g, (match) => {
+        const printable = match.replace(/[^\x20-\x7E\u0600-\u06FF\n\r\t]/g, ' ');
+        return printable.length > 30 ? printable : ' ';
+      });
+    }
+    return text.replace(/[\x00-\x08\x0B\x0E-\x1F\x7F]/g, ' ');
   }
 
   const {
-    stageName = '',
-    subjectName = '',
+    stageName: rawStageName = '',
+    subjectName: rawSubjectName = '',
     lessonTitle = '',
     topic = '',
     sourceText = '',
+    contextText = '',
     count = 5,
+    questionCount = 5,
     type = 'MCQ',
-    difficulty = 'MEDIUM'
+    questionType = 'MCQ',
+    difficulty = 'MEDIUM',
+    startPage = null,
+    endPage = null
   } = payload;
 
-  const countNum = Math.min(20, Math.max(1, Number(count) || 5));
+  let stageName = rawStageName;
+  let subjectName = rawSubjectName;
+  if (!stageName && payload.stageId && instId) {
+    try {
+      const stSnap = await getDoc(doc(clientDb, 'institutions', instId, 'stages', payload.stageId));
+      if (stSnap.exists()) stageName = stSnap.data().name || '';
+    } catch (_) {}
+  }
+  if (!subjectName && payload.subjectId && instId) {
+    try {
+      const subSnap = await getDoc(doc(clientDb, 'institutions', instId, 'subjects', payload.subjectId));
+      if (subSnap.exists()) subjectName = subSnap.data().name || '';
+    } catch (_) {}
+  }
+
+  const countNum = Math.min(20, Math.max(1, Number(questionCount || count) || 5));
+  const finalType = questionType || type || 'MCQ';
+  const effectiveTopic = topic || lessonTitle || '';
+  
+  let effectiveSource = sanitizeDocumentText(contextText || sourceText || '');
+  if (effectiveSource && (startPage || endPage)) {
+    effectiveSource = extractPageRangeFromContent(effectiveSource, startPage, endPage);
+  }
+
   const diffArabic = {
     EASY: 'مستوى سهل ومباشر يقيس التذكر والاستيعاب البسيط',
     MEDIUM: 'مستوى متوسط يقيس الفهم والتطبيق',
@@ -10806,7 +10976,7 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     TRUE_FALSE: 'أسئلة صواب وخطأ مع تصويب العبارة الخاطئة',
     ESSAY: 'أسئلة مقالية وأسئلة علل ومسائل وشرح خطوات الحل',
     MIXED: 'مزيج من أسئلة الاختيار من متعدد والمسائل والأسئلة المقالية'
-  }[type] || 'أسئلة اختيار من متعدد';
+  }[finalType] || 'أسئلة اختيار من متعدد';
 
   const systemPrompt = `أنت خبير تربوي ومعلم أول متخصص في وضع الامتحانات الرسمية والمدرسية باللغة العربية وفق المناهج التعليمية المعتمدة.
 مهمتك: توليد اختبار تعليمي دقيق وممتاز للطلاب.
@@ -10826,133 +10996,309 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
   let userPrompt = `يرجى توليد عدد ${countNum} سؤال (${typeDesc}) بمستوى صعوبة: ${diffArabic}.
 المرحلة الدراسية: ${stageName || 'المرحلة التعليمية المعتمدة'}
 المادة: ${subjectName || 'المادة الدراسية'}
-عنوان الدرس / الموضوع: ${lessonTitle || topic || 'الدرس المحدد'}
+عنوان الدرس / الموضوع: ${effectiveTopic || 'الدرس المحدد'}
 `;
 
-  if (sourceText && String(sourceText).trim()) {
-    userPrompt += `\nالمصدر ومحتوى المذكرة المعتمدة (يجب أن تكون الأسئلة مستنبطة حصرياً ومطابقة للمعلومات الواردة في هذا النص فقط دون أي خروج عنه):\n"""\n${String(sourceText).slice(0, 30000)}\n"""\n`;
+  if (startPage || endPage) {
+    userPrompt += `\n🎯 نطاق الصفحات المستهدفة حصرياً: من صفحة (${startPage || 1}) إلى صفحة (${endPage || 'نهاية المحدود'}).\n⚠️ توجيه تعليمي إلزامي: يجب أن تكون جميع الأسئلة مستنبطة حصرياً وبدقة تامة من هذا النطاق من الصفحات المحددة فقط داخل المذكرة وتجاهل أي موضوعات خارج هذا النطاق.\n`;
+  }
+
+  if (effectiveSource && String(effectiveSource).trim()) {
+    userPrompt += `\nالمصدر ومحتوى المذكرة المعتمدة (يجب أن تكون الأسئلة مستنبطة حصرياً ومطابقة للمعلومات الواردة في هذا النص فقط دون أي خروج عنه):\n"""\n${String(effectiveSource).slice(0, 30000)}\n"""\n`;
   } else {
     userPrompt += `\nيرجى صياغة الأسئلة وفق المنهج الدراسي الرسمي المعتمد لهذه المرحلة والمادة بدقة واحترافية.\n`;
   }
 
   let lastError = null;
 
-  // Separate keys: prioritize Groq keys if available (100% free, fastest, zero location limits)
-  const sortedKeys = [...keys].sort((a, b) => (b.startsWith('gsk_') ? 1 : 0) - (a.startsWith('gsk_') ? 1 : 0));
+  // Helper function to call OpenRouter
+  async function callOpenRouter() {
+    if (!openrouterKey) throw new Error('مفتاح OpenRouter غير متوفر');
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openrouterKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://educenter-saas-860c5.web.app',
+        'X-Title': 'REMAS Center Desktop App'
+      },
+      body: JSON.stringify({
+        model: openrouterModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3
+      })
+    });
 
-  for (const apiKey of sortedKeys) {
-    // 1. If Groq Key (starts with gsk_)
-    if (apiKey.startsWith('gsk_')) {
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.3
-          })
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          lastError = new Error(`Groq API Error (${res.status}): ${errText}`);
-          continue;
-        }
-
-        const data = await res.json();
-        const rawText = data?.choices?.[0]?.message?.content || '';
-        if (!rawText) throw new Error('رد محرك Groq فارغ');
-
-        let parsed = null;
-        try {
-          parsed = JSON.parse(rawText);
-        } catch (_) {
-          const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
-          if (match) parsed = JSON.parse(match[1]);
-          else throw new Error('تعذر معالجة صيغة JSON المسترجعة من Groq');
-        }
-
-        const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
-        return {
-          success: true,
-          provider: 'Groq (Llama 3.3 70B)',
-          model: 'llama-3.3-70b-versatile',
-          questionsCount: questions.length,
-          questions
-        };
-      } catch (err) {
-        lastError = err;
-        continue;
-      }
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenRouter HTTP ${res.status}: ${errText.slice(0, 150)}`);
     }
 
-    // 2. If Gemini Key
-    const geminiModels = ['gemini-1.5-flash', 'gemini-2.0-flash'];
-    for (const model of geminiModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const bodyPayload = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 4096,
-            responseMimeType: 'application/json'
-          }
-        };
+    const data = await res.json();
+    const rawText = data?.choices?.[0]?.message?.content || '';
+    if (!rawText) throw new Error('رد محرك OpenRouter فارغ');
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyPayload)
-        });
+    let parsed = null;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (_) {
+      const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
+      if (match) parsed = JSON.parse(match[1]);
+      else throw new Error('تعذر معالجة صيغة JSON المسترجعة من OpenRouter');
+    }
 
-        if (!res.ok) {
-          const errText = await res.text();
-          lastError = new Error(`Gemini API Error (${res.status}): ${errText}`);
-          continue;
-        }
+    const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
+    return {
+      success: true,
+      provider: 'OpenRouter',
+      model: openrouterModel,
+      questionsCount: questions.length,
+      questions
+    };
+  }
 
-        const data = await res.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (!rawText) throw new Error('رد نموذج الذكاء الاصطناعي فارغ');
+  // Helper function to call Gemini
+  async function callGemini() {
+    if (geminiKeys.length === 0) throw new Error('مفتاح Google Gemini غير متوفر');
+    const modelsToTry = [config.primaryModel || config.model || 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    let innerErr = null;
 
-        let parsed = null;
+    for (const apiKey of geminiKeys) {
+      for (const m of modelsToTry) {
         try {
-          parsed = JSON.parse(rawText);
-        } catch (_) {
-          const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
-          if (match) parsed = JSON.parse(match[1]);
-          else throw new Error('تعذر معالجة صيغة الـ JSON المسترجعة');
-        }
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 4096,
+                responseMimeType: 'application/json'
+              }
+            })
+          });
 
-        const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
-        return {
-          success: true,
-          provider: 'Google Gemini',
-          model,
-          questionsCount: questions.length,
-          questions
-        };
-      } catch (err) {
-        lastError = err;
+          if (!res.ok) {
+            const errText = await res.text();
+            innerErr = new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 150)}`);
+            continue;
+          }
+
+          const data = await res.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (!rawText) throw new Error('رد نموذج Gemini فارغ');
+
+          let parsed = null;
+          try {
+            parsed = JSON.parse(rawText);
+          } catch (_) {
+            const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
+            if (match) parsed = JSON.parse(match[1]);
+            else throw new Error('تعذر معالجة صيغة JSON المسترجعة');
+          }
+
+          const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
+          return {
+            success: true,
+            provider: 'Google Gemini',
+            model: m,
+            questionsCount: questions.length,
+            questions
+          };
+        } catch (err) {
+          innerErr = err;
+        }
+      }
+    }
+    throw innerErr || new Error('فشلت جميع محاولات الاتصال بـ Google Gemini');
+  }
+
+  // 4. Execution with Automatic Failover based on Primary Provider
+  let result = null;
+  if (primaryProvider === 'openrouter') {
+    try {
+      result = await callOpenRouter();
+    } catch (orErr) {
+      lastError = orErr;
+      console.warn('OpenRouter primary failed, falling back to Gemini:', orErr.message);
+      if (geminiKeys.length > 0) {
+        try {
+          result = await callGemini();
+        } catch (gErr) {
+          lastError = gErr;
+        }
+      }
+    }
+  } else {
+    // Gemini Primary
+    try {
+      result = await callGemini();
+    } catch (gErr) {
+      lastError = gErr;
+      console.warn('Gemini primary failed, falling back to OpenRouter:', gErr.message);
+      if (openrouterKey) {
+        try {
+          result = await callOpenRouter();
+        } catch (orErr) {
+          lastError = orErr;
+        }
       }
     }
   }
 
-  throw arabicServiceError('AI_GENERATION_FAILED', `تعذر توليد الأسئلة حالياً: ${lastError ? lastError.message : 'خطأ غير معروف'}`);
+  if (!result || !result.questions || result.questions.length === 0) {
+    throw arabicServiceError('AI_GENERATION_FAILED', `تعذر توليد الأسئلة حالياً: ${lastError ? lastError.message : 'خطأ غير معروف في مزودات الذكاء'}`);
+  }
+
+  // 5. Track Question Usage for Center Governance
+  if (instId && result.questions.length > 0) {
+    try {
+      const usageRef = doc(clientDb, 'institutions', instId, 'aiUsage', periodKey);
+      const uSnap = await getDoc(usageRef);
+      const prevCount = uSnap.exists() ? (Number(uSnap.data().questionsGenerated) || 0) : 0;
+      await setDoc(usageRef, {
+        questionsGenerated: prevCount + result.questions.length,
+        lastUsedAt: now.toISOString(),
+        institutionId: instId,
+        updatedAt: now.toISOString()
+      }, { merge: true });
+    } catch (uErr) {
+      console.warn('Non-blocking AI usage update error:', uErr);
+    }
+  }
+
+  return result;
+}
+
+async function getCenterAiStatusAndQuota(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const clientDb = await getClientFirestoreDb(token);
+  const instId = token.institutionId || payload.institutionId;
+
+  let sysConfig = {};
+  let provMeta = {};
+  try {
+    const snap = await getDoc(doc(clientDb, 'system', 'aiConfig'));
+    if (snap.exists()) sysConfig = snap.data();
+  } catch (_) {}
+  try {
+    const pSnap = await getDoc(doc(clientDb, 'system', 'aiProviders'));
+    if (pSnap.exists()) provMeta = pSnap.data();
+  } catch (_) {}
+
+  let instConfig = {};
+  if (instId) {
+    try {
+      const iSnap = await getDoc(doc(clientDb, 'institutions', instId, 'aiConfig', 'config'));
+      if (iSnap.exists()) instConfig = iSnap.data();
+    } catch (_) {}
+  }
+
+  const now = new Date();
+  const periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let usedThisMonth = 0;
+  if (instId) {
+    try {
+      const uSnap = await getDoc(doc(clientDb, 'institutions', instId, 'aiUsage', periodKey));
+      if (uSnap.exists()) usedThisMonth = Number(uSnap.data().questionsGenerated || 0);
+    } catch (_) {}
+  }
+
+  const hasGemini = Boolean(sysConfig.geminiKey || (Array.isArray(sysConfig.geminiKeys) && sysConfig.geminiKeys.length));
+  const hasOpenRouter = Boolean(sysConfig.openrouterKey && sysConfig.openrouterKey.trim().length > 0);
+  const isConnected = (hasGemini || hasOpenRouter) && (sysConfig.enabled !== false);
+
+  const monthlyQuota = (instConfig.features?.questionGeneration?.monthlyLimit || instConfig.monthlyLimit) || 3000;
+  const remainingQuota = Math.max(0, monthlyQuota - usedThisMonth);
+  const nextRenewal = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('ar-EG');
+
+  return {
+    success: true,
+    connected: isConnected,
+    systemStatus: sysConfig.enabled === false ? 'DISABLED' : 'ACTIVE',
+    primaryProvider: provMeta.primaryProvider || 'gemini',
+    fallbackProvider: provMeta.fallbackProvider || 'openrouter',
+    activeModel: (provMeta.primaryProvider === 'openrouter' ? sysConfig.openrouterModel : (sysConfig.primaryModel || sysConfig.model)) || 'gemini-2.5-flash',
+    openrouterModel: sysConfig.openrouterModel || 'nvidia/nemotron-3.5-lightning:free',
+    governance: {
+      aiEnabled: instConfig.aiEnabled !== false,
+      questionGenerationEnabled: instConfig.features?.questionGeneration?.enabled !== false,
+      teacherAssistantEnabled: instConfig.features?.teacherAssistant?.enabled !== false,
+      tutorEnabled: instConfig.features?.tutor?.enabled !== false,
+      monthlyQuota,
+      usedThisMonth,
+      remainingQuota,
+      usagePercent: Math.min(100, Math.round((usedThisMonth / monthlyQuota) * 100)),
+      renewalDate: nextRenewal
+    }
+  };
+}
+
+async function testCenterAiConnection(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const clientDb = await getClientFirestoreDb(token);
+
+  let sysConfig = {};
+  let provMeta = {};
+  try {
+    const snap = await getDoc(doc(clientDb, 'system', 'aiConfig'));
+    if (snap.exists()) sysConfig = snap.data();
+  } catch (_) {}
+  try {
+    const pSnap = await getDoc(doc(clientDb, 'system', 'aiProviders'));
+    if (pSnap.exists()) provMeta = pSnap.data();
+  } catch (_) {}
+
+  const primary = provMeta.primaryProvider || 'gemini';
+  const start = Date.now();
+
+  if (primary === 'openrouter' && sysConfig.openrouterKey) {
+    const model = sysConfig.openrouterModel || 'nvidia/nemotron-3.5-lightning:free';
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sysConfig.openrouterKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'قل: متصل' }],
+        max_tokens: 5
+      })
+    });
+    const latency = Date.now() - start;
+    if (res.ok) {
+      return { success: true, latencyMs: latency, provider: `OpenRouter (${model})`, message: `الاتصال بالمحرك سليم وفوري (${latency}ms) 🟢` };
+    }
+    const errText = await res.text();
+    throw new Error(`OpenRouter Error (${res.status}): ${errText.slice(0, 100)}`);
+  }
+
+  // Gemini Test
+  const geminiKey = sysConfig.geminiKey || (Array.isArray(sysConfig.geminiKeys) ? sysConfig.geminiKeys[0] : '');
+  if (!geminiKey) throw new Error('لم يتم تعيين مفتاح Gemini نشط');
+
+  const model = sysConfig.primaryModel || sysConfig.model || 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: 'قل: متصل' }] }],
+      generationConfig: { maxOutputTokens: 5 }
+    })
+  });
+  const latency = Date.now() - start;
+  if (res.ok) {
+    return { success: true, latencyMs: latency, provider: `Google Gemini (${model})`, message: `الاتصال بمحرك Gemini يعمل بنجاح (${latency}ms) 🟢` };
+  }
+  const errText = await res.text();
+  throw new Error(`Gemini Error (${res.status}): ${errText.slice(0, 100)}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -11973,6 +12319,112 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
   };
 }
 
+const inMemoryVideoWatchCodes = new Map();
+
+async function generateVideoWatchCodes(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  requirePermission(token, 'content:create');
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+
+  const count = Math.min(Math.max(parseInt(payload.count, 10) || 1, 1), 100);
+  const maxViews = Math.max(parseInt(payload.maxViews, 10) || 1, 1);
+  const subjectId = payload.subjectId || null;
+  const subjectName = payload.subjectName || 'عام';
+  const videoId = payload.videoId || null;
+  const videoTitle = payload.videoTitle || null;
+
+  const localList = readLocalData(`video_watch_codes_${instId}`, []);
+  const createdCodes = [];
+  const now = new Date().toISOString();
+
+  for (let i = 0; i < count; i++) {
+    const randHex = crypto.randomBytes(2).toString('hex').toUpperCase();
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const code = `RMS-V${randNum}-${randHex}`;
+    const id = `vwc_${Date.now()}_${randHex}_${i}`;
+
+    const codeObj = {
+      id,
+      code,
+      institutionId: instId,
+      subjectId,
+      subjectName,
+      videoId,
+      videoTitle,
+      maxViews,
+      viewsUsed: 0,
+      status: 'AVAILABLE',
+      createdAt: now,
+      createdBy: token.uid
+    };
+
+    inMemoryVideoWatchCodes.set(`${instId}_${code}`, codeObj);
+    localList.unshift(codeObj);
+    createdCodes.push(codeObj);
+  }
+
+  writeLocalData(`video_watch_codes_${instId}`, localList);
+
+  if (!isTestOffline()) {
+    try {
+      const clientDb = await getClientFirestoreDb(token);
+      for (const c of createdCodes) {
+        try {
+          await setDoc(doc(clientDb, 'institutions', instId, 'videoWatchCodes', c.id), c);
+        } catch (_) {}
+      }
+    } catch (fsErr) {
+      console.warn('[WatchCodes] Firestore sync notice:', fsErr.message);
+    }
+  }
+
+  await recordAuditEvent({
+    action: 'GENERATE_VIDEO_WATCH_CODES',
+    actorUid: token.uid,
+    actorRole: token.role,
+    institutionId: instId,
+    targetType: 'WATCH_CODE',
+    targetId: `BATCH_${count}`,
+    details: { count, maxViews, subjectId, subjectName, videoId }
+  });
+
+  return { success: true, count: createdCodes.length, codes: createdCodes };
+}
+
+async function getVideoWatchCodes(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+
+  const localList = readLocalData(`video_watch_codes_${instId}`, []);
+  const map = new Map();
+  localList.forEach(c => map.set(c.code, c));
+  Array.from(inMemoryVideoWatchCodes.values())
+    .filter(c => c.institutionId === instId)
+    .forEach(c => map.set(c.code, c));
+
+  if (!isTestOffline()) {
+    try {
+      const clientDb = await getClientFirestoreDb(token);
+      const snap = await getDocs(collection(clientDb, 'institutions', instId, 'videoWatchCodes'));
+      snap.docs.forEach(d => {
+        const data = { id: d.id, ...d.data() };
+        map.set(data.code, data);
+      });
+      writeLocalData(`video_watch_codes_${instId}`, Array.from(map.values()));
+    } catch (_) {}
+  }
+
+  let list = Array.from(map.values());
+  if (payload.status) {
+    list = list.filter(c => c.status === payload.status);
+  }
+  if (payload.subjectId) {
+    list = list.filter(c => !c.subjectId || c.subjectId === payload.subjectId);
+  }
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
 module.exports = {
   resetStore,
   authenticateUser,
@@ -12280,6 +12732,8 @@ module.exports = {
   saveSuperAdminAiConfig,
   testAiKeyConnection,
   generateExamQuestionsAi,
+  getCenterAiStatusAndQuota,
+  testCenterAiConnection,
   // Barcode Generation
   generateBarcode,
   // Invoice & Receipt Settings
@@ -12300,6 +12754,9 @@ module.exports = {
   getAiVouchers,
   allocateAiVoucherToStudent,
   redeemAiVoucher,
+  // Video Watch Codes
+  generateVideoWatchCodes,
+  getVideoWatchCodes,
   // Session Attendance Window & Absence
   getSessionAttendanceWindow,
   markSessionRemainingAbsent

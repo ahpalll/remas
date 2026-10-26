@@ -197,9 +197,48 @@ class HotpatchService {
   }
 
   /**
-   * Check GitHub Releases for hotpatch tag
+   * Check GitHub Releases or Raw GitHub repository for hotpatch manifest
    */
   checkGitHubHotpatch(currentPatch, repo = 'ahpalll/remas') {
+    return new Promise((resolve) => {
+      // 1. Direct fetch from raw.githubusercontent.com (zero rate limit, instantaneous, no release tag required)
+      const rawUrl = `https://raw.githubusercontent.com/${repo}/main/center-desktop/release_hotpatches/hotpatch_manifest.json`;
+      const clientReq = https.get(rawUrl, {
+        headers: { 'User-Agent': 'RemasHotpatchClient' },
+        timeout: 8000
+      }, (res) => {
+        if (res.statusCode === 200) {
+          let raw = '';
+          res.on('data', c => raw += c);
+          res.on('end', () => {
+            try {
+              const manifest = JSON.parse(raw);
+              if (manifest && manifest.patchVersion && this.isNewerPatch(manifest.patchVersion, currentPatch)) {
+                return resolve({
+                  available: true,
+                  patchVersion: manifest.patchVersion,
+                  description: manifest.description || 'تحديث فوري للنظام يتضمن تحسينات الاستقرار وسرعة الاستجابة.',
+                  publishedAt: manifest.publishedAt || new Date().toISOString(),
+                  files: manifest.files || [],
+                  source: 'github-raw'
+                });
+              } else {
+                return resolve({ available: false });
+              }
+            } catch (_) {
+              this.fallbackCheckGitHubReleases(currentPatch, repo).then(resolve);
+            }
+          });
+          return;
+        }
+        this.fallbackCheckGitHubReleases(currentPatch, repo).then(resolve);
+      });
+      clientReq.on('error', () => this.fallbackCheckGitHubReleases(currentPatch, repo).then(resolve));
+      clientReq.on('timeout', () => { clientReq.destroy(); this.fallbackCheckGitHubReleases(currentPatch, repo).then(resolve); });
+    });
+  }
+
+  fallbackCheckGitHubReleases(currentPatch, repo = 'ahpalll/remas') {
     return new Promise((resolve) => {
       const req = https.get(`https://api.github.com/repos/${repo}/releases/tags/hotpatch-latest`, {
         headers: { 'User-Agent': 'RemasHotpatchClient' },
@@ -214,7 +253,6 @@ class HotpatchService {
             const manifestAsset = (data.assets || []).find(a => a.name === 'hotpatch_manifest.json');
             if (!manifestAsset) return resolve(null);
 
-            // Fetch manifest body
             https.get(manifestAsset.browser_download_url, (mRes) => {
               let mData = '';
               mRes.on('data', mc => mData += mc);

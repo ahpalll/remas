@@ -181,6 +181,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.institutionId == institutionId
         && (get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.teacherId == teacherId
           || (get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.keys().hasAny(['subjectId']) && get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, teacherId, get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.subjectId, get(/databases/$(database)/documents/institutions/$(institutionId)/homework/$(homeworkId)).data.stageId)));
+    }
     function isStudentSelf(data) {
       return isAuthenticated() && (
         (data.keys().hasAny(['authUid']) && data.authUid == request.auth.uid)
@@ -188,7 +189,6 @@ service cloud.firestore {
              (data.keys().hasAny(['authEmail']) && request.auth.token.email == data.authEmail)
              || (data.keys().hasAny(['phone']) && request.auth.token.email == ('stu_2' + data.phone + '@remas.local'))
              || (data.keys().hasAny(['phone']) && request.auth.token.email == ('stu_' + data.phone + '@remas.local'))
-             || (data.keys().hasAny(['normalizedPhone']) && data.normalizedPhone.size() > 1 && request.auth.token.email == ('stu_' + data.normalizedPhone.split('+')[1] + '@remas.local'))
            ))
       );
     }
@@ -201,9 +201,67 @@ service cloud.firestore {
              (data.keys().hasAny(['authEmail']) && request.auth.token.email == data.authEmail)
              || (data.keys().hasAny(['phone']) && request.auth.token.email == ('tch_2' + data.phone + '@remas.local'))
              || (data.keys().hasAny(['phone']) && request.auth.token.email == ('tch_' + data.phone + '@remas.local'))
-             || (data.keys().hasAny(['normalizedPhone']) && data.normalizedPhone.size() > 1 && request.auth.token.email == ('tch_' + data.normalizedPhone.split('+')[1] + '@remas.local'))
            ))
       );
+    }
+
+    function lessonTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && to == 'ARCHIVED');
+    }
+    function homeworkTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && (to == 'CLOSED' || to == 'ARCHIVED'))
+        || (from == 'CLOSED' && to == 'ARCHIVED');
+    }
+    function contentTypeOk(t) {
+      return t in ['VIDEO', 'PDF', 'IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF'];
+    }
+    // CENTRAL CONTENT HUB CORE (additive validators; service validates deeply, rules backstop types/enums).
+    function accessTypeOk(v) {
+      return !(v is string) || v in ['FREE', 'SUBSCRIPTION_REQUIRED'];
+    }
+    function groupIdsOk(v) {
+      return !(v is list) || (v.size() >= 1 && v.size() <= 50);
+    }
+    function homeworkModeOk(v) {
+      return !(v is string) || v in ['DIGITAL', 'PAPER', 'HYBRID'];
+    }
+    function examScopeOk(v) {
+      return !(v is string) || v in ['CENTER', 'TEACHER'];
+    }
+    function hubQuestionTypeOk(v) {
+      return v in ['MCQ', 'TRUE_FALSE', 'MULTI_SELECT', 'SHORT_ANSWER', 'ESSAY', 'SHORT_TEXT'];
+    }
+    function examStatusHubOk(v) {
+      return v in ['DRAFT', 'PUBLISHED', 'CLOSED', 'ARCHIVED'];
+    }
+    // BATCH 1 — academic-context backstops (absent = legacy, never fabricated;
+    // service validates deeply, rules backstop types/tenant binding).
+    function academicYearOk(v) {
+      return !(v is string) || v.size() > 0;
+    }
+    function termOk(v) {
+      return v == null || (v is string && v.size() > 0);
+    }
+    function unitStatusOk(v) {
+      return !(v is string) || v in ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+    }
+    function sourceStatusOk(v) {
+      return v in ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+    }
+    function sourceTransitionOk(from, to) {
+      return (from == to)
+        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
+        || (from == 'PUBLISHED' && to == 'ARCHIVED');
+    }
+    function gradeDecisionOk(v) {
+      return v in ['APPROVED', 'REJECTED'];
+    }
+    function gradingStatusOk(v) {
+      return v in ['PENDING', 'GRADED', 'REVIEW_REQUIRED', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED_RESULT', 'FINALIZED'];
     }
 
     // Phase 49.9.3 Institution Document Rules (Atomic Owner Claiming with getAfter)
@@ -1297,64 +1355,6 @@ service cloud.firestore {
     // Subject+Stage scoping stays service-side (requirePermission + reads),
     // consistent with the employees/permissions enforcement model.
     // Students/parents/anonymous get NO write access here (default deny).
-    function lessonTransitionOk(from, to) {
-      return (from == to)
-        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
-        || (from == 'PUBLISHED' && to == 'ARCHIVED');
-    }
-    function homeworkTransitionOk(from, to) {
-      return (from == to)
-        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
-        || (from == 'PUBLISHED' && (to == 'CLOSED' || to == 'ARCHIVED'))
-        || (from == 'CLOSED' && to == 'ARCHIVED');
-    }
-    function contentTypeOk(t) {
-      return t in ['VIDEO', 'PDF', 'IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF'];
-    }
-    // CENTRAL CONTENT HUB CORE (additive validators; service validates deeply, rules backstop types/enums).
-    function accessTypeOk(v) {
-      return !(v is string) || v in ['FREE', 'SUBSCRIPTION_REQUIRED'];
-    }
-    function groupIdsOk(v) {
-      return !(v is list) || (v.size() >= 1 && v.size() <= 50);
-    }
-    function homeworkModeOk(v) {
-      return !(v is string) || v in ['DIGITAL', 'PAPER', 'HYBRID'];
-    }
-    function examScopeOk(v) {
-      return !(v is string) || v in ['CENTER', 'TEACHER'];
-    }
-    function hubQuestionTypeOk(v) {
-      return v in ['MCQ', 'TRUE_FALSE', 'MULTI_SELECT', 'SHORT_ANSWER', 'ESSAY', 'SHORT_TEXT'];
-    }
-    function examStatusHubOk(v) {
-      return v in ['DRAFT', 'PUBLISHED', 'CLOSED', 'ARCHIVED'];
-    }
-    // BATCH 1 — academic-context backstops (absent = legacy, never fabricated;
-    // service validates deeply, rules backstop types/tenant binding).
-    function academicYearOk(v) {
-      return !(v is string) || v.size() > 0;
-    }
-    function termOk(v) {
-      return v == null || (v is string && v.size() > 0);
-    }
-    function unitStatusOk(v) {
-      return !(v is string) || v in ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
-    }
-    function sourceStatusOk(v) {
-      return v in ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
-    }
-    function sourceTransitionOk(from, to) {
-      return (from == to)
-        || (from == 'DRAFT' && (to == 'PUBLISHED' || to == 'ARCHIVED'))
-        || (from == 'PUBLISHED' && to == 'ARCHIVED');
-    }
-    function gradeDecisionOk(v) {
-      return v in ['APPROVED', 'REJECTED'];
-    }
-    function gradingStatusOk(v) {
-      return v in ['PENDING', 'GRADED', 'REVIEW_REQUIRED', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED_RESULT', 'FINALIZED'];
-    }
     match /institutions/{institutionId}/lessons/{lessonId} {
       // P3: eligible FREE PUBLISHED lessons (student) + assigned-subject PUBLISHED (teacher).
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
@@ -1658,6 +1658,18 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /institutions/{institutionId}/videoWatchCodes/{codeId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (p3IsStudent() && p3ClaimInst() == institutionId && resource.data.redeemedByStudentId == p3ClaimStudentId());
+      allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == institutionId
+        && request.resource.data.code is string && request.resource.data.code.size() > 0;
+      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.institutionId == institutionId;
+      allow delete: if isSuperAdmin();
+    }
+
     match /institutions/{institutionId}/entitlements/{entitlementId} {
       // AI-4: students read ONLY records keyed to their own auth uid
       // (entitlement.studentId == auth uid by the subscription service
@@ -1706,6 +1718,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Center AI Governance Configuration (managed by SuperAdmin, readable by tenant)
+    match /institutions/{institutionId}/aiConfig/{docId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // Center AI Usage & Monthly Quota Tracking (read and incremented by center admin / superadmin)
+    match /institutions/{institutionId}/aiUsage/{docId} {
+      allow read: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow create, update: if isTenantAdmin(institutionId) || isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     // Phase 21 System Health & System Metadata Collections (Direct Client Writes DENIED)
     match /systemHealth/{checkId} {
       allow read: if isSuperAdmin();
@@ -1726,13 +1751,20 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isSuperAdmin()
         || (isAuthenticated() && isTenantAdmin(resource.data.institutionId));
-      allow create: if isAuthenticated()
+      allow create: if isSuperAdmin() || (
+        isAuthenticated()
         && request.resource.data.institutionId is string
-        && (isTenantUser(request.resource.data.institutionId) || isSuperAdmin());
+        && (isTenantUser(request.resource.data.institutionId) || isSuperAdmin())
+      );
       allow update, delete: if false;
     }
 
     // Phase 40 Production Identity, License & Single Device Binding Rules
+    match /licenses/system_hotpatch_latest {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
     match /licenses/{licenseId} {
       allow read: if isAuthenticated() && (isTenantUser(resource.data.institutionId) || isSuperAdmin());
       allow create, update, delete: if isSuperAdmin();
@@ -1773,13 +1805,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Central AI Configuration & Key Distribution
+    // Readable by SuperAdmin, and by authenticated center staff when enabledForCenters is true.
     match /system/aiConfig {
-      allow read: if isSuperAdmin() || isAuthenticated();
+      allow read: if isSuperAdmin() || (isAuthenticated() && resource.data.enabledForCenters == true);
+      allow write: if isSuperAdmin();
+    }
+
+    // AI Providers metadata (masked keys only, safe for authenticated callers)
+    match /system/aiProviders {
+      allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
     }
 
     // App Releases (Desktop Auto-Update Manifests)
     match /appReleases/{releaseId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // App OTA Hotpatches (Instant Desktop Code Updates)
+    match /appHotpatches/{patchId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
