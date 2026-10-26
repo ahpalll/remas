@@ -1,10 +1,10 @@
 {
-  "patchVersion": "1.0.0-hp.52.8.1",
-  "targetVersion": "1.0.0-release.52.8.0",
-  "publishedAt": "2026-10-26T03:08:00.000Z",
+  "patchVersion": "1.0.0-hp.53.0.0",
+  "targetVersion": "1.0.0-release.53.0.0",
+  "publishedAt": "2026-10-26T15:10:44.081Z",
   "active": true,
-  "description": "إظهار قسم التقارير والنتائج أول القائمة الجانبية — كشف نتائج الواجبات وتشخيص مستوى الطالب الآن مرئيان مباشرة",
-  "totalSizeKb": "1463.3",
+  "description": "إظهار قسم التقارير والنتائج وتشخيص المستوى والواجبات تلقائيا في القائمة الجانبية",
+  "totalSizeKb": "1475.6",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
@@ -23,8 +23,8 @@
     {
       "relativePath": "src/hotpatch_service.js",
       "filename": "hotpatch_service.js",
-      "size": 16214,
-      "sha256": "75e1a97404e6d8758ba2a5ab86f58216663275b6d1053a90c3a735f3e58e1ac1",
+      "size": 17316,
+      "sha256": "2f845049c91dd69212ddf402e215fcdd54ecaed951dda4f0cbe7e1cc87c7baf0",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/hotpatch_service.js"
     }
   ]

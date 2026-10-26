@@ -63,8 +63,8 @@ for (const relPath of targetFiles) {
     filename: path.basename(relPath),
     size,
     sha256,
-    // Provide inline content for small text files (< 1MB total) or reference
-    url: `https://raw.githubusercontent.com/ahpalll/remas/main/center-desktop/${relPath.replace(/\\/g, '/')}`
+    // Provide GitHub Raw URL for instant, reliable zero-rate-limit download
+    url: `https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/${path.basename(relPath)}`
   });
 
   console.log(`  ✓ ${relPath.padEnd(32)} ${(size / 1024).toFixed(1)} KB (SHA-256: ${sha256.slice(0, 12)}...)`);

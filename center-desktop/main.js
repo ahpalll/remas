@@ -67,7 +67,7 @@ currentDeviceStatus.meta = meta;
 app.whenReady().then(() => {
   // 1. Initialize Hotpatch Storage
   try {
-    hotpatchService.init(app.getPath('userData'));
+    hotpatchService.init(app.getPath('userData'), pkg.version);
 
     // Reload backend module if a hotpatch exists
     if (hotpatchService.hasHotpatch('src/center_desktop_services.js')) {
@@ -458,6 +458,9 @@ ipcMain.handle('check-for-hotpatch', async () => {
 ipcMain.handle('download-apply-hotpatch', async (event, { patchInfo }) => {
   try {
     const result = await hotpatchService.downloadAndApplyHotpatch(patchInfo, __dirname);
+    if (hotpatchService.hasHotpatch('src/center_desktop_services.js')) {
+      desktopServices = hotpatchService.loadHotpatchedModule('src/center_desktop_services.js', desktopServices, __dirname);
+    }
     return { success: true, ...result };
   } catch (err) {
     return { success: false, error: err.message };
@@ -483,10 +486,13 @@ ipcMain.handle('relaunch-app', () => {
 
 // Trusted Backend Service Gateway Handler for Renderer Process
 ipcMain.handle('call-backend-service', async (event, { method, args = [] }) => {
+  if (hotpatchService && hotpatchService.hasHotpatch('src/center_desktop_services.js')) {
+    desktopServices = hotpatchService.loadHotpatchedModule('src/center_desktop_services.js', desktopServices, __dirname);
+  }
   if (typeof desktopServices[method] === 'function') {
     try {
-      const isLongRunningMethod = (method.startsWith('generate') && method.includes('WithAI')) || method.toLowerCase().includes('content') || method.toLowerCase().includes('upload');
-      const timeoutMs = isLongRunningMethod ? 75000 : 25000;
+      const isLongRunningMethod = method.toLowerCase().includes('ai') || method.toLowerCase().includes('generate') || method.toLowerCase().includes('content') || method.toLowerCase().includes('upload');
+      const timeoutMs = isLongRunningMethod ? 120000 : 25000;
       let timerId;
       const timeoutPromise = new Promise((_, reject) => {
         timerId = setTimeout(() => {

@@ -25,7 +25,7 @@ class HotpatchService {
   /**
    * Initialize hotpatch directory structure
    */
-  init(userDataPath) {
+  init(userDataPath, appVersion = null) {
     this.userDataDir = userDataPath;
     this.hotpatchDir = path.join(this.userDataDir, 'hotpatches');
     this.currentPatchDir = path.join(this.hotpatchDir, 'current');
@@ -39,12 +39,39 @@ class HotpatchService {
         const raw = fs.readFileSync(this.manifestPath, 'utf8');
         this.activeManifest = JSON.parse(raw);
         console.log(`[Hotpatch] Active patch loaded: ${this.activeManifest.patchVersion || 'unknown'}`);
+
+        if (appVersion && this.isPatchStaleComparedToApp(this.activeManifest, appVersion)) {
+          console.warn(`[Hotpatch] Stale patch detected for app version ${appVersion} (patch was ${this.activeManifest.patchVersion || 'unknown'}). Rolling back.`);
+          this.rollback();
+        }
       }
     } catch (err) {
       console.warn('[Hotpatch] Failed to load manifest, rolling back:', err.message);
       this.rollback();
     }
     this.isInitialized = true;
+  }
+
+  /**
+   * Check if an active hotpatch should be invalidated because base app is newer
+   */
+  isPatchStaleComparedToApp(manifest, appVersion) {
+    if (!manifest || !appVersion) return false;
+    if (manifest.targetVersion && manifest.targetVersion !== appVersion) {
+      return true;
+    }
+    const parseParts = (v) => {
+      const match = String(v).match(/(\d+)\.(\d+)\.(\d+)/);
+      if (match) return [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)];
+      return [0, 0, 0];
+    };
+    const appParts = parseParts(appVersion);
+    const patchParts = parseParts(manifest.patchVersion);
+    for (let i = 0; i < 3; i++) {
+      if (appParts[i] > patchParts[i]) return true;
+      if (appParts[i] < patchParts[i]) return false;
+    }
+    return false;
   }
 
   getCurrentPatchVersion() {
@@ -202,7 +229,7 @@ class HotpatchService {
   checkGitHubHotpatch(currentPatch, repo = 'ahpalll/remas') {
     return new Promise((resolve) => {
       // 1. Direct fetch from raw.githubusercontent.com (zero rate limit, instantaneous, no release tag required)
-      const rawUrl = `https://raw.githubusercontent.com/${repo}/main/center-desktop/release_hotpatches/hotpatch_manifest.json`;
+      const rawUrl = `https://raw.githubusercontent.com/${repo}/master/center-desktop/release_hotpatches/hotpatch_manifest.json`;
       const clientReq = https.get(rawUrl, {
         headers: { 'User-Agent': 'RemasHotpatchClient' },
         timeout: 8000

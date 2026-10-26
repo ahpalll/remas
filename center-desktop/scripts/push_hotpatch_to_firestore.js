@@ -33,11 +33,20 @@ async function main() {
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // SECURITY: credentials come from the environment only (never hardcode).
+  const adminEmail = process.env.REMAS_ADMIN_EMAIL;
+  const adminPassword = process.env.REMAS_ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    console.error('❌ يجب ضبط REMAS_ADMIN_EMAIL و REMAS_ADMIN_PASSWORD كمتغيرات بيئة قبل النشر.');
+    process.exit(1);
+  }
+
   try {
-    const cred = await signInWithEmailAndPassword(auth, 'admin@remas.edu', 'Mm4499289');
+    const cred = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
     console.log(`✓ تم تسجيل الدخول بصلاحية السوبر أدمن (${cred.user.email})`);
   } catch (authErr) {
-    console.warn(`تحذير أثناء تسجيل الدخول: ${authErr.message}`);
+    console.error(`❌ فشل تسجيل الدخول: ${authErr.message}`);
+    process.exit(1);
   }
 
   // 1. Primary Fleet Document (licenses/system_hotpatch_latest) - Authorized for SuperAdmin & readable by all centers
