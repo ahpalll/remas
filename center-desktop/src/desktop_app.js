@@ -3835,8 +3835,8 @@ async function renderAiStudioView(container, initialTab = null) {
   const activeTab = window._activeAiStudioTab || 'resources';
 
   let lessons = [], contents = [], exams = [], homework = [], stages = [], subjects = [], groups = [];
+  const instId = currentCallerToken ? currentCallerToken.institutionId : '';
   try {
-    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
     const [lRes, cRes, eRes, hRes, stRes, subRes, gRes, vCodesRes] = await Promise.all([
       callBackend('getLessons', currentCallerToken, { institutionId: instId }).catch(() => []),
       callBackend('getContent', currentCallerToken, { institutionId: instId }).catch(() => []),
