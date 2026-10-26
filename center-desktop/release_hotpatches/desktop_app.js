@@ -4141,14 +4141,14 @@ async function renderAiStudioView(container, initialTab = null) {
         </div>
 
         <div style="display:flex; gap:0.75rem;">
-          <button type="button" class="btn" style="background:linear-gradient(135deg, #0284c7, #7c3aed); color:#fff; font-weight:bold; padding:0.6rem 1.4rem; box-shadow:0 4px 14px rgba(2,132,199,0.4);" onclick="runAiLessonExtraction()">
+          <button type="button" id="btnRunAiLessonExtract" class="btn" style="background:linear-gradient(135deg, #0284c7, #7c3aed); color:#fff; font-weight:bold; padding:0.6rem 1.4rem; box-shadow:0 4px 14px rgba(2,132,199,0.4);" onclick="runAiLessonExtraction()">
             ✨ استخراج وشرح الدرس بالذكاء الاصطناعي
           </button>
         </div>
 
         <!-- AI Extraction Result Box (Hidden by default, shown upon generation) -->
         <div id="aiLessonExtractionResultBox" style="display:none; margin-top:1.25rem; border-top:1px dashed #334155; padding-top:1.25rem;">
-          <div style="font-weight:bold; color:#4ade80; font-size:0.95rem; margin-bottom:0.75rem;">
+          <div id="aiLessonExtractionStatusBanner" style="font-weight:bold; color:#4ade80; font-size:0.95rem; margin-bottom:0.75rem;">
             ✅ تم استخراج محاور وشرح الدرس بالذكاء الاصطناعي بنجاح (يمكنك المراجعة والتعديل قبل النشر):
           </div>
 
@@ -5224,10 +5224,20 @@ async function runAiLessonExtraction() {
   const memo = allContents.find(c => c.id === sourceId);
 
   if (resBox) resBox.style.display = 'block';
+  const statusBanner = document.getElementById('aiLessonExtractionStatusBanner');
+  const extractBtn = document.getElementById('btnRunAiLessonExtract');
   const outEl = document.getElementById('aiResultOutlines');
   const conEl = document.getElementById('aiResultConcepts');
   const sumEl = document.getElementById('aiResultSummary');
 
+  if (statusBanner) {
+    statusBanner.style.color = '#38bdf8';
+    statusBanner.innerText = `⏳ جاري قراءة المذكرة من صفحة ${startPage} إلى ${endPage || 'النهاية'} واستخراج العناصر والمفاهيم والملخص بالذكاء الاصطناعي...`;
+  }
+  if (extractBtn) {
+    extractBtn.disabled = true;
+    extractBtn.innerText = '⏳ جاري الاستخراج بالذكاء الاصطناعي...';
+  }
   if (outEl) outEl.value = '⏳ جاري قراءة الصفحات المحددة من المذكرة واستخراج العناصر الرئيسية بالذكاء الاصطناعي...';
   if (conEl) conEl.value = '⏳ جاري استخراج المفاهيم والتعريفات...';
   if (sumEl) sumEl.value = '⏳ جاري صياغة الملخص الشامل للدرس...';
@@ -5275,9 +5285,29 @@ async function runAiLessonExtraction() {
       }
     }
 
-    if (outEl) outEl.value = res.outlines || '';
-    if (conEl) conEl.value = res.concepts || '';
-    if (sumEl) sumEl.value = res.summary || '';
+    const formatUiField = (val) => {
+      if (!val) return '';
+      if (Array.isArray(val)) return val.map((item, i) => `${i + 1}. ${typeof item === 'object' ? Object.values(item).filter(Boolean).join(' — ') : item}`).join('\n');
+      if (typeof val === 'object') return Object.entries(val).map(([k, v]) => `• ${k}: ${typeof v === 'object' ? Object.values(v).filter(Boolean).join(' — ') : v}`).join('\n');
+      return String(val).trim();
+    };
+
+    const outlinesText = formatUiField(res?.outlines);
+    const conceptsText = formatUiField(res?.concepts);
+    const summaryText = formatUiField(res?.summary);
+
+    if (!outlinesText && !conceptsText && !summaryText) {
+      throw new Error('لم يتم استرجاع نصوص الشرح من مزود الذكاء الاصطناعي — يرجى المحاولة مرة أخرى');
+    }
+
+    if (outEl) outEl.value = outlinesText;
+    if (conEl) conEl.value = conceptsText;
+    if (sumEl) sumEl.value = summaryText;
+
+    if (statusBanner) {
+      statusBanner.style.color = '#4ade80';
+      statusBanner.innerText = `✅ تم استخراج محاور وشرح الدرس بالذكاء الاصطناعي بنجاح عبر (${res.provider || 'AI'}) — يمكنك المراجعة والتعديل قبل النشر:`;
+    }
 
     const titleInp = document.getElementById('aiStudioLessonTitle');
     if (titleInp && !titleInp.value.trim() && res.suggestedTitle) {
@@ -5289,7 +5319,16 @@ async function runAiLessonExtraction() {
     if (outEl && outEl.value.startsWith('⏳')) outEl.value = '';
     if (conEl && conEl.value.startsWith('⏳')) conEl.value = '';
     if (sumEl && sumEl.value.startsWith('⏳')) sumEl.value = '';
+    if (statusBanner) {
+      statusBanner.style.color = '#f87171';
+      statusBanner.innerText = `❌ تعذر استخراج الشرح آلياً: ${(e && e.message) || e}`;
+    }
     showToast(`❌ تعذر استخراج الشرح آلياً: ${(e && e.message) || e}`, true);
+  } finally {
+    if (extractBtn) {
+      extractBtn.disabled = false;
+      extractBtn.innerText = '✨ استخراج وشرح الدرس بالذكاء الاصطناعي';
+    }
   }
 }
 
@@ -5685,16 +5724,24 @@ function openOrDownloadFile(urlOrPath, title = 'معاينة المحتوى') {
 
   let bodyHtml = '';
   if (ytId) {
-    const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+    const embedUrl = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
     bodyHtml = `
-      <div style="background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9; width:100%; border:1px solid #334155;">
-        <iframe src="${embedUrl}" style="width:100%; height:100%; border:none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      <div id="ytPreviewContainer" style="background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9; width:100%; border:1px solid #334155; display:flex; align-items:center; justify-content:center; position:relative;">
+        <div style="text-align:center; color:#cbd5e1; padding:1.5rem;">
+          <div style="font-size:2rem; margin-bottom:0.5rem;">⏳</div>
+          <div style="font-weight:bold; color:#38bdf8;">جاري تجهيز البث المباشر للفيديو داخل المشغل المدمج...</div>
+        </div>
       </div>
       <div style="margin-top:0.75rem; padding:0.7rem 0.9rem; background:#0f172a; border:1px solid #1e293b; border-radius:8px; font-size:0.82rem; color:#94a3b8; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
         <span>🔗 معرّف فيديو يوتيوب: <strong style="color:#38bdf8; font-family:monospace;">${escapeHtmlAttr(ytId)}</strong></span>
-        <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.8rem;" onclick="openExternalUrlHelper('${escapeHtmlAttr(raw)}')">
-          🌐 فتح الفيديو في المتصفح الخارجي
-        </button>
+        <div style="display:flex; gap:0.4rem;">
+          <button type="button" class="btn" style="background:#334155; color:#fff; font-size:0.78rem;" onclick="switchYtPreviewToIframe('${escapeHtmlAttr(embedUrl)}')">
+            🎬 المشغل البديل (Embed)
+          </button>
+          <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.8rem;" onclick="openExternalUrlHelper('${escapeHtmlAttr(raw)}')">
+            🌐 فتح الفيديو في المتصفح الخارجي
+          </button>
+        </div>
       </div>
     `;
   } else if (isDirectVideo) {
@@ -5740,6 +5787,29 @@ function openOrDownloadFile(urlOrPath, title = 'معاينة المحتوى') {
       </div>
     </div>
   `;
+
+  if (ytId) {
+    const embedUrl = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+    callBackend('resolveYouTubeStreamUrl', currentCallerToken, { videoId: ytId, url: raw })
+      .then((res) => {
+        const box = document.getElementById('ytPreviewContainer');
+        if (!box) return;
+        if (res && res.success && res.streamUrl) {
+          box.innerHTML = `<video src="${escapeHtmlAttr(res.streamUrl)}" controls autoplay controlsList="nodownload" style="width:100%; height:100%; max-height:70vh; background:#000;"></video>`;
+        } else {
+          switchYtPreviewToIframe(embedUrl);
+        }
+      })
+      .catch(() => {
+        switchYtPreviewToIframe(embedUrl);
+      });
+  }
+}
+
+function switchYtPreviewToIframe(embedUrl) {
+  const box = document.getElementById('ytPreviewContainer');
+  if (!box) return;
+  box.innerHTML = `<iframe src="${escapeHtmlAttr(embedUrl)}" referrerpolicy="origin" style="width:100%; height:100%; border:none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
 }
 
 async function openAddVideoModal() {
@@ -9279,47 +9349,129 @@ async function deleteRoomAction(id){
   } catch(err){ showToast(friendlyBatchAError(err), true); }
 }
 
-// Group Modal — Batch A: full academic relationships (IDs only)
+// Group Modal — Batch A: full academic relationships (IDs only) with dynamic Stage ↔ Subject ↔ Teacher linking
+function normalizeArabicLinkText(str) {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^(ال)/, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ');
+}
+
+function doesSubjectBelongToStage(subj, stageId) {
+  if (!subj) return false;
+  if (!stageId) return true;
+  const stageIds = Array.isArray(subj.stageIds) ? subj.stageIds.filter(Boolean) : [];
+  if (subj.stageId === stageId || stageIds.includes(stageId)) return true;
+  if (!subj.stageId && stageIds.length === 0) return true;
+  return false;
+}
+
+function doesTeacherMatchSubjectAndStage(teacher, subjObj, stageId, teacherSubjectsMap = {}, teacherStagesMap = {}) {
+  if (!teacher) return false;
+  const tSubAssignments = (teacherSubjectsMap && teacherSubjectsMap[teacher.id]) || [];
+  const tStgAssignments = (teacherStagesMap && teacherStagesMap[teacher.id]) || [];
+  const normTeacherSpec = normalizeArabicLinkText(teacher.specialization || teacher.subject || '');
+  const normSubjName = normalizeArabicLinkText(subjObj?.name || '');
+
+  // 1. Check explicit non-legacy teacherSubjects assignment for this exact subject ID
+  if (subjObj) {
+    const explicitAssign = tSubAssignments.find(a => a.subjectId === subjObj.id && !a.migratedFromLegacy);
+    if (explicitAssign) {
+      const aStages = Array.isArray(explicitAssign.stageIds) ? explicitAssign.stageIds.filter(Boolean) : (explicitAssign.stageId ? [explicitAssign.stageId] : []);
+      if (!stageId || aStages.length === 0 || aStages.includes(stageId)) return true;
+    }
+  }
+
+  // 2. Check specialization / subject name match (e.g. "تاريخ" === "تاريخ" or "عربى" === "عربي")
+  if (normTeacherSpec && normSubjName && (normTeacherSpec === normSubjName || normTeacherSpec.includes(normSubjName) || normSubjName.includes(normTeacherSpec))) {
+    return true;
+  }
+
+  // 3. Fallback to any subject assignment if teacher has no conflicting specialization
+  if (subjObj && !normTeacherSpec) {
+    const anyAssign = tSubAssignments.find(a => a.subjectId === subjObj.id);
+    if (anyAssign) return true;
+  }
+
+  // 4. If no subject is selected yet, check stage assignment
+  if (!subjObj && stageId) {
+    if (tStgAssignments.some(a => a.stageId === stageId)) return true;
+  }
+
+  return false;
+}
+
 async function openAddGroupModal() {
   const container = document.getElementById('modalContainer');
-  container.innerHTML = '<div class="modal-overlay"><div class="modal-card"><p style="color:#94a3b8;">جاري تحميل البيانات الأكاديمية...</p></div></div>';
+  container.innerHTML = '<div class="modal-overlay"><div class="modal-card"><p style="color:#94a3b8;">جاري تحميل البيانات الأكاديمية وروابط المعلمين والمواد...</p></div></div>';
   try {
-    const years = await callBackend('getAcademicYears', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const stages = await callBackend('getStages', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const subjects = await callBackend('getSubjects', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const teachers = await callBackend('getTeachers', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const rooms = await callBackend('getRooms', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const existingGroups = await callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    window._batchAGroup = { years, stages, subjects, teachers, rooms, existingGroups };
-    const activeYears = years.filter(y => y.status === 'ACTIVE');
-    const activeStages = stages.filter(s => s.status !== 'ARCHIVED');
-    const activeSubjects = subjects.filter(s => s.status !== 'ARCHIVED');
-    const activeTeachers = teachers.filter(t => t.status === 'ACTIVE');
-    const activeRooms = rooms.filter(r => r.status === 'ACTIVE');
+    const instId = currentCallerToken.institutionId;
+    const [years, stages, subjects, teachers, rooms, existingGroups] = await Promise.all([
+      callBackend('getAcademicYears', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getStages', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getTeachers', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getRooms', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getGroups', currentCallerToken, { institutionId: instId }).catch(() => [])
+    ]);
+
+    const activeYears = (years || []).filter(y => y.status === 'ACTIVE');
+    const activeStages = (stages || []).filter(s => s.status !== 'ARCHIVED');
+    const activeSubjects = (subjects || []).filter(s => s.status !== 'ARCHIVED');
+    const activeTeachers = (teachers || []).filter(t => t.status === 'ACTIVE');
+    const activeRooms = (rooms || []).filter(r => r.status === 'ACTIVE');
+
+    const teacherSubjectsMap = {};
+    const teacherStagesMap = {};
+    await Promise.all(activeTeachers.map(async (t) => {
+      const [subs, stgs] = await Promise.all([
+        callBackend('getTeacherSubjects', currentCallerToken, t.id, instId).catch(() => []),
+        callBackend('getTeacherStages', currentCallerToken, t.id, instId).catch(() => [])
+      ]);
+      teacherSubjectsMap[t.id] = subs || [];
+      teacherStagesMap[t.id] = stgs || [];
+    }));
+
+    window._batchAGroup = {
+      years: activeYears,
+      stages: activeStages,
+      subjects: activeSubjects,
+      teachers: activeTeachers,
+      rooms: activeRooms,
+      existingGroups: existingGroups || [],
+      teacherSubjectsMap,
+      teacherStagesMap
+    };
+
     if (activeYears.length === 0 || activeStages.length === 0 || activeSubjects.length === 0 || activeTeachers.length === 0 || activeRooms.length === 0) {
       container.innerHTML = `<div class="modal-overlay"><div class="modal-card"><div class="modal-header">+ إنشاء مجموعة دراسية جديدة</div>
         <p style="color:#fbbf24; font-size:0.9rem;">يلزم استكمال الإعداد الأكاديمي أولاً (سنة نشطة + مرحلة + مادة + معلم نشط + قاعة متاحة) قبل إنشاء المجموعات.</p>
-        <p style="color:#94a3b8; font-size:0.8rem;">السنوات: ${years.length} | المراحل: ${stages.length} | المواد: ${subjects.length} | المعلمون النشطون: ${activeTeachers.length} | القاعات المتاحة: ${activeRooms.length}</p>
+        <p style="color:#94a3b8; font-size:0.8rem;">السنوات: ${(years || []).length} | المراحل: ${(stages || []).length} | المواد: ${(subjects || []).length} | المعلمون النشطون: ${activeTeachers.length} | القاعات المتاحة: ${activeRooms.length}</p>
         <div style="display:flex; justify-content:flex-end; gap:0.5rem;"><button class="btn" style="background:#475569;" onclick="closeModal()">إغلاق</button><button class="btn" onclick="closeModal(); navigate('academic')">فتح الإعداد الأكاديمي</button></div></div></div>`;
       return;
     }
     container.innerHTML = `
     <div class="modal-overlay">
-      <div class="modal-card" style="width:620px; max-height:88vh; overflow-y:auto;">
-        <div class="modal-header">+ إنشاء مجموعة دراسية جديدة (علاقات حقيقية)</div>
+      <div class="modal-card" style="width:640px; max-height:88vh; overflow-y:auto;">
+        <div class="modal-header">+ إنشاء مجموعة دراسية جديدة (ترابط أكاديمي ذكي)</div>
         <div class="form-group">
           <label>اسم المجموعة * <span style="color:#38bdf8; font-size:0.75rem;">(يُكتب تلقائياً عند اختيار المرحلة والمادة ويمكنك تعديله)</span></label>
           <input type="text" id="mGrpName" placeholder="الصف الثالث الثانوي — تاريخ (أ)" oninput="this.dataset.userEdited='1'">
         </div>
         <div class="form-group"><label>كود المجموعة (اختياري — يولد تلقائياً)</label><input type="text" id="mGrpCode" placeholder="GRP-1001"></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
-          <div class="form-group"><label>السنة الدراسية *</label><select id="mGrpYear" onchange="onGroupModalYearChange()">${activeYears.map(y => `<option value="${y.id}">${escapeHtmlAttr(y.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المرحلة الدراسية *</label><select id="mGrpStage" onchange="onGroupModalStageChange()">${activeStages.map(s => `<option value="${s.id}" data-year="${s.academicYearId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المادة الدراسية *</label><select id="mGrpSubject" onchange="onGroupModalSubjectChange()">${activeSubjects.map(s => `<option value="${s.id}" data-stage="${s.stageId || ''}" data-year="${s.academicYearId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المعلم *</label><select id="mGrpTeacher">${activeTeachers.map(t => `<option value="${t.id}">${escapeHtmlAttr(t.fullName || t.name)} (${t.teacherCode || t.id})</option>`).join('')}</select></div>
-          <div class="form-group"><label>القاعة *</label><select id="mGrpRoom">${activeRooms.map(r => `<option value="${r.id}">${escapeHtmlAttr(r.name)} — ${r.capacity} مقعد</option>`).join('')}</select></div>
-          <div class="form-group"><label>السعة القصوى *</label><input type="number" id="mGrpCapacity" value="20" min="1"><div style="color:#94a3b8; font-size:0.72rem;">يجب أن تكون رقماً صحيحاً موجباً</div></div>
+          <div class="form-group"><label>1. السنة الدراسية *</label><select id="mGrpYear" onchange="onGroupModalYearChange()">${activeYears.map(y => `<option value="${y.id}">${escapeHtmlAttr(y.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>2. المرحلة الدراسية *</label><select id="mGrpStage" onchange="onGroupModalStageChange()">${activeStages.map(s => `<option value="${s.id}" data-year="${s.academicYearId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>3. المادة الدراسية (مرتبطة بالمرحلة) *</label><select id="mGrpSubject" onchange="onGroupModalSubjectChange()"></select></div>
+          <div class="form-group"><label>4. المعلم (مرتبط بالمادة والمرحلة) *</label><select id="mGrpTeacher" onchange="onGroupModalTeacherChange()"></select></div>
+          <div class="form-group"><label>5. القاعة *</label><select id="mGrpRoom">${activeRooms.map(r => `<option value="${r.id}">${escapeHtmlAttr(r.name)} — ${r.capacity} مقعد</option>`).join('')}</select></div>
+          <div class="form-group"><label>6. السعة القصوى *</label><input type="number" id="mGrpCapacity" value="20" min="1"><div style="color:#94a3b8; font-size:0.72rem;">يجب أن تكون رقماً صحيحاً موجباً</div></div>
         </div>
+        <div id="mGrpLinkBadge" style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.75rem; font-size:0.8rem; color:#cbd5e1;"></div>
         <div class="form-group"><label>المواعيد (وصف حر)</label><input type="text" id="mGrpSchedule" placeholder="الأحد والأربعاء 04:00 مساءً"></div>
         <div class="form-group">
           <label>سعر المجموعة (محسوب تلقائياً = عدد الطلاب × سعر المادة)</label>
@@ -9335,7 +9487,6 @@ async function openAddGroupModal() {
       </div>
     </div>`;
     onGroupModalYearChange();
-    onGroupModalSubjectChange();
   } catch (err) { showToast(friendlyBatchAError(err), true); }
 }
 
@@ -9352,8 +9503,8 @@ function updateAutoGroupName() {
 
   const stageObj = stages.find(s => s.id === stageId);
   const subjObj = subjects.find(s => s.id === subjId);
-  const stageName = stageObj ? stageObj.name : (stageSel?.selectedOptions?.[0]?.text || '');
-  const subjName = subjObj ? subjObj.name : (subjSel?.selectedOptions?.[0]?.text || '');
+  const stageName = stageObj ? stageObj.name : '';
+  const subjName = subjObj ? subjObj.name : '';
 
   if (stageName && subjName) {
     const arabicLetters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط', 'ي'];
@@ -9364,37 +9515,106 @@ function updateAutoGroupName() {
 }
 
 function onGroupModalYearChange() {
+  const st = window._batchAGroup;
+  if (!st) return;
   const yearId = document.getElementById('mGrpYear')?.value || '';
   const stageSel = document.getElementById('mGrpStage');
-  if (!window._batchAGroup) return;
   if (stageSel) {
-    Array.from(stageSel.options).forEach(o => { const y = o.getAttribute('data-year'); o.style.display = (!y || !yearId || y === yearId) ? '' : 'none'; });
-    const first = Array.from(stageSel.options).find(o => o.style.display !== 'none');
-    if (first && stageSel.value !== first.value && (stageSel.selectedOptions[0]?.style.display === 'none')) stageSel.value = first.value;
+    const prevStage = stageSel.value;
+    const filteredStages = (st.stages || []).filter(s => !yearId || !s.academicYearId || s.academicYearId === yearId);
+    stageSel.innerHTML = filteredStages.length
+      ? filteredStages.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')
+      : `<option value="">— لا توجد مراحل لهذه السنة —</option>`;
+    if (prevStage && filteredStages.some(s => s.id === prevStage)) {
+      stageSel.value = prevStage;
+    }
   }
   onGroupModalStageChange();
 }
 
 function onGroupModalStageChange() {
+  const st = window._batchAGroup;
+  if (!st) return;
   const stageId = document.getElementById('mGrpStage')?.value || '';
   const subjSel = document.getElementById('mGrpSubject');
   if (!subjSel) return;
-  Array.from(subjSel.options).forEach(o => { const st = o.getAttribute('data-stage'); o.style.display = (!st || !stageId || st === stageId) ? '' : 'none'; });
-  const first = Array.from(subjSel.options).find(o => o.style.display !== 'none');
-  if (first) subjSel.value = first.value;
+
+  const prevSubj = subjSel.value;
+  const filteredSubjects = (st.subjects || []).filter(s => doesSubjectBelongToStage(s, stageId));
+  if (filteredSubjects.length > 0) {
+    subjSel.innerHTML = filteredSubjects
+      .map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)} (${fmtMoney(s.price || 0)})</option>`)
+      .join('');
+    if (prevSubj && filteredSubjects.some(s => s.id === prevSubj)) {
+      subjSel.value = prevSubj;
+    }
+  } else {
+    subjSel.innerHTML = `<option value="">— لا توجد مواد مرتبطة بهذه المرحلة —</option>`;
+  }
   onGroupModalSubjectChange();
 }
 
 function onGroupModalSubjectChange() {
+  const st = window._batchAGroup;
+  if (!st) return;
+  const stageId = document.getElementById('mGrpStage')?.value || '';
   const subjId = document.getElementById('mGrpSubject')?.value || '';
+  const teacherSel = document.getElementById('mGrpTeacher');
   const helper = document.getElementById('mGrpFeeHelper');
-  const subjects = (window._batchAGroup && window._batchAGroup.subjects) || [];
+  const subjects = st.subjects || [];
   const subj = subjects.find(s => s.id === subjId);
   const price = Math.max(0, Number(subj?.price || 0));
+
   if (helper) {
-    helper.innerText = subjId ? `سعر مادة المجموعة: ${fmtMoney(price)} | السعر المبدئي: 0 ج.م (0 طلاب مسجلين حالياً) — يُحسب إجمالي المجموعة تلقائياً فور اشتراك الطلاب.` : 'سعر مادة المجموعة: —';
+    helper.innerText = subjId
+      ? `سعر مادة المجموعة: ${fmtMoney(price)} | السعر المبدئي: 0 ج.م (0 طلاب مسجلين حالياً) — يُحسب إجمالي المجموعة تلقائياً فور اشتراك الطلاب.`
+      : 'سعر مادة المجموعة: —';
   }
+
+  if (teacherSel) {
+    const prevTeacher = teacherSel.value;
+    const allTeachers = st.teachers || [];
+    const matchedTeachers = allTeachers.filter(t =>
+      doesTeacherMatchSubjectAndStage(t, subj, stageId, st.teacherSubjectsMap, st.teacherStagesMap)
+    );
+
+    if (matchedTeachers.length > 0) {
+      teacherSel.innerHTML = matchedTeachers
+        .map(t => `<option value="${t.id}">👨‍🏫 ${escapeHtmlAttr(t.fullName || t.name)} — تخصص: ${escapeHtmlAttr(t.specialization || t.subject || subj?.name || 'معتمد')} (${t.teacherCode || t.id})</option>`)
+        .join('');
+      if (prevTeacher && matchedTeachers.some(t => t.id === prevTeacher)) {
+        teacherSel.value = prevTeacher;
+      } else {
+        teacherSel.value = matchedTeachers[0].id;
+      }
+    } else if (allTeachers.length > 0) {
+      teacherSel.innerHTML = `<option value="">— اختر معلماً لربطه بمادة (${escapeHtmlAttr(subj?.name || '')}) —</option>` +
+        allTeachers.map(t => `<option value="${t.id}">${escapeHtmlAttr(t.fullName || t.name)} — تخصص: ${escapeHtmlAttr(t.specialization || t.subject || 'عام')} (${t.teacherCode || t.id})</option>`).join('');
+    } else {
+      teacherSel.innerHTML = `<option value="">— لا يوجد معلمون نشطون —</option>`;
+    }
+  }
+
   updateAutoGroupName();
+  onGroupModalTeacherChange();
+}
+
+function onGroupModalTeacherChange() {
+  const st = window._batchAGroup;
+  const badge = document.getElementById('mGrpLinkBadge');
+  if (!st || !badge) return;
+  const stageId = document.getElementById('mGrpStage')?.value || '';
+  const subjId = document.getElementById('mGrpSubject')?.value || '';
+  const teacherId = document.getElementById('mGrpTeacher')?.value || '';
+  const stageObj = (st.stages || []).find(s => s.id === stageId);
+  const subjObj = (st.subjects || []).find(s => s.id === subjId);
+  const teacherObj = (st.teachers || []).find(t => t.id === teacherId);
+
+  if (stageObj && subjObj && teacherObj) {
+    badge.innerHTML = `🔗 <strong>الترابط الأكاديمي للمجموعة:</strong> المرحلة: <span style="color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(stageObj.name)}</span> ⬅️ المادة: <span style="color:#4ade80; font-weight:bold;">${escapeHtmlAttr(subjObj.name)}</span> ⬅️ المعلم: <span style="color:#facc15; font-weight:bold;">${escapeHtmlAttr(teacherObj.fullName || teacherObj.name)}</span>`;
+  } else {
+    badge.innerHTML = `⚠️ يرجى التأكد من اختيار المرحلة والمادة والمعلم المرتبط بها.`;
+  }
 }
 
 async function submitAddGroup() {
@@ -12277,17 +12497,32 @@ async function openEditGroupModal(groupId) {
   const container = document.getElementById('modalContainer');
   container.innerHTML = '<div class="modal-overlay"><div class="modal-card"><p style="color:#94a3b8;">جاري تحميل بيانات المجموعة...</p></div></div>';
   try {
-    const group = await callBackend('getGroupById', currentCallerToken, groupId, currentCallerToken.institutionId);
-    const years = await callBackend('getAcademicYears', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const stages = await callBackend('getStages', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const subjects = await callBackend('getSubjects', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const teachers = await callBackend('getTeachers', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const rooms = await callBackend('getRooms', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    const curSubj = subjects.find(s => s.id === group.subjectId);
+    const instId = currentCallerToken.institutionId;
+    const [group, years, stages, subjects, teachers, rooms] = await Promise.all([
+      callBackend('getGroupById', currentCallerToken, groupId, instId),
+      callBackend('getAcademicYears', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getStages', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getTeachers', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getRooms', currentCallerToken, { institutionId: instId }).catch(() => [])
+    ]);
+    const activeTeachers = (teachers || []).filter(t => t.status === 'ACTIVE');
+    const teacherSubjectsMap = {};
+    const teacherStagesMap = {};
+    await Promise.all(activeTeachers.map(async (t) => {
+      const [subs, stgs] = await Promise.all([
+        callBackend('getTeacherSubjects', currentCallerToken, t.id, instId).catch(() => []),
+        callBackend('getTeacherStages', currentCallerToken, t.id, instId).catch(() => [])
+      ]);
+      teacherSubjectsMap[t.id] = subs || [];
+      teacherStagesMap[t.id] = stgs || [];
+    }));
+
+    const curSubj = (subjects || []).find(s => s.id === group.subjectId);
     const subjPrice = Number(group.subjectPrice !== undefined ? group.subjectPrice : (curSubj?.price || 0));
     const enrolledCount = Number(group.enrolledCount || 0);
     const totalGroupFee = enrolledCount * subjPrice;
-    window._batchAGroupEdit = { group, subjects };
+    window._batchAGroupEdit = { group, stages: stages || [], subjects: subjects || [], teachers: activeTeachers, teacherSubjectsMap, teacherStagesMap };
 
     container.innerHTML = `
     <div class="modal-overlay">
@@ -12295,11 +12530,11 @@ async function openEditGroupModal(groupId) {
         <div class="modal-header">تعديل المجموعة — ${escapeHtmlAttr(group.name)}</div>
         <div class="form-group"><label>اسم المجموعة *</label><input type="text" id="eGrpName" value="${escapeHtmlAttr(group.name || '')}"></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
-          <div class="form-group"><label>السنة</label><select id="eGrpYear">${years.map(y => `<option value="${y.id}" ${y.id === group.academicYearId ? 'selected' : ''}>${escapeHtmlAttr(y.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المرحلة</label><select id="eGrpStage">${stages.map(s => `<option value="${s.id}" ${s.id === group.stageId ? 'selected' : ''}>${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المادة</label><select id="eGrpSubject" onchange="onEditGroupSubjectChange()">${subjects.map(s => `<option value="${s.id}" ${s.id === group.subjectId ? 'selected' : ''}>${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>المعلم</label><select id="eGrpTeacher">${teachers.filter(t => t.status === 'ACTIVE').map(t => `<option value="${t.id}" ${t.id === group.teacherId ? 'selected' : ''}>${escapeHtmlAttr(t.fullName || t.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label>القاعة</label><select id="eGrpRoom">${rooms.filter(r => r.status !== 'ARCHIVED').map(r => `<option value="${r.id}" ${r.id === group.roomId ? 'selected' : ''}>${escapeHtmlAttr(r.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>السنة</label><select id="eGrpYear">${(years || []).map(y => `<option value="${y.id}" ${y.id === group.academicYearId ? 'selected' : ''}>${escapeHtmlAttr(y.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>المرحلة</label><select id="eGrpStage" onchange="onEditGroupStageChange()">${(stages || []).filter(s => s.status !== 'ARCHIVED').map(s => `<option value="${s.id}" ${s.id === group.stageId ? 'selected' : ''}>${escapeHtmlAttr(s.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>المادة (مرتبطة بالمرحلة)</label><select id="eGrpSubject" onchange="onEditGroupSubjectChange()"></select></div>
+          <div class="form-group"><label>المعلم (مرتبط بالمادة والمرحلة)</label><select id="eGrpTeacher"></select></div>
+          <div class="form-group"><label>القاعة</label><select id="eGrpRoom">${(rooms || []).filter(r => r.status !== 'ARCHIVED').map(r => `<option value="${r.id}" ${r.id === group.roomId ? 'selected' : ''}>${escapeHtmlAttr(r.name)}</option>`).join('')}</select></div>
           <div class="form-group"><label>السعة * (المسجلون حالياً: ${group.enrolledCount || 0})</label><input type="number" id="eGrpCapacity" min="1" value="${group.maxCapacity || group.capacity || 30}"></div>
         </div>
         <div class="form-group"><label>المواعيد</label><input type="text" id="eGrpSchedule" value="${escapeHtmlAttr(group.schedule || '')}"></div>
@@ -12315,11 +12550,27 @@ async function openEditGroupModal(groupId) {
         </div>
       </div>
     </div>`;
+    onEditGroupStageChange(group.subjectId, group.teacherId);
   } catch (err) { showToast(friendlyBatchAError(err), true); }
 }
 
-function onEditGroupSubjectChange() {
+function onEditGroupStageChange(initialSubjectId = null, initialTeacherId = null) {
+  const st = window._batchAGroupEdit || {};
+  const stageId = document.getElementById('eGrpStage')?.value || '';
+  const subjSel = document.getElementById('eGrpSubject');
+  if (!subjSel) return;
+  const targetSubjId = initialSubjectId || subjSel.value || st.group?.subjectId || '';
+  const filteredSubjects = (st.subjects || []).filter(s => s.status !== 'ARCHIVED' && doesSubjectBelongToStage(s, stageId));
+  subjSel.innerHTML = filteredSubjects.length
+    ? filteredSubjects.map(s => `<option value="${s.id}" ${s.id === targetSubjId ? 'selected' : ''}>${escapeHtmlAttr(s.name)}</option>`).join('')
+    : `<option value="">— لا توجد مواد مرتبطة بهذه المرحلة —</option>`;
+  onEditGroupSubjectChange(initialTeacherId);
+}
+
+function onEditGroupSubjectChange(initialTeacherId = null) {
+  const stageId = document.getElementById('eGrpStage')?.value || '';
   const subjId = document.getElementById('eGrpSubject')?.value || '';
+  const teacherSel = document.getElementById('eGrpTeacher');
   const st = window._batchAGroupEdit || {};
   const subjects = st.subjects || [];
   const group = st.group || {};
@@ -12333,6 +12584,16 @@ function onEditGroupSubjectChange() {
   if (disp) disp.value = `${fmtMoney(total)} (${enrolled} طالب × ${fmtMoney(price)})`;
   if (hid) hid.value = total;
   if (hlp) hlp.innerText = `سعر مادة المجموعة: ${fmtMoney(price)} | عدد الطلاب المشتركين: ${enrolled} طالب.`;
+
+  if (teacherSel) {
+    const targetTeacherId = initialTeacherId || teacherSel.value || group.teacherId || '';
+    const allTeachers = st.teachers || [];
+    const matched = allTeachers.filter(t => doesTeacherMatchSubjectAndStage(t, subj, stageId, st.teacherSubjectsMap, st.teacherStagesMap));
+    const listToUse = matched.length > 0 ? matched : allTeachers;
+    teacherSel.innerHTML = listToUse
+      .map(t => `<option value="${t.id}" ${t.id === targetTeacherId ? 'selected' : ''}>${escapeHtmlAttr(t.fullName || t.name)} — ${escapeHtmlAttr(t.specialization || t.subject || '')}</option>`)
+      .join('');
+  }
 }
 
 async function submitEditGroup(groupId) {

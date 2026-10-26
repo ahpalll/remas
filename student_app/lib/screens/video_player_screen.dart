@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:convert';
+import 'dart:io' show HttpClient, HttpHeaders, Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -130,6 +131,77 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     return null;
   }
 
+  Future<Uri?> _resolveYouTubeDirectInnertube(String videoId) async {
+    final clients = <Map<String, dynamic>>[
+      {
+        'clientName': 'ANDROID',
+        'clientVersion': '20.10.38',
+        'androidSdkVersion': 34,
+        'osName': 'Android',
+        'osVersion': '14',
+        'userAgent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip',
+      },
+      {
+        'clientName': 'IOS',
+        'clientVersion': '20.10.4',
+        'deviceMake': 'Apple',
+        'deviceModel': 'iPhone16,2',
+        'osName': 'iPhone',
+        'osVersion': '18.3.2.22D82',
+        'userAgent': 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
+      },
+    ];
+
+    for (final client in clients) {
+      final httpClient = HttpClient();
+      try {
+        final uri = Uri.parse('https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
+        final req = await httpClient.postUrl(uri);
+        req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+        req.headers.set(HttpHeaders.userAgentHeader, client['userAgent'] as String);
+        final bodyMap = {
+          'videoId': videoId,
+          'context': {
+            'client': {
+              ...client,
+              'hl': 'ar',
+              'gl': 'EG',
+            }
+          }
+        };
+        req.add(utf8.encode(jsonEncode(bodyMap)));
+        final res = await req.close();
+        if (res.statusCode != 200) continue;
+        final rawBody = await res.transform(utf8.decoder).join();
+        final data = jsonDecode(rawBody) as Map<String, dynamic>;
+        final status = (data['playabilityStatus'] as Map<String, dynamic>?)?['status'];
+        if (status != 'OK') continue;
+        final streamingData = data['streamingData'] as Map<String, dynamic>?;
+        if (streamingData == null) continue;
+        final formats = (streamingData['formats'] as List<dynamic>?) ?? const [];
+        for (final f in formats) {
+          if (f is Map<String, dynamic>) {
+            final urlStr = f['url']?.toString();
+            if (urlStr != null && urlStr.isNotEmpty) {
+              _streamQualityLabel = 'YouTube ${f['qualityLabel'] ?? 'HD'}';
+              return Uri.parse(urlStr);
+            }
+          }
+        }
+        final hlsUrl = streamingData['hlsManifestUrl']?.toString();
+        if (hlsUrl != null && hlsUrl.isNotEmpty) {
+          _streamQualityLabel = 'YouTube HLS';
+          return Uri.parse(hlsUrl);
+        }
+      } catch (_) {
+        // Fallback to next client
+      } finally {
+        httpClient.close(force: true);
+      }
+    }
+    return null;
+  }
+
   Future<void> _initVideoPlayer() async {
     final rawUrl = widget.playbackUrl ?? widget.content.url;
     if (rawUrl == null || rawUrl.trim().isEmpty) {
@@ -150,20 +222,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             _loadingStatus = 'جاري تجهيز بث فيديو اليوتيوب المحمي (DRM)...';
           });
         }
-        _ytExplode = YoutubeExplode();
-        final manifest = await _ytExplode!.videos.streamsClient.getManifest(ytId);
-
-        if (manifest.muxed.isNotEmpty) {
-          final muxedList = manifest.muxed.sortByVideoQuality();
-          final bestStream = muxedList.first;
-          playbackUri = bestStream.url;
-          _streamQualityLabel = 'YouTube ${bestStream.qualityLabel}';
-        } else if (manifest.hls.isNotEmpty) {
-          final hlsStream = manifest.hls.first;
-          playbackUri = hlsStream.url;
-          _streamQualityLabel = 'YouTube HLS';
+        final directUri = await _resolveYouTubeDirectInnertube(ytId);
+        if (directUri != null) {
+          playbackUri = directUri;
         } else {
-          throw Exception('لا يتوفر بث متوافق لهذا الفيديو على يوتيوب');
+          _ytExplode = YoutubeExplode();
+          final manifest = await _ytExplode!.videos.streamsClient.getManifest(ytId);
+
+          if (manifest.muxed.isNotEmpty) {
+            final muxedList = manifest.muxed.sortByVideoQuality();
+            final bestStream = muxedList.first;
+            playbackUri = bestStream.url;
+            _streamQualityLabel = 'YouTube ${bestStream.qualityLabel}';
+          } else if (manifest.hls.isNotEmpty) {
+            final hlsStream = manifest.hls.first;
+            playbackUri = hlsStream.url;
+            _streamQualityLabel = 'YouTube HLS';
+          } else {
+            throw Exception('لا يتوفر بث متوافق لهذا الفيديو على يوتيوب');
+          }
         }
       } else {
         playbackUri = Uri.parse(rawUrl.trim());

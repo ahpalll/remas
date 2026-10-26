@@ -1,23 +1,23 @@
 {
-  "patchVersion": "1.0.0-hp.53.2.3",
+  "patchVersion": "1.0.0-hp.53.2.4",
   "targetVersion": "1.0.0-release.53.0.0",
-  "publishedAt": "2026-10-26T20:53:21.358Z",
+  "publishedAt": "2026-10-26T22:06:46.872Z",
   "active": true,
-  "description": "إصلاح توليد أكواد المشاهدة وتفعيل الجهاز وفحص شامل لاستوديو الذكاء الاصطناعي",
-  "totalSizeKb": "1602.5",
+  "description": "إصلاح معاينة فيديوهات يوتيوب (Error 153)، والربط التلقائي بين المرحلة والمادة والمعلم في المجموعات، وعرض بيانات استخراج الدرس بالذكاء الاصطناعي",
+  "totalSizeKb": "1623.3",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 930594,
-      "sha256": "0da070ea2385c1c0b8225b2aa4c673e75cdb43362c8b2fb76af81ce71843ef39",
+      "size": 942509,
+      "sha256": "3a4b304e16f348b876c0977fcfb183b5d7ea6b39a23f99e36d6d055511b357a2",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
-      "size": 672980,
-      "sha256": "3163385dbdf858e2918f46ca4a60fb52c18162a57a9f43a03dbc51b444fdf130",
+      "size": 682457,
+      "sha256": "00731af4829c879138ee26dadb78fd614357c6087801b7b89797c598360b1f50",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {

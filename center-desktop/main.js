@@ -84,6 +84,22 @@ app.whenReady().then(() => {
       } catch (_) {}
       callback({});
     });
+
+    // Inject valid Referer/Origin for YouTube embeds & streams so Electron file:// origin never triggers YouTube Error 153
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'] },
+      (details, callback) => {
+        const requestHeaders = { ...(details.requestHeaders || {}) };
+        if (!requestHeaders['Referer'] || String(requestHeaders['Referer']).startsWith('file:')) {
+          requestHeaders['Referer'] = 'https://www.youtube.com/';
+        }
+        if (!requestHeaders['Origin'] || String(requestHeaders['Origin']).startsWith('file:') || requestHeaders['Origin'] === 'null') {
+          requestHeaders['Origin'] = 'https://www.youtube.com';
+        }
+        callback({ requestHeaders });
+      }
+    );
+    session.defaultSession._remasYoutubeRefererInstalled = true;
   } catch (err) {
     console.warn('[Hotpatch] Setup failed, running factory base:', err.message);
   }
