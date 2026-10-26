@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/ai_models.dart';
+import '../models/ai_learning_modes.dart';
 import '../services/ai_tutor_service.dart';
 
 /// Interactive Arabic RTL AI Chat Screen
@@ -8,6 +9,7 @@ class AIChatScreen extends StatefulWidget {
   final String? initialPrompt;
   final String? initialLessonId;
   final String? initialLessonTitle;
+  final String? initialMode;
 
   const AIChatScreen({
     super.key,
@@ -15,6 +17,7 @@ class AIChatScreen extends StatefulWidget {
     this.initialPrompt,
     this.initialLessonId,
     this.initialLessonTitle,
+    this.initialMode,
   });
 
   @override
@@ -25,10 +28,26 @@ class _AIChatScreenState extends State<AIChatScreen> {
   final List<AIChatMessageDTO> _messages = [];
   final TextEditingController _inputController = TextEditingController();
   bool _isLoading = false;
+  List<TutorSubjectDTO> _subjects = [];
+  String? _selectedSubjectId;
+  bool _subjectsLoading = true;
+  String? _subjectsError;
+  // AI-6: learning modes backed by existing server TUTOR_MODES (no new
+  // endpoints). Default EXPLAIN preserves prior behavior.
+  String _mode = 'EXPLAIN';
+  static const Map<String, String> _modes = AiLearningModes.chatModes;
+  // AI-7 F-S3: last failed action eligible for idempotent retry (same
+  // requestId is reused so the server replays instead of double-charging).
+  Map<String, String>? _pendingRetry;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialMode != null &&
+        _modes.containsKey(widget.initialMode)) {
+      _mode = widget.initialMode!;
+    }
+    _loadSubjects();
     // Welcome message
     _messages.add(
       AIChatMessageDTO(
@@ -44,6 +63,30 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
     if (widget.initialPrompt != null) {
       _sendMessage(widget.initialPrompt!);
+    }
+  }
+
+  Future<void> _loadSubjects() async {
+    setState(() {
+      _subjectsLoading = true;
+      _subjectsError = null;
+    });
+    try {
+      final list = await widget.aiService.fetchSubjects();
+      if (!mounted) return;
+      setState(() {
+        _subjects = list;
+        if (list.length == 1) _selectedSubjectId = list.first.subjectId;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _subjectsError = e is TutorApiException
+            ? e.message
+            : 'تعذر تحميل المواد الدراسية.';
+      });
+    } finally {
+      if (mounted) setState(() => _subjectsLoading = false);
     }
   }
 
@@ -67,6 +110,64 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ),
         body: Column(
           children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+              color: Colors.deepPurple.shade50,
+              child: _subjectsLoading
+                  ? const Row(
+                      children: [
+                        SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 8),
+                        Text('جاري تحميل موادك الدراسية...',
+                            style: TextStyle(fontSize: 12)),
+                      ],
+                    )
+                  : _subjectsError != null
+                      ? Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                size: 16, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(_subjectsError!,
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.red)),
+                            ),
+                            TextButton(
+                              onPressed: _loadSubjects,
+                              child: const Text('إعادة المحاولة',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        )
+                      : _subjects.isEmpty
+                          ? const Text(
+                              'لا توجد مواد متاحة لحسابك حاليًا.',
+                              style: TextStyle(fontSize: 12),
+                            )
+                          : DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedSubjectId,
+                                hint: const Text('اختر المادة الدراسية',
+                                    style: TextStyle(fontSize: 13)),
+                                isExpanded: true,
+                                items: _subjects
+                                    .map((s) => DropdownMenuItem(
+                                          value: s.subjectId,
+                                          child: Text(s.name,
+                                              style: const TextStyle(
+                                                  fontSize: 13)),
+                                        ))
+                                    .toList(),
+                                onChanged: (v) => setState(
+                                    () => _selectedSubjectId = v),
+                              ),
+                            ),
+            ),
             if (widget.initialLessonTitle != null)
               Container(
                 width: double.infinity,
@@ -113,24 +214,47 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 color: Colors.white,
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)],
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputController,
+                  SizedBox(
+                    width: double.infinity,
+                    child: DropdownButtonFormField<String>(
+                      value: _mode,
                       decoration: const InputDecoration(
-                        hintText: 'اكتب سؤالك هنا...',
+                        labelText: 'نمط التعلم',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                       ),
-                      onSubmitted: (val) => _sendMessage(val),
+                      items: _modes.entries
+                          .map((e) => DropdownMenuItem(
+                              value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _mode = v ?? 'EXPLAIN'),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _isLoading ? null : () => _sendMessage(_inputController.text),
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(backgroundColor: Colors.deepPurple.shade800),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          decoration: const InputDecoration(
+                            hintText: 'اكتب سؤالك هنا...',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          onSubmitted: (val) => _sendMessage(val),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        onPressed: _isLoading ? null : () => _sendMessage(_inputController.text),
+                        icon: const Icon(Icons.send),
+                        style: IconButton.styleFrom(backgroundColor: Colors.deepPurple.shade800),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -142,6 +266,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildMessageBubble(AIChatMessageDTO msg) {
+    final isPendingRetry = _pendingRetry != null &&
+        _pendingRetry!['errorBubbleId'] == msg.id &&
+        !_isLoading;
     return Align(
       alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -169,13 +296,29 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 style: TextStyle(fontSize: 11, color: msg.isUser ? Colors.white70 : Colors.indigo.shade800),
               ),
             ],
+            if (isPendingRetry) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () => _retryPending(),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('إعادة المحاولة بنفس الطلب',
+                    style: TextStyle(fontSize: 12)),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Future<void> _sendMessage(String text) async {
+  Future<void> _retryPending() async {
+    final pending = _pendingRetry;
+    if (pending == null || _isLoading) return;
+    setState(() => _pendingRetry = null);
+    await _sendMessage(pending['prompt']!, requestId: pending['requestId']);
+  }
+
+  Future<void> _sendMessage(String text, {String? requestId}) async {
     if (text.trim().isEmpty) return;
 
     final userMsg = AIChatMessageDTO(
@@ -184,6 +327,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
       isUser: true,
       timestamp: DateTime.now(),
     );
+    // One stable request id per user action (reused on retry).
+    final actionRequestId =
+        requestId ?? StudentAITutorService.generateRequestId();
 
     setState(() {
       _messages.add(userMsg);
@@ -193,7 +339,10 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
     final res = await widget.aiService.askQuestion(
       prompt: text,
+      subjectId: _selectedSubjectId,
       lessonId: widget.initialLessonId,
+      mode: _mode,
+      requestId: actionRequestId,
     );
 
     setState(() {
@@ -209,14 +358,25 @@ class _AIChatScreenState extends State<AIChatScreen> {
           ),
         );
       } else {
+        final errId = 'msg_err_${DateTime.now().millisecondsSinceEpoch}';
         _messages.add(
           AIChatMessageDTO(
-            id: 'msg_err_${DateTime.now().millisecondsSinceEpoch}',
+            id: errId,
             text: res['message'] ?? 'حدث خطأ في الاتصال بالمساعد الذكي.',
             isUser: false,
             timestamp: DateTime.now(),
           ),
         );
+        // Retryable transport/provider failures keep the same request id;
+        // auth/selection/validation errors must be fixed by the user first.
+        final code = (res['errorCode'] ?? '').toString();
+        if (code == 'NETWORK_ERROR' || code == 'PROVIDER_ERROR') {
+          _pendingRetry = {
+            'prompt': text.trim(),
+            'requestId': actionRequestId,
+            'errorBubbleId': errId,
+          };
+        }
       }
     });
   }

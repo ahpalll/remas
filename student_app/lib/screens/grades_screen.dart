@@ -21,6 +21,11 @@ class _GradesScreenState extends State<GradesScreen> {
   }
 
   Future<void> _loadGrades() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     final list = await _studentService.fetchStudentGrades();
     if (mounted) {
       setState(() {
@@ -38,9 +43,18 @@ class _GradesScreenState extends State<GradesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _grades.isEmpty
-              ? const Center(child: Text('لا توجد نتائج اختبارات معلنة.'))
-              : ListView.builder(
+          : RefreshIndicator(
+              onRefresh: _loadGrades,
+              child: _grades.isEmpty
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                            child: Text(
+                                'لا توجد بيانات متاحة حاليًا.\nاسحب للأسفل لإعادة المحاولة.')),
+                      ],
+                    )
+                  : ListView.builder(
                   padding: const EdgeInsets.all(16.0),
                   itemCount: _grades.length,
                   itemBuilder: (context, index) {
@@ -90,6 +104,7 @@ class _GradesScreenState extends State<GradesScreen> {
                     );
                   },
                 ),
+            ),
     );
   }
 }

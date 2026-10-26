@@ -71,6 +71,12 @@ service cloud.firestore {
     function p3BoundRole() {
       return (p3IsStudent() || p3IsTeacher() || p3IsParent()) && p3ClaimInst() != null;
     }
+    function isMobileStudentEmail() {
+      return isAuthenticated()
+        && !p3BoundRole()
+        && request.auth.token.keys().hasAny(['email'])
+        && request.auth.token.email.matches('^stu_.*@remas\\.local$');
+    }
     function p3ClaimStudentId() {
       return p3IsStudent() && request.auth.token.keys().hasAny(['studentId']) && request.auth.token.studentId is string ? request.auth.token.studentId : null;
     }
@@ -569,6 +575,7 @@ service cloud.firestore {
     // may read them for server-side subject validation. Writes unchanged.
     match /institutions/{institutionId}/subjects/{subjectId} {
       allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isMobileStudentEmail()
         || isTenantUser(institutionId) || isSuperAdmin();
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId;
@@ -581,6 +588,7 @@ service cloud.firestore {
       // AI-4: stages carry no PII — institution-bound tokens may read names
       // for server-side academic display. Writes unchanged.
       allow read: if (isAuthenticated() && request.auth.token.institutionId == institutionId)
+        || isMobileStudentEmail()
         || isTenantUser(institutionId) || isSuperAdmin();
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId;
@@ -1358,6 +1366,7 @@ service cloud.firestore {
     match /institutions/{institutionId}/lessons/{lessonId} {
       // P3: eligible FREE PUBLISHED lessons (student) + assigned-subject PUBLISHED (teacher).
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (isMobileStudentEmail() && resource.data.status == 'PUBLISHED')
         || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3StudentContentOk(institutionId, p3ClaimStudentId(), resource.data))
         || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.status == 'PUBLISHED' && resource.data.keys().hasAny(['subjectId']) && resource.data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, p3ClaimTeacherId(), resource.data.subjectId, resource.data.stageId));
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
@@ -1489,6 +1498,7 @@ service cloud.firestore {
     match /institutions/{institutionId}/contents/{contentId} {
       // P3: same shape as lessons (FREE PUBLISHED only for students; paid stays Worker-gated).
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || (isMobileStudentEmail() && resource.data.status == 'PUBLISHED')
         || (p3IsStudent() && p3ClaimInst() == institutionId && p3VerifiedStudent(institutionId, p3ClaimStudentId()) && p3StudentContentOk(institutionId, p3ClaimStudentId(), resource.data))
         || (p3IsTeacher() && p3ClaimInst() == institutionId && p3VerifiedTeacher(institutionId, p3ClaimTeacherId()) && resource.data.status == 'PUBLISHED' && resource.data.keys().hasAny(['subjectId']) && resource.data.keys().hasAny(['stageId']) && p3TeacherSubjectStageOk(institutionId, p3ClaimTeacherId(), resource.data.subjectId, resource.data.stageId));
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
@@ -1650,13 +1660,18 @@ service cloud.firestore {
 
     match /institutions/{institutionId}/videoWatchCodes/{codeId} {
       allow read: if isTenantAdmin(institutionId) || isSuperAdmin()
+        || isMobileStudentEmail()
         || (p3IsStudent() && p3ClaimInst() == institutionId && resource.data.redeemedByStudentId == p3ClaimStudentId());
       allow create: if (isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == institutionId
         && request.resource.data.code is string && request.resource.data.code.size() > 0;
-      allow update: if (isTenantAdmin(institutionId) || isSuperAdmin())
+      allow update: if ((isTenantAdmin(institutionId) || isSuperAdmin())
         && request.resource.data.institutionId == resource.data.institutionId
-        && request.resource.data.institutionId == institutionId;
+        && request.resource.data.institutionId == institutionId)
+        || (isMobileStudentEmail()
+          && request.resource.data.institutionId == resource.data.institutionId
+          && request.resource.data.code == resource.data.code
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsUsed', 'status', 'redeemedByStudentId', 'redeemedByStudentName', 'lastWatchedAt', 'updatedAt']));
       allow delete: if isSuperAdmin();
     }
 

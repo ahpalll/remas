@@ -21,6 +21,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _loadAttendance() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     final list = await _studentService.fetchStudentAttendanceHistory();
     if (mounted) {
       setState(() {
@@ -44,25 +49,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Container(
-                  color: Colors.green.shade50,
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatTile('نسبة الحضور', '$pct%', Colors.green),
-                      _buildStatTile('حاضر', '$presentCount', Colors.blue),
-                      _buildStatTile('متأخر', '$lateCount', Colors.orange),
-                      _buildStatTile('غائب', '$absentCount', Colors.red),
-                    ],
+          : RefreshIndicator(
+              onRefresh: _loadAttendance,
+              child: Column(
+                children: [
+                  Container(
+                    color: Colors.green.shade50,
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatTile('نسبة الحضور', '$pct%', Colors.green),
+                        _buildStatTile('حاضر', '$presentCount', Colors.blue),
+                        _buildStatTile('متأخر', '$lateCount', Colors.orange),
+                        _buildStatTile('غائب', '$absentCount', Colors.red),
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _records.isEmpty
-                      ? const Center(child: Text('لا توجد سجلات حضور مسجلة.'))
-                      : ListView.builder(
+                  Expanded(
+                    child: _records.isEmpty
+                        ? ListView(
+                            children: const [
+                              SizedBox(height: 120),
+                              Center(
+                                  child: Text(
+                                      'لا توجد بيانات متاحة حاليًا.\nاسحب للأسفل لإعادة المحاولة.')),
+                            ],
+                          )
+                        : ListView.builder(
                           padding: const EdgeInsets.all(16.0),
                           itemCount: _records.length,
                           itemBuilder: (context, index) {
@@ -96,8 +110,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             );
                           },
                         ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
     );
   }

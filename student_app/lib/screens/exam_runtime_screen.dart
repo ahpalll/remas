@@ -19,6 +19,7 @@ class _ExamRuntimeScreenState extends State<ExamRuntimeScreen> {
   final Map<String, String> _selectedAnswers = {};
   String? _attemptId;
   bool _submitting = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -27,12 +28,21 @@ class _ExamRuntimeScreenState extends State<ExamRuntimeScreen> {
   }
 
   Future<void> _startAttempt() async {
-    final res = await _service.startExam(widget.examId);
-    setState(() {
-      _attemptId = res['attemptId'];
-      _questions = res['questions'] ?? [];
-      _loading = false;
-    });
+    try {
+      final res = await _service.startExam(widget.examId);
+      if (!mounted) return;
+      setState(() {
+        _attemptId = res['attemptId'];
+        _questions = res['questions'] ?? [];
+        _loading = false;
+      });
+    } on OnlineExamException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _selectOption(String questionId, String optionId) async {
@@ -40,7 +50,14 @@ class _ExamRuntimeScreenState extends State<ExamRuntimeScreen> {
       _selectedAnswers[questionId] = optionId;
     });
     if (_attemptId != null) {
-      await _service.saveAnswer(_attemptId!, questionId, optionId, 1);
+      try {
+        await _service.saveAnswer(_attemptId!, questionId, optionId, 1);
+      } on OnlineExamException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     }
   }
 
@@ -50,26 +67,36 @@ class _ExamRuntimeScreenState extends State<ExamRuntimeScreen> {
       _submitting = true;
     });
 
-    final res = await _service.submitExam(_attemptId!);
-    if (!mounted) return;
+    try {
+      final res = await _service.submitExam(_attemptId!);
+      if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('تم تسليم الامتحان بنجاح'),
-        content: Text('النتيجة: ${res['resultStatus']}\nالنسبة: ${res['percentage']}'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('موافق'),
-          ),
-        ],
-      ),
-    );
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('تم تسليم الامتحان بنجاح'),
+          content: Text('النتيجة: ${res['resultStatus']}\nالنسبة: ${res['percentage']}'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('موافق'),
+            ),
+          ],
+        ),
+      );
+    } on OnlineExamException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
   }
 
   @override
@@ -78,6 +105,18 @@ class _ExamRuntimeScreenState extends State<ExamRuntimeScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(widget.title)),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.title)),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Text(_errorMessage!, textAlign: TextAlign.center),
+          ),
+        ),
       );
     }
 

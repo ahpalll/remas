@@ -6,8 +6,11 @@ import 'ai_self_test_screen.dart';
 import 'ai_weakness_screen.dart';
 import 'ai_study_plan_screen.dart';
 
+import '../services/student_service.dart';
+import 'ai_vip_activation_screen.dart';
+
 /// Main Arabic RTL AI Dashboard ("المساعد الذكي") featuring 8 Quick-Action Cards
-class AITutorHomeScreen extends StatelessWidget {
+class AITutorHomeScreen extends StatefulWidget {
   final StudentAITutorService aiService;
 
   const AITutorHomeScreen({
@@ -16,7 +19,17 @@ class AITutorHomeScreen extends StatelessWidget {
   });
 
   @override
+  State<AITutorHomeScreen> createState() => _AITutorHomeScreenState();
+}
+
+class _AITutorHomeScreenState extends State<AITutorHomeScreen> {
+  final StudentService _studentService = StudentService();
+
+  @override
   Widget build(BuildContext context) {
+    final profile = _studentService.activeMembership;
+    final balance = profile?.aiQuestionsBalance ?? 0;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -24,50 +37,96 @@ class AITutorHomeScreen extends StatelessWidget {
           title: const Text('المساعد الذكي — ريماس'),
           backgroundColor: Colors.deepPurple.shade800,
           foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_card),
+              tooltip: 'شحن كود إضافي',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AIVipActivationScreen(aiService: widget.aiService)),
+                ).then((_) => setState(() {}));
+              },
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Banner
+              // VIP Banner & Quota Balance
               Card(
-                color: Colors.deepPurple.shade50,
+                color: const Color(0xFF1E1B4B),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.deepPurple.shade200),
+                  side: const BorderSide(color: Color(0xFF8B5CF6)),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(20.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.deepPurple.shade800,
-                        child: const Icon(Icons.psychology, color: Colors.white, size: 36),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.workspace_premium, color: Color(0xFFFBBF24), size: 32),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'مرحباً بك في المساعد الذكي',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            Row(
+                              children: [
+                                const Text(
+                                  'المساعد الذكي VIP',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF065F46),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'مفعل 🟢',
+                                    style: TextStyle(color: Color(0xFF86EFAC), fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'مساعدك المعتمد للشرح، التلخيص، الاختبارات، وتحليل المستوى بناءً على المواد الدراسية.',
-                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                              'رصيد الأسئلة المتبقي: $balance سؤال ذكي',
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ],
                         ),
+                      ),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFC084FC),
+                          side: const BorderSide(color: Color(0xFF8B5CF6)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => AIVipActivationScreen(aiService: widget.aiService)),
+                          ).then((_) => setState(() {}));
+                        },
+                        child: const Text('شحن كود ➕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               const Text(
                 'الخدمات الذكية المتاحة (8 أدوات)',
@@ -95,26 +154,25 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AIChatScreen(aiService: aiService),
+                          builder: (context) => AIChatScreen(aiService: widget.aiService),
                         ),
                       );
                     },
                   ),
-                  // Card 2: Lesson/Video Specific Q&A
+                  // Card 2: Quick review with REVIEW mode
                   _buildActionCard(
                     context,
-                    title: 'اسأل عن الدرس / الفيديو',
-                    subtitle: 'أسئلة مرتبطة بدرس معين',
-                    icon: Icons.ondemand_video,
+                    title: 'مراجعة سريعة',
+                    subtitle: 'نقاط وأسئلة مراجعة',
+                    icon: Icons.rate_review,
                     color: Colors.teal,
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => AIChatScreen(
-                            aiService: aiService,
-                            initialLessonId: 'les_math_calculus_01',
-                            initialLessonTitle: 'درس التفاضل والتكامل',
+                            aiService: widget.aiService,
+                            initialMode: 'REVIEW',
                           ),
                         ),
                       );
@@ -131,7 +189,7 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AILessonExplainerScreen(aiService: aiService, mode: 'EXPLAIN'),
+                          builder: (context) => AILessonExplainerScreen(aiService: widget.aiService, mode: 'EXPLAIN'),
                         ),
                       );
                     },
@@ -147,7 +205,7 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AILessonExplainerScreen(aiService: aiService, mode: 'SUMMARIZE'),
+                          builder: (context) => AILessonExplainerScreen(aiService: widget.aiService, mode: 'SUMMARIZE'),
                         ),
                       );
                     },
@@ -163,7 +221,7 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AISelfTestScreen(aiService: aiService),
+                          builder: (context) => AISelfTestScreen(aiService: widget.aiService),
                         ),
                       );
                     },
@@ -179,7 +237,7 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AIWeaknessScreen(aiService: aiService),
+                          builder: (context) => AIWeaknessScreen(aiService: widget.aiService),
                         ),
                       );
                     },
@@ -195,7 +253,7 @@ class AITutorHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AIStudyPlanScreen(aiService: aiService),
+                          builder: (context) => AIStudyPlanScreen(aiService: widget.aiService),
                         ),
                       );
                     },
@@ -212,7 +270,7 @@ class AITutorHomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) => AIChatScreen(
-                            aiService: aiService,
+                            aiService: widget.aiService,
                             initialPrompt: 'استعد للامتحان: أنشئ لي خطة مراجعة سريعة لاختبار الرياضيات.',
                           ),
                         ),

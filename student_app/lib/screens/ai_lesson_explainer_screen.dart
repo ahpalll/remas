@@ -17,40 +17,118 @@ class AILessonExplainerScreen extends StatefulWidget {
 }
 
 class _AILessonExplainerScreenState extends State<AILessonExplainerScreen> {
-  String? _selectedLesson = 'les_math_calculus_01';
+  List<TutorSubjectDTO> _subjects = [];
+  String? _selectedSubjectId;
+  bool _subjectsLoading = true;
+  String? _subjectsError;
+  final TextEditingController _topicController = TextEditingController();
   String _explainMode = 'SIMPLE';
   String? _resultText;
+  String? _resultError;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubjects();
+  }
+
+  @override
+  void dispose() {
+    _topicController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSubjects() async {
+    setState(() {
+      _subjectsLoading = true;
+      _subjectsError = null;
+    });
+    try {
+      final list = await widget.aiService.fetchSubjects();
+      if (!mounted) return;
+      setState(() {
+        _subjects = list;
+        if (list.length == 1) _selectedSubjectId = list.first.subjectId;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _subjectsError = e is TutorApiException
+            ? e.message
+            : 'تعذر تحميل المواد الدراسية.';
+      });
+    } finally {
+      if (mounted) setState(() => _subjectsLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final bool isSummarize = widget.mode == 'SUMMARIZE';
+    final bool isReview = widget.mode == 'REVIEW';
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(isSummarize ? 'تلخيص الدرس الذكي' : 'شرح الدرس الذكي'),
+          title: Text(isSummarize
+              ? 'تلخيص الدرس الذكي'
+              : isReview
+                  ? 'مراجعة المادة الذكية'
+                  : 'شرح الدرس الذكي'),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DropdownButtonFormField<String>(
-                value: _selectedLesson,
+              if (_subjectsLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (_subjectsError != null)
+                Card(
+                  color: Colors.red.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                            child: Text(_subjectsError!,
+                                style: const TextStyle(color: Colors.red))),
+                        TextButton(
+                          onPressed: _loadSubjects,
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (_subjects.isEmpty)
+                const Text('لا توجد مواد متاحة لحسابك حاليًا.')
+              else
+                DropdownButtonFormField<String>(
+                  value: _selectedSubjectId,
+                  decoration: const InputDecoration(
+                    labelText: 'اختر المادة الدراسية',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _subjects
+                      .map((s) => DropdownMenuItem(
+                          value: s.subjectId, child: Text(s.name)))
+                      .toList(),
+                  onChanged: (val) =>
+                      setState(() => _selectedSubjectId = val),
+                ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _topicController,
                 decoration: const InputDecoration(
-                  labelText: 'اختر الدرس المراد شرحه/تلخيصه',
+                  labelText: 'الموضوع (اختياري — اتركه فارغًا للعام)',
                   border: OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'les_math_calculus_01', child: Text('درس التفاضل والتكامل - رياضيات')),
-                  DropdownMenuItem(value: 'les_phys_electro_01', child: Text('درس الكهربية وقانون أوم - فيزياء')),
-                ],
-                onChanged: (val) => setState(() => _selectedLesson = val),
               ),
               const SizedBox(height: 16),
-              if (!isSummarize) ...[
+              if (!isSummarize && !isReview) ...[
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(value: 'SIMPLE', label: Text('شرح مبسط')),
@@ -74,6 +152,16 @@ class _AILessonExplainerScreenState extends State<AILessonExplainerScreen> {
               const SizedBox(height: 24),
               if (_isLoading)
                 const Center(child: CircularProgressIndicator())
+              else if (_resultError != null)
+                Card(
+                  color: Colors.red.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(_resultError!,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.red)),
+                  ),
+                )
               else if (_resultText != null)
                 Card(
                   elevation: 2,
@@ -90,16 +178,47 @@ class _AILessonExplainerScreenState extends State<AILessonExplainerScreen> {
   }
 
   Future<void> _generate() async {
-    if (_selectedLesson == null) return;
-    setState(() => _isLoading = true);
+    if (_selectedSubjectId == null) {
+      setState(() => _resultError = 'اختر المادة الدراسية أولًا.');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _resultError = null;
+      _resultText = null;
+    });
 
+    final topic = _topicController.text.trim();
     final res = widget.mode == 'SUMMARIZE'
-        ? await widget.aiService.summarizeLesson(lessonId: _selectedLesson!)
-        : await widget.aiService.explainLesson(lessonId: _selectedLesson!, mode: _explainMode);
+        ? await widget.aiService.summarizeLesson(
+            subjectId: _selectedSubjectId,
+            topic: topic.isEmpty ? 'لخص أهم النقاط' : topic)
+        : widget.mode == 'REVIEW'
+            ? await widget.aiService.askQuestion(
+                prompt: topic.isEmpty
+                    ? 'راجع معي أهم نقاط هذه المادة.'
+                    : topic,
+                subjectId: _selectedSubjectId,
+                mode: 'REVIEW',
+              )
+            : await widget.aiService.explainLesson(
+                subjectId: _selectedSubjectId,
+                mode: _explainMode,
+                lessonId: null);
 
     setState(() {
       _isLoading = false;
-      _resultText = res['response'];
+      if (res['success'] == true) {
+        _resultText = (res['response'] ?? '').toString();
+        final sources = res['sources'];
+        if (sources is List && sources.isNotEmpty) {
+          _resultText =
+              '$_resultText\n\nالمصادر المعتمدة: ${sources.join('، ')}';
+        }
+      } else {
+        _resultError =
+            (res['message'] ?? 'حدث خطأ في الاتصال بالمساعد الذكي.').toString();
+      }
     });
   }
 }

@@ -37,7 +37,17 @@ class _OnlineExamsListScreenState extends State<OnlineExamsListScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
+          : _exams.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Text(
+                      'لا توجد بيانات متاحة حاليًا.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : ListView.builder(
               padding: const EdgeInsets.all(16.0),
               itemCount: _exams.length,
               itemBuilder: (context, index) {

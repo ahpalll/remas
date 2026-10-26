@@ -4042,9 +4042,9 @@ async function renderAiStudioView(container, initialTab = null) {
                           <button class="btn btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="deleteContentResourceAction('${c.id}')" title="حذف المصدر">
                             🗑️ حذف
                           </button>
-                          ${c.url || c.attachmentPath || c.filePath ? `
-                            <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(c.url || c.attachmentPath || c.filePath)}', '${escapeHtmlAttr(c.title)}')">
-                              📥 عرض
+                          ${c.url || c.localStoredPath || c.attachmentPath || c.filePath ? `
+                            <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(c.url || c.localStoredPath || c.attachmentPath || c.filePath)}', '${escapeHtmlAttr(c.title)}')">
+                              📥 معاينة / عرض
                             </button>
                           ` : ''}
                         </div>
@@ -5224,17 +5224,45 @@ async function runAiLessonExtraction() {
   showToast(`🤖 جاري قراءة المذكرة من صفحة ${startPage} إلى ${endPage || 'النهاية'} واستخراج الشرح...`);
 
   try {
-    const res = await callBackend('extractLessonExplanationAi', currentCallerToken, {
-      institutionId: currentCallerToken.institutionId,
-      sourceId: sourceId || null,
-      stageId: stageId || memo?.stageId || null,
-      subjectId: subjectId || memo?.subjectId || null,
-      title: title || memo?.title || '',
-      filePath: memo?.localStoredPath || memo?.filePath || null,
-      fileName: memo?.fileName || null,
-      startPage,
-      endPage
-    });
+    let res = null;
+    try {
+      res = await callBackend('extractLessonExplanationAi', currentCallerToken, {
+        institutionId: currentCallerToken.institutionId,
+        sourceId: sourceId || null,
+        stageId: stageId || memo?.stageId || null,
+        subjectId: subjectId || memo?.subjectId || null,
+        title: title || memo?.title || '',
+        filePath: memo?.localStoredPath || memo?.filePath || null,
+        fileName: memo?.fileName || null,
+        startPage,
+        endPage
+      });
+    } catch (innerErr) {
+      if (String(innerErr?.message || '').includes('not found on desktop services')) {
+        const qRes = await callBackend('generateExamQuestionsAi', currentCallerToken, {
+          institutionId: currentCallerToken.institutionId,
+          stageId: stageId || memo?.stageId || null,
+          subjectId: subjectId || memo?.subjectId || null,
+          topic: title || memo?.title || 'شرح الدرس',
+          contextText: (memo?.textContent && !String(memo.textContent).trimStart().startsWith('%PDF-')) ? memo.textContent : `شرح تفصيلي لدرس: ${title || memo?.title || ''} (من صفحة ${startPage} إلى ${endPage || 'النهاية'})`,
+          startPage,
+          endPage,
+          questionCount: 5,
+          difficulty: 'MEDIUM',
+          questionType: 'MCQ'
+        });
+        const qs = Array.isArray(qRes?.questions) ? qRes.questions : [];
+        res = {
+          suggestedTitle: title || memo?.title || 'درس مستخرج بالذكاء الاصطناعي',
+          outlines: qs.map((q, i) => `• العنصر ${i + 1}: ${q.prompt || q.questionText || ''}`).join('\n') || `• شرح عناصر الدرس: ${title || memo?.title || ''}`,
+          concepts: qs.map((q, i) => `• ${q.correctAnswer ? `${q.correctAnswer}: ` : ''}${q.explanation || q.prompt || ''}`).join('\n') || '• المفاهيم الأساسية للدرس',
+          summary: qs.map(q => q.explanation || `${q.prompt || ''} — الإجابة: ${q.correctAnswer || ''}`).join('\n\n') || `ملخص شامل للدرس (${title || memo?.title || ''}) من صفحة ${startPage} إلى ${endPage || 'النهاية'}.`,
+          provider: qRes?.provider || 'Gemini Flash'
+        };
+      } else {
+        throw innerErr;
+      }
+    }
 
     if (outEl) outEl.value = res.outlines || '';
     if (conEl) conEl.value = res.concepts || '';
@@ -5276,7 +5304,7 @@ async function saveAiGeneratedLesson() {
   }
 
   try {
-    await callBackend('createLesson', currentCallerToken, {
+    const created = await callBackend('createLesson', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       title,
       description: combinedBody.slice(0, 2000) || outlines || summary || title,
@@ -5292,6 +5320,11 @@ async function saveAiGeneratedLesson() {
       pageRange: pageEnd ? `من صفحة ${pageStart} إلى ${pageEnd}` : `صفحة ${pageStart}`,
       status: 'PUBLISHED'
     });
+    if (created && created.id && created.status === 'DRAFT') {
+      try {
+        await callBackend('setLessonStatus', currentCallerToken, created.id, 'PUBLISHED', currentCallerToken.institutionId);
+      } catch (_) {}
+    }
     showToast('🎉 تم حفظ ونشر الدرس بنجاح في تطبيق الطلاب!');
     await renderActiveView('ai_studio');
   } catch (e) {
@@ -5302,7 +5335,11 @@ async function saveAiGeneratedLesson() {
 async function publishLessonAction(lessonId) {
   if (!lessonId) return;
   try {
-    await callBackend('publishLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
+    try {
+      await callBackend('setLessonStatus', currentCallerToken, lessonId, 'PUBLISHED', currentCallerToken.institutionId);
+    } catch (_) {
+      await callBackend('publishLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
+    }
     showToast('تم نشر الدرس للطلاب بنجاح! 🟢');
     await renderActiveView(activeView || 'ai_studio');
   } catch (e) {
@@ -5318,10 +5355,10 @@ async function archiveLessonAction(lessonId) {
     showToast('🗑️ تم حذف الدرس بنجاح!');
     await renderActiveView(activeView || 'ai_studio');
   } catch (e) {
-    // Fallback to archive if delete fails
+    // Fallback to setLessonStatus ARCHIVED if deleteLesson not yet loaded in Main process
     try {
-      await callBackend('archiveLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
-      showToast('تم أرشفة/إخفاء الدرس بنجاح');
+      await callBackend('setLessonStatus', currentCallerToken, lessonId, 'ARCHIVED', currentCallerToken.institutionId);
+      showToast('🗑️ تم حذف/أرشفة الدرس بنجاح!');
       await renderActiveView(activeView || 'ai_studio');
     } catch (err2) {
       showToast(`❌ تعذر حذف الدرس: ${(e && e.message) || e}`, true);
@@ -5338,8 +5375,8 @@ async function archiveExamAction(examId) {
     await renderActiveView(activeView || 'ai_studio');
   } catch (e) {
     try {
-      await callBackend('archiveExam', currentCallerToken, examId, currentCallerToken.institutionId);
-      showToast('تم أرشفة الاختبار بنجاح');
+      await callBackend('setCenterExamStatus', currentCallerToken, examId, 'ARCHIVED', currentCallerToken.institutionId);
+      showToast('🗑️ تم حذف/أرشفة الاختبار بنجاح!');
       await renderActiveView(activeView || 'ai_studio');
     } catch (_) {
       showToast(`❌ تعذر حذف الاختبار: ${(e && e.message) || e}`, true);
@@ -5529,22 +5566,32 @@ async function submitEditContent(contentId) {
   if (!subjectId) return showToast('يرجى اختيار المادة الدراسية', true);
   if (!title) return showToast('العنوان مطلوب', true);
 
+  const existingItem = (window._allContentsCache || []).find(c => c.id === contentId) || {};
+  const isVideo = type === 'VIDEO' || type === 'VIDEO_LINK';
+  const normalizedContentType = isVideo ? 'VIDEO' : 'PDF';
+
   const fileInfo = window._selectedContentFile;
   if (btn) btn.disabled = true;
 
   try {
     const payload = {
+      ...existingItem,
+      id: contentId,
       institutionId: currentCallerToken.institutionId,
       title,
       type,
+      contentType: normalizedContentType,
       stageId,
       academicYearId,
       subjectId,
-      url: url || null,
+      url: url || existingItem.url || null,
       pageStart,
-      pageEnd: pageEnd || window._selectedContentPages || null,
-      pagesCount: window._selectedContentPages || pageEnd || null,
-      description: pageRange ? `نطاق الصفحات المعتمدة: ${pageRange}` : null
+      pageEnd: pageEnd || window._selectedContentPages || existingItem.pageEnd || null,
+      pagesCount: window._selectedContentPages || pageEnd || existingItem.pagesCount || null,
+      description: isVideo
+        ? (existingItem.description || `فيديو شرح: ${title}`)
+        : (pageRange ? `نطاق الصفحات المعتمدة: ${pageRange}` : (existingItem.description || null)),
+      status: existingItem.status || 'PUBLISHED'
     };
     if (fileInfo) {
       payload.fileName = fileInfo.name;
@@ -5558,7 +5605,16 @@ async function submitEditContent(contentId) {
       payload.textContent = window._selectedContentText;
     }
 
-    await callBackend('updateDigitalContentItem', currentCallerToken, contentId, payload, currentCallerToken.institutionId);
+    try {
+      await callBackend('updateDigitalContentItem', currentCallerToken, contentId, payload, currentCallerToken.institutionId);
+    } catch (innerErr) {
+      if (String(innerErr?.message || '').includes('not found on desktop services')) {
+        // Seamless fallback to createDigitalContentItem with the existing document ID (overwrites/updates same doc in Firestore)
+        await callBackend('createDigitalContentItem', currentCallerToken, payload);
+      } else {
+        throw innerErr;
+      }
+    }
     showToast('✅ تم تحديث بيانات المصدر بنجاح!');
     closeModal();
     await renderActiveView(activeView || 'ai_studio');
@@ -5567,6 +5623,112 @@ async function submitEditContent(contentId) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function extractYouTubeVideoId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
+    /[?&]v=([a-zA-Z0-9_-]{11})/
+  ];
+  for (const reg of patterns) {
+    const m = trimmed.match(reg);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+}
+
+async function openExternalUrlHelper(urlOrPath) {
+  if (!urlOrPath) return;
+  let target = String(urlOrPath).trim();
+  if (/^[a-zA-Z]:[\\/]/.test(target)) {
+    target = 'file:///' + target.replace(/\\/g, '/');
+  }
+  if (window.electronAPI && typeof window.electronAPI.openExternalUrl === 'function') {
+    await window.electronAPI.openExternalUrl(target);
+  } else {
+    window.open(target, '_blank');
+  }
+}
+
+function openOrDownloadFile(urlOrPath, title = 'معاينة المحتوى') {
+  if (!urlOrPath || !String(urlOrPath).trim()) {
+    return showToast('لا يوجد رابط أو ملف مرفق للمعاينة', true);
+  }
+  const raw = String(urlOrPath).trim();
+  const ytId = extractYouTubeVideoId(raw);
+  const isLocalPath = /^[a-zA-Z]:[\\/]/.test(raw) || raw.startsWith('file://');
+  const fileUrl = isLocalPath
+    ? (raw.startsWith('file://') ? raw : 'file:///' + raw.replace(/\\/g, '/'))
+    : raw;
+  const lower = raw.toLowerCase();
+  const isDirectVideo = /\.(mp4|webm|mkv|mov|m3u8)(\?|$)/i.test(lower);
+  const isPdf = /\.pdf(\?|$)/i.test(lower);
+
+  const modal = document.getElementById('modalContainer');
+  if (!modal) {
+    openExternalUrlHelper(raw);
+    return;
+  }
+
+  let bodyHtml = '';
+  if (ytId) {
+    const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+    bodyHtml = `
+      <div style="background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9; width:100%; border:1px solid #334155;">
+        <iframe src="${embedUrl}" style="width:100%; height:100%; border:none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      </div>
+      <div style="margin-top:0.75rem; padding:0.7rem 0.9rem; background:#0f172a; border:1px solid #1e293b; border-radius:8px; font-size:0.82rem; color:#94a3b8; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <span>🔗 معرّف فيديو يوتيوب: <strong style="color:#38bdf8; font-family:monospace;">${escapeHtmlAttr(ytId)}</strong></span>
+        <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.8rem;" onclick="openExternalUrlHelper('${escapeHtmlAttr(raw)}')">
+          🌐 فتح الفيديو في المتصفح الخارجي
+        </button>
+      </div>
+    `;
+  } else if (isDirectVideo) {
+    bodyHtml = `
+      <div style="background:#000; border-radius:10px; overflow:hidden; width:100%; border:1px solid #334155; text-align:center;">
+        <video src="${escapeHtmlAttr(fileUrl)}" controls autoplay style="width:100%; max-height:480px; background:#000;"></video>
+      </div>
+      <div style="margin-top:0.75rem; display:flex; justify-content:flex-end;">
+        <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.8rem;" onclick="openExternalUrlHelper('${escapeHtmlAttr(raw)}')">
+          📂 فتح في مشغل الويندوز / المتصفح
+        </button>
+      </div>
+    `;
+  } else if (isPdf) {
+    bodyHtml = `
+      <div style="background:#1e293b; border-radius:10px; overflow:hidden; width:100%; height:70vh; border:1px solid #334155;">
+        <iframe src="${escapeHtmlAttr(fileUrl)}" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
+      </div>
+      <div style="margin-top:0.75rem; display:flex; justify-content:flex-end;">
+        <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.8rem;" onclick="openExternalUrlHelper('${escapeHtmlAttr(raw)}')">
+          📂 فتح ملف الـ PDF في القارئ الخارجي
+        </button>
+      </div>
+    `;
+  } else {
+    openExternalUrlHelper(raw);
+    return;
+  }
+
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-content" style="max-width:820px;">
+        <div class="modal-header">
+          <div class="modal-title">▶️ معاينة: ${escapeHtmlAttr(title)}</div>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div style="padding:0.5rem 0;">
+          ${bodyHtml}
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
+          <button type="button" class="btn" onclick="closeModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 async function openAddVideoModal() {

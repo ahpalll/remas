@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'services/auth_service.dart';
+import 'firebase_options.dart';
+import 'services/student_auth_service.dart';
 import 'services/branding_service.dart';
+import 'services/update_service.dart';
 import 'models/app_branding.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/change_password_screen.dart';
+import 'screens/update_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     // Falls back if app is already initialized or running in test environment
   }
@@ -25,16 +31,33 @@ class StudentApp extends StatefulWidget {
 }
 
 class _StudentAppState extends State<StudentApp> {
-  final _authService = AuthService();
+  final _authService = StudentAuthService();
   final _brandingService = BrandingService();
 
   AppBranding _currentBranding = AppBranding.platformDefault();
   bool _isLoadingBranding = false;
+  bool _mustChangePassword = false;
 
   @override
   void initState() {
     super.initState();
     _listenToAuthChanges();
+    _checkForUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final updateInfo = await StudentUpdateService.checkForUpdate();
+      if (updateInfo != null && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => UpdateScreen(updateInfo: updateInfo),
+          ),
+        );
+      }
+    } catch (_) {
+      // Fail-closed: connection failure does not block app usage
+    }
   }
 
   void _listenToAuthChanges() {
@@ -43,11 +66,35 @@ class _StudentAppState extends State<StudentApp> {
         setState(() {
           _isLoadingBranding = true;
         });
+
+        // Resolve the authoritative status from trusted backend; fall back to claims
+        String? status = await _authService.getSelfStatus();
+        status ??= (await _authService.getIdTokenClaims())?['status'] as String?;
+
+        if (status == 'INACTIVE' || status == 'ARCHIVED') {
+          // Account is explicitly deactivated - sign out.
+          await _authService.signOut();
+          if (mounted) {
+            setState(() {
+              _currentBranding = AppBranding.platformDefault();
+              _isLoadingBranding = false;
+              _mustChangePassword = false;
+            });
+          }
+          return;
+        }
+
+        bool mustChangePassword = status == 'MUST_CHANGE_PASSWORD' || _mustChangePassword;
+        if (!mustChangePassword) {
+          mustChangePassword = await _authService.checkMustChangePassword(user.uid);
+        }
+
         final branding = await _brandingService.fetchAuthenticatedBranding();
         if (mounted) {
           setState(() {
             _currentBranding = branding;
             _isLoadingBranding = false;
+            _mustChangePassword = mustChangePassword || _mustChangePassword;
           });
         }
       } else {
@@ -55,9 +102,22 @@ class _StudentAppState extends State<StudentApp> {
           setState(() {
             _currentBranding = AppBranding.platformDefault();
             _isLoadingBranding = false;
+            _mustChangePassword = false;
           });
         }
       }
+    });
+  }
+
+  void _handleLoginSuccess(bool mustChangePassword) {
+    setState(() {
+      _mustChangePassword = mustChangePassword;
+    });
+  }
+
+  void _handlePasswordChanged() {
+    setState(() {
+      _mustChangePassword = false;
     });
   }
 
@@ -106,9 +166,19 @@ class _StudentAppState extends State<StudentApp> {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
+            // User is signed in - check if password change is required
+            if (_mustChangePassword) {
+              return ChangePasswordScreen(
+                branding: _currentBranding,
+                onPasswordChanged: _handlePasswordChanged,
+              );
+            }
             return HomeScreen(branding: _currentBranding);
           }
-          return LoginScreen(branding: _currentBranding);
+          return LoginScreen(
+            branding: _currentBranding,
+            onLoginSuccess: _handleLoginSuccess,
+          );
         },
       ),
     );

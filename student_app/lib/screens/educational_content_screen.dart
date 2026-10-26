@@ -78,7 +78,7 @@ class _EducationalContentScreenState extends State<EducationalContentScreen> {
   }
 
   Future<void> _playMedia(EducationalContentDTO content) async {
-    if (content.type == 'VIDEO') {
+    if (content.type == 'VIDEO' || content.type == 'VIDEO_LINK') {
       final codeController = TextEditingController();
       final enteredCode = await showDialog<String>(
         context: context,
@@ -131,12 +131,32 @@ class _EducationalContentScreenState extends State<EducationalContentScreen> {
         return;
       }
 
+      try {
+        await _studentService.verifyAndConsumeVideoWatchCode(
+          enteredCode,
+          subjectId: content.subjectId,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+        return;
+      }
+
+      final resolvedPlaybackUrl = (content.url != null && content.url!.trim().isNotEmpty)
+          ? content.url!.trim()
+          : 'https://media.educenter.local/videos/${content.id}.mp4?code=${Uri.encodeComponent(enteredCode)}';
+
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => VideoPlayerScreen(
             content: content,
-            playbackUrl: 'https://media.educenter.local/videos/${content.id}.mp4?code=${Uri.encodeComponent(enteredCode)}',
+            playbackUrl: resolvedPlaybackUrl,
           ),
         ),
       );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/subscription.dart';
 import '../services/subscription_service.dart';
+import '../services/student_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -11,6 +12,7 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   final SubscriptionStudentService _subscriptionService = SubscriptionStudentService();
+  final StudentService _studentService = StudentService();
   final TextEditingController _codeController = TextEditingController();
   List<StudentEntitlementDTO> _entitlements = [];
   bool _isLoading = true;
@@ -24,12 +26,34 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _loadEntitlements() async {
-    final list = await _subscriptionService.fetchActiveEntitlements();
-    if (mounted) {
-      setState(() {
-        _entitlements = list;
-        _isLoading = false;
-      });
+    try {
+      final profile = await _studentService.fetchCurrentStudentProfile();
+      if (profile == null) {
+        if (mounted) {
+          setState(() {
+            _entitlements = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+      final list = await _subscriptionService.fetchActiveEntitlements(
+        institutionId: profile.institutionId,
+      );
+      if (mounted) {
+        setState(() {
+          _entitlements = list;
+          _isLoading = false;
+        });
+      }
+    } on StudentResolutionException catch (e) {
+      if (mounted) {
+        setState(() {
+          _entitlements = [];
+          _isLoading = false;
+          _resultMessage = e.message;
+        });
+      }
     }
   }
 
@@ -48,9 +72,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     });
 
     final requestId = 'req_flutter_${DateTime.now().millisecondsSinceEpoch}';
-    final result = await _subscriptionService.redeemCode(rawCode, requestId);
-
-    if (mounted) {
+    try {
+      final result = await _subscriptionService.redeemCode(rawCode, requestId);
+      if (!mounted) return;
       _codeController.clear(); // Zero plaintext code in UI input immediately
       setState(() {
         _isRedeeming = false;
@@ -60,6 +84,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         } else {
           _resultMessage = 'تعذر تفعيل الكود. يرجى التثبت من صحة الكود أو حالة الباقة.';
         }
+      });
+    } on SubscriptionException catch (e) {
+      if (!mounted) return;
+      _codeController.clear();
+      setState(() {
+        _isRedeeming = false;
+        _resultMessage = e.message;
       });
     }
   }

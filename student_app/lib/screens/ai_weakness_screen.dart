@@ -20,10 +20,29 @@ class AIWeaknessScreen extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            final report = snapshot.data;
-            if (report == null) {
-              return const Center(child: Text('تعذر جلب تقرير تحليل المستوى.'));
+            // Adaptive weakness analytics ships in AI-6; until then the
+            // service honestly reports unavailability (never mock numbers).
+            if (snapshot.hasError || snapshot.data == null) {
+              final err = snapshot.error;
+              final msg = err is TutorApiException
+                  ? err.message
+                  : 'تعذر جلب تقرير تحليل المستوى.';
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.analytics_outlined,
+                          size: 48, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      Text(msg, textAlign: TextAlign.center),
+                    ],
+                  ),
+                ),
+              );
             }
+            final report = snapshot.data!;
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),

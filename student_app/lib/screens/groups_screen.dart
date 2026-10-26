@@ -21,6 +21,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _loadGroups() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     final list = await _studentService.fetchStudentGroups();
     if (mounted) {
       setState(() {
@@ -38,9 +43,18 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _groups.isEmpty
-              ? const Center(child: Text('لا توجد مجموعات دراسية مسجلة حالياً.'))
-              : ListView.builder(
+          : RefreshIndicator(
+              onRefresh: _loadGroups,
+              child: _groups.isEmpty
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                            child: Text(
+                                'لا توجد بيانات متاحة حاليًا.\nاسحب للأسفل لإعادة المحاولة.')),
+                      ],
+                    )
+                  : ListView.builder(
                   padding: const EdgeInsets.all(16.0),
                   itemCount: _groups.length,
                   itemBuilder: (context, index) {
@@ -75,6 +89,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     );
                   },
                 ),
+            ),
     );
   }
 }

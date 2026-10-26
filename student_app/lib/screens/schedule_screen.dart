@@ -21,6 +21,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _loadSchedule() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     final list = await _studentService.fetchStudentSchedule();
     if (mounted) {
       setState(() {
@@ -38,9 +43,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _schedule.isEmpty
-              ? const Center(child: Text('لا توجد مواعيد دراسية مسجلة.'))
-              : ListView.builder(
+          : RefreshIndicator(
+              onRefresh: _loadSchedule,
+              child: _schedule.isEmpty
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                            child: Text(
+                                'لا توجد بيانات متاحة حاليًا.\nاسحب للأسفل لإعادة المحاولة.')),
+                      ],
+                    )
+                  : ListView.builder(
                   padding: const EdgeInsets.all(16.0),
                   itemCount: _schedule.length,
                   itemBuilder: (context, index) {
@@ -89,6 +103,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     );
                   },
                 ),
+            ),
     );
   }
 }

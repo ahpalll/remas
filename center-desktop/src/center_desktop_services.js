@@ -19,6 +19,52 @@ const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
 
+// Ensure OTA hotpatched center_desktop_services.js in %APPDATA% can resolve node_modules from Electron app.asar
+try {
+  if (module.parent && Array.isArray(module.parent.paths)) {
+    for (const p of module.parent.paths) {
+      if (!module.paths.includes(p)) module.paths.push(p);
+    }
+  }
+  if (require.main && Array.isArray(require.main.paths)) {
+    for (const p of require.main.paths) {
+      if (!module.paths.includes(p)) module.paths.push(p);
+    }
+  }
+  if (process.resourcesPath) {
+    const asarNodeModules = path.join(process.resourcesPath, 'app.asar', 'node_modules');
+    if (!module.paths.includes(asarNodeModules)) module.paths.unshift(asarNodeModules);
+    const unpackedNodeModules = path.join(process.resourcesPath, 'app', 'node_modules');
+    if (!module.paths.includes(unpackedNodeModules)) module.paths.unshift(unpackedNodeModules);
+  }
+  // Cache hotpatched module in parent HotpatchService so it isn't re-evaluated on every IPC call
+  if (module.parent && module.parent.exports && typeof module.parent.exports.loadHotpatchedModule === 'function' && !module.parent.exports._remasCachedLoaderInstalled) {
+    const hpInstance = module.parent.exports;
+    hpInstance._remasModuleCache = hpInstance._remasModuleCache || new Map();
+    hpInstance.loadHotpatchedModule = function(relativePath, fallbackModule, bundledBaseDir) {
+      const effective = this.resolveEffectivePath(relativePath, bundledBaseDir || __dirname);
+      try {
+        if (fs.existsSync(effective)) {
+          const stat = fs.statSync(effective);
+          const cacheKey = `${effective}::${stat.mtimeMs}::${stat.size}`;
+          if (this._remasModuleCache.has(cacheKey)) {
+            return this._remasModuleCache.get(cacheKey);
+          }
+          delete require.cache[require.resolve(effective)];
+          const loaded = require(effective);
+          this._remasModuleCache.clear();
+          this._remasModuleCache.set(cacheKey, loaded);
+          return loaded;
+        }
+      } catch (err) {
+        console.error(`[Hotpatch] Error requiring hotpatched module ${relativePath}:`, err.message);
+      }
+      return fallbackModule;
+    };
+    hpInstance._remasCachedLoaderInstalled = true;
+  }
+} catch (_) {}
+
 const { initializeApp, getApps, getApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword, updatePassword, signOut, connectAuthEmulator, EmailAuthProvider, reauthenticateWithCredential } = require('firebase/auth');
 const {
@@ -188,7 +234,7 @@ function withTimeout(promise, ms, timeoutMsg = 'انتهت مهلة الاتصا
   });
 }
 
-let activeSessionToken = null;
+let activeSessionToken = global.__REMAS_ACTIVE_SESSION_TOKEN__ || null;
 
 async function authenticateUser({ email, password }) {
   if (!email || !password) {
@@ -415,11 +461,13 @@ async function authenticateUser({ email, password }) {
     };
 
     activeSessionToken = session;
+    global.__REMAS_ACTIVE_SESSION_TOKEN__ = session;
     return session;
   } catch (err) {
     if (err.code === 'UNAUTHORIZED_ROLE' || err.code === 'TENANT_RESOLUTION_FAILED') throw err;
     // Do not create incomplete session
     activeSessionToken = null;
+    global.__REMAS_ACTIVE_SESSION_TOKEN__ = null;
     try { await signOut(auth); } catch (_) {}
 
     if (isNetworkOrOfflineError(err) || err.code === 'NETWORK_TIMEOUT' || err.code === 'NETWORK_DISCONNECTED') {
@@ -798,7 +846,11 @@ async function logoutUser(callerToken) {
 }
 
 function resolveCallerToken(callerToken) {
+  if (!activeSessionToken && global.__REMAS_ACTIVE_SESSION_TOKEN__) {
+    activeSessionToken = global.__REMAS_ACTIVE_SESSION_TOKEN__;
+  }
   if (callerToken && typeof callerToken === 'object' && callerToken.uid) {
+    global.__REMAS_ACTIVE_SESSION_TOKEN__ = callerToken;
     // Allow callerToken even if institutionId empty — validateTenantAccess will handle empty check with correct error code
     if (callerToken.institutionId !== undefined || callerToken.role !== undefined) {
       return callerToken;
@@ -6260,6 +6312,8 @@ async function createDigitalContentItem(callerToken, payload = {}) {
     academicYearId: payload.academicYearId || payload.yearId || null,
     subjectId: payload.subjectId || null,
     groupId: payload.groupId || null,
+    groupIds: payload.groupId ? [payload.groupId] : (Array.isArray(payload.groupIds) && payload.groupIds.length > 0 ? payload.groupIds : null),
+    accessType: payload.accessType || 'FREE',
     teacherId: payload.teacherId || null,
     title,
     description: payload.description ? String(payload.description).slice(0, 2000) : null,
@@ -6274,17 +6328,17 @@ async function createDigitalContentItem(callerToken, payload = {}) {
     storageBucket: isVideo ? 'cloudflare-r2://mana-videos' : 'local-and-cloud',
     fileName: payload.fileName || null,
     filePath: localStoredPath || payload.filePath || null,
-    localStoredPath: localStoredPath || null,
+    localStoredPath: localStoredPath || payload.localStoredPath || null,
     sizeBytes: Number(payload.sizeBytes ?? payload.size ?? 0) || null,
     mimeType: payload.mimeType || (isVideo ? 'video/mp4' : 'application/pdf'),
     pageStart: Number(payload.pageStart) || 1,
     pageEnd: Number(payload.pageEnd) || null,
     pagesCount: Number(payload.pagesCount || payload.pageEnd) || null,
     textContent: cleanTextContent,
-    createdAt: now,
+    createdAt: payload.createdAt || now,
     updatedAt: now,
-    publishedAt: now,
-    createdBy: actor,
+    publishedAt: payload.publishedAt || now,
+    createdBy: payload.createdBy || actor,
     updatedBy: actor
   };
 

@@ -52,6 +52,8 @@ class EducationalContentDTO {
   final int sortOrder;
   final int? durationSeconds;
   final int? fileSizeBytes;
+  final String? url;
+  final String? videoProvider;
 
   String get type => contentType;
 
@@ -68,6 +70,8 @@ class EducationalContentDTO {
     required this.sortOrder,
     this.durationSeconds,
     this.fileSizeBytes,
+    this.url,
+    this.videoProvider,
   });
 
   factory EducationalContentDTO.fromJson(Map<String, dynamic> json) {
@@ -84,6 +88,8 @@ class EducationalContentDTO {
       sortOrder: json['sortOrder'] ?? 1,
       durationSeconds: json['durationSeconds'],
       fileSizeBytes: json['fileSizeBytes'],
+      url: json['url']?.toString(),
+      videoProvider: json['videoProvider']?.toString(),
     );
   }
 }
