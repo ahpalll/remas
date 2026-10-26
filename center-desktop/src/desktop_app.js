@@ -1187,10 +1187,16 @@ function renderSidebarNav() {
       </li>
     `;
 
+    // Force reports section open by default
+    window._sidebarAccordionState = window._sidebarAccordionState || {};
+    if (window._sidebarAccordionState['cat_reports'] === undefined) {
+      window._sidebarAccordionState['cat_reports'] = true;
+    }
+
     if (nav) nav.innerHTML = `
       ${buildSidebarAccordionSection('cat_main', 'الرئيسية والمتابعة', '📊', mainItems, activeView === 'dashboard')}
+      ${buildSidebarAccordionSection('cat_reports', '📊 التقارير والنتائج والمستويات', '📈', reportsItems, ['homework_reports', 'student_diagnostic'].includes(activeView))}
       ${buildSidebarAccordionSection('cat_ai_studio', 'مصادر الذكاء الاصطناعي', '🤖', aiStudioItems, ['ai_studio', 'content', 'exams', 'homework'].includes(activeView))}
-      ${buildSidebarAccordionSection('cat_reports', 'تقارير الانضباط والنتائج', '📈', reportsItems, ['homework_reports', 'student_diagnostic'].includes(activeView))}
       ${buildSidebarAccordionSection('cat_academic', 'الهيكل الأكاديمي', '🏫', academicItems, ['academic', 'groups', 'schedule'].includes(activeView))}
       ${buildSidebarAccordionSection('cat_students', 'شؤون الطلاب والكادر', '👥', studentsItems, ['students', 'cards', 'teachers', 'employees', 'parents'].includes(activeView))}
       ${buildSidebarAccordionSection('cat_attendance', 'الحضور والانضباط', '⏱️', attendanceItems, activeView === 'attendance')}

@@ -1,16 +1,16 @@
 {
-  "patchVersion": "1.0.0-hp.52.8.0",
+  "patchVersion": "1.0.0-hp.52.8.1",
   "targetVersion": "1.0.0-release.52.8.0",
-  "publishedAt": "2026-10-26T03:00:00.000Z",
+  "publishedAt": "2026-10-26T03:08:00.000Z",
   "active": true,
-  "description": "الإصدار الكامل 52.8.0 — تقارير النتائج الحقيقية، تشخيص مستوى الطالب، أكواد مشاهدة الفيديو، وإصلاحات شاملة",
-  "totalSizeKb": "1462.7",
+  "description": "إظهار قسم التقارير والنتائج أول القائمة الجانبية — كشف نتائج الواجبات وتشخيص مستوى الطالب الآن مرئيان مباشرة",
+  "totalSizeKb": "1463.3",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 853455,
-      "sha256": "173329d38d764f57a72cf396252137abfc451dd22260ca30e5ca0127ff0f4550",
+      "size": 853722,
+      "sha256": "80a85c796496a6e5991a128c2cd551eb9acc481f2b7fde77cf0a80bf5b9ecb87",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
