@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/educational_content.dart';
 import '../services/student_service.dart';
 
@@ -10,7 +11,7 @@ import '../services/student_service.dart';
 /// 1. Hardware screen-recording / screenshot block enforced at OS level (FLAG_SECURE in MainActivity.kt).
 /// 2. Android-only enforcement guard.
 /// 3. Dynamic bouncing watermark overlay with student name, center, code and phone number.
-/// 4. Watch Code verification dialog if access code is required.
+/// 4. Native playback of both direct MP4/HLS streams AND YouTube links (youtu.be / youtube.com).
 class VideoPlayerScreen extends StatefulWidget {
   final EducationalContentDTO content;
   final String? playbackUrl;
@@ -36,9 +37,12 @@ class VideoPlayerScreen extends StatefulWidget {
 class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     with SingleTickerProviderStateMixin {
   VideoPlayerController? _controller;
+  YoutubeExplode? _ytExplode;
   bool _isInitialized = false;
   bool _hasError = false;
   String? _errorMessage;
+  String _loadingStatus = 'جاري فتح الفيديو المشفر بأمان...';
+  String? _streamQualityLabel;
   bool _showControls = true;
   Timer? _controlsTimer;
 
@@ -110,9 +114,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
   }
 
-  void _initVideoPlayer() {
-    final url = widget.playbackUrl;
-    if (url == null || url.isEmpty) {
+  /// Extracts 11-char YouTube video ID from any standard YouTube URL format.
+  String? _extractYouTubeVideoId(String url) {
+    final trimmed = url.trim();
+    final patterns = [
+      RegExp(r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})'),
+      RegExp(r'[?&]v=([a-zA-Z0-9_-]{11})'),
+    ];
+    for (final reg in patterns) {
+      final match = reg.firstMatch(trimmed);
+      if (match != null && match.groupCount >= 1) {
+        return match.group(1);
+      }
+    }
+    return null;
+  }
+
+  Future<void> _initVideoPlayer() async {
+    final rawUrl = widget.playbackUrl ?? widget.content.url;
+    if (rawUrl == null || rawUrl.trim().isEmpty) {
       setState(() {
         _hasError = true;
         _errorMessage = 'رابط تشغيل الفيديو غير متاح أو يتطلب إدخال كود مشاهدة مسبق.';
@@ -121,32 +141,56 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
 
     try {
-      final uri = Uri.parse(url);
-      _controller = VideoPlayerController.networkUrl(uri)
-        ..initialize().then((_) {
-          if (mounted) {
-            setState(() {
-              _isInitialized = true;
-            });
-            _controller?.play();
-            _startControlsTimer();
-          }
-        }).catchError((err) {
-          if (mounted) {
-            setState(() {
-              _hasError = true;
-              _errorMessage = 'تعذر تشغيل الفيديو: ${err.toString()}';
-            });
-          }
-        });
+      Uri playbackUri;
+      final ytId = _extractYouTubeVideoId(rawUrl);
 
-      _controller?.addListener(() {
+      if (ytId != null) {
+        if (mounted) {
+          setState(() {
+            _loadingStatus = 'جاري تجهيز بث فيديو اليوتيوب المحمي (DRM)...';
+          });
+        }
+        _ytExplode = YoutubeExplode();
+        final manifest = await _ytExplode!.videos.streamsClient.getManifest(ytId);
+
+        if (manifest.muxed.isNotEmpty) {
+          final muxedList = manifest.muxed.sortByVideoQuality();
+          final bestStream = muxedList.first;
+          playbackUri = bestStream.url;
+          _streamQualityLabel = 'YouTube ${bestStream.qualityLabel}';
+        } else if (manifest.hls.isNotEmpty) {
+          final hlsStream = manifest.hls.first;
+          playbackUri = hlsStream.url;
+          _streamQualityLabel = 'YouTube HLS';
+        } else {
+          throw Exception('لا يتوفر بث متوافق لهذا الفيديو على يوتيوب');
+        }
+      } else {
+        playbackUri = Uri.parse(rawUrl.trim());
+        _streamQualityLabel = 'بث مباشر محمي';
+      }
+
+      if (!mounted) return;
+
+      _controller = VideoPlayerController.networkUrl(playbackUri);
+      await _controller!.initialize();
+
+      if (!mounted) return;
+      setState(() {
+        _isInitialized = true;
+        _hasError = false;
+      });
+      await _controller!.play();
+      _startControlsTimer();
+
+      _controller!.addListener(() {
         if (mounted) setState(() {});
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _hasError = true;
-        _errorMessage = 'خطأ في إعداد مشغل الفيديو: $e';
+        _errorMessage = 'تعذر تشغيل الفيديو: ${e.toString().replaceAll('Exception: ', '')}';
       });
     }
   }
@@ -176,6 +220,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _controlsTimer?.cancel();
     _watermarkController.dispose();
     _controller?.dispose();
+    _ytExplode?.close();
     super.dispose();
   }
 
@@ -210,13 +255,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           const CircularProgressIndicator(color: Color(0xFF38BDF8)),
           const SizedBox(height: 16),
           Text(
-            'جاري فتح الفيديو المشفر بأمان...',
+            _loadingStatus,
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
-          Text(
-            widget.content.title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              widget.content.title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -247,14 +296,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('العودة للمحتوى'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF334155),
-                foregroundColor: Colors.white,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _hasError = false;
+                      _isInitialized = false;
+                    });
+                    _initVideoPlayer();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('العودة للمحتوى'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF334155),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -276,49 +346,53 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           // 1. Video Player
           Center(
             child: AspectRatio(
-              aspectRatio: controller.value.aspectRatio,
+              aspectRatio: controller.value.aspectRatio > 0
+                  ? controller.value.aspectRatio
+                  : 16 / 9,
               child: VideoPlayer(controller),
             ),
           ),
 
-          // 2. Anti-Piracy Floating Dynamic Watermark
-          AnimatedBuilder(
-            animation: _watermarkAlignment,
-            builder: (context, child) {
-              return Align(
-                alignment: _watermarkAlignment.value,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.white.withOpacity(0.15)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$_displayCenter | $_displayName',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.45),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+          // 2. Anti-Piracy Floating Dynamic Watermark (IgnorePointer so it never blocks touches)
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _watermarkAlignment,
+              builder: (context, child) {
+                return Align(
+                  alignment: _watermarkAlignment.value,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.35),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white.withOpacity(0.15)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_displayCenter | $_displayName',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.45),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'كود: $_displayCode | هاتف: $_displayPhone',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.40),
-                          fontSize: 10,
-                          fontFamily: 'monospace',
+                        Text(
+                          'كود: $_displayCode | هاتف: $_displayPhone',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.40),
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
 
           // 3. Player Controls Overlay
@@ -347,6 +421,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                             ),
                           ),
                         ),
+                        if (_streamQualityLabel != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _streamQualityLabel!,
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(

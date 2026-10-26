@@ -1,23 +1,23 @@
 {
-  "patchVersion": "1.0.0-hp.53.2.2",
+  "patchVersion": "1.0.0-hp.53.2.3",
   "targetVersion": "1.0.0-release.53.0.0",
-  "publishedAt": "2026-10-26T20:18:59.395Z",
+  "publishedAt": "2026-10-26T20:53:21.358Z",
   "active": true,
-  "description": "إصلاح تعديل الفيديوهات والمصادر، تفعيل مشغل المعاينة المباشر للفيديوهات والمذكرات، وتحديث ربط الفيديوهات بتطبيق الطالب",
-  "totalSizeKb": "1576.7",
+  "description": "إصلاح توليد أكواد المشاهدة وتفعيل الجهاز وفحص شامل لاستوديو الذكاء الاصطناعي",
+  "totalSizeKb": "1602.5",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 925598,
-      "sha256": "2ecf101319c68b09ad03fd66610b67d5ea0426fdc5c328b7e6f17e105adc3f0e",
+      "size": 930594,
+      "sha256": "0da070ea2385c1c0b8225b2aa4c673e75cdb43362c8b2fb76af81ce71843ef39",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
-      "size": 671583,
-      "sha256": "9b08b07f3b84ea1fcf25d842be9c4d0c979f6f39b575d7c513f99878c0461692",
+      "size": 672980,
+      "sha256": "3163385dbdf858e2918f46ca4a60fb52c18162a57a9f43a03dbc51b444fdf130",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {
@@ -26,6 +26,20 @@
       "size": 17316,
       "sha256": "2f845049c91dd69212ddf402e215fcdd54ecaed951dda4f0cbe7e1cc87c7baf0",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/hotpatch_service.js"
+    },
+    {
+      "relativePath": "src/device_fingerprint.js",
+      "filename": "device_fingerprint.js",
+      "size": 3613,
+      "sha256": "ca43a1d8582256308f36c0fe1b903b62562b19819e87644c5b48e384121c35ce",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/device_fingerprint.js"
+    },
+    {
+      "relativePath": "src/content_upload_config.js",
+      "filename": "content_upload_config.js",
+      "size": 16407,
+      "sha256": "d883db98468cda3edc1623c30a1e982b9b76afd35b65721161547c131f4985dd",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/content_upload_config.js"
     }
   ]
 }

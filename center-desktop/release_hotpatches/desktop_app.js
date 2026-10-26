@@ -4560,7 +4560,10 @@ async function renderAiStudioView(container, initialTab = null) {
                       ${escapeHtmlAttr(cd.code)}
                     </span>
                   </td>
-                  <td style="color:#cbd5e1;">${escapeHtmlAttr(cd.subjectName || 'عام')}</td>
+                  <td style="color:#cbd5e1;">
+                    <div>${escapeHtmlAttr(cd.subjectName || 'عام')}</div>
+                    ${cd.videoTitle ? `<div style="font-size:0.75rem; color:#a855f7;">🎬 ${escapeHtmlAttr(cd.videoTitle)}</div>` : ''}
+                  </td>
                   <td>
                     <span class="badge" style="background:#1e293b; color:#4ade80;">
                       ${cd.viewsUsed || 0} / ${cd.maxViews || 2} مشاهدة
@@ -5055,9 +5058,13 @@ function selectDiagnosticStudent(studentId) {
 async function generateWatchCodesBatch() {
   const count = parseInt(document.getElementById('vCodeCount')?.value, 10) || 10;
   const maxViews = parseInt(document.getElementById('vCodeMaxViews')?.value, 10) || 2;
+  const expiresAt = document.getElementById('vCodeExpireDate')?.value || null;
   const targetSubId = document.getElementById('vCodeTargetSubject')?.value || '';
   const subEl = document.getElementById('vCodeTargetSubject');
-  const subName = subEl && subEl.selectedIndex >= 0 ? subEl.options[subEl.selectedIndex].text : 'عام';
+  const subjectName = (subEl && subEl.selectedIndex >= 0 && targetSubId) ? subEl.options[subEl.selectedIndex].text : 'عام';
+  const targetVideoId = document.getElementById('vCodeTargetVideo')?.value || '';
+  const vidEl = document.getElementById('vCodeTargetVideo');
+  const videoTitle = (vidEl && vidEl.selectedIndex >= 0 && targetVideoId) ? vidEl.options[vidEl.selectedIndex].text : null;
 
   showToast('⏳ جاري إنشاء وحفظ أكواد المشاهدة المشفرة...');
   try {
@@ -5065,14 +5072,18 @@ async function generateWatchCodesBatch() {
       institutionId: currentCallerToken.institutionId,
       count,
       maxViews,
-      subjectId: targetSubId,
-      subjectName
+      expiresAt,
+      subjectId: targetSubId || null,
+      subjectName,
+      videoId: targetVideoId || null,
+      videoTitle
     });
     const newCodes = (res && res.codes) || [];
     window._allWatchCodesCache = newCodes.concat(window._allWatchCodesCache || []);
     showToast(`✅ تم إنشاء وحفظ (${newCodes.length || count}) كود مشاهدة محمي بنجاح!`);
+    window._activeAiStudioTab = 'videos';
     const container = document.getElementById('mainView');
-    if (container) renderAiStudioView(container, 'videos');
+    if (container) await renderAiStudioView(container, 'videos');
   } catch (err) {
     showToast(`❌ فشل إنشاء أكواد المشاهدة: ${(err && err.message) || err}`, true);
   }
@@ -5907,6 +5918,7 @@ async function submitCreateVideo() {
     });
     showToast('🎬 تم رفع وحفظ الفيديو بنجاح في مكتبة الفيديوهات المحمية! 🟢');
     closeModal();
+    window._activeAiStudioTab = 'videos';
     window._currentAiStudioTab = 'videos';
     await renderActiveView('ai_studio');
   } catch (err) {
@@ -13238,16 +13250,16 @@ async function openAddLessonModal() {
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
             <div class="form-group">
               <label>المرحلة الدراسية *</label>
-              <select id="mLessonStage" required>
+              <select id="mLessonStage" required onchange="onLessonModalStageSubjectChange()">
                 <option value="">— اختر المرحلة —</option>
                 ${stages.map(st => `<option value="${st.id}">${escapeHtmlAttr(st.name)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
               <label>المادة الدراسية *</label>
-              <select id="mLessonSubject" required>
+              <select id="mLessonSubject" required onchange="onLessonModalStageSubjectChange()">
                 <option value="">— اختر المادة —</option>
-                ${subjects.map(sb => `<option value="${sb.id}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
+                ${subjects.map(sb => `<option value="${sb.id}" data-stage="${sb.stageId || ''}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -13257,7 +13269,7 @@ async function openAddLessonModal() {
               <label>المجموعة المستهدفة (اختياري)</label>
               <select id="mLessonGroup">
                 <option value="">— كل مجموعات المادة —</option>
-                ${groups.map(g => `<option value="${g.id}">${escapeHtmlAttr(g.name)}</option>`).join('')}
+                ${groups.map(g => `<option value="${g.id}" data-stage="${g.stageId || ''}" data-subject="${g.subjectId || ''}">${escapeHtmlAttr(g.name)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -13485,11 +13497,37 @@ async function submitCreateLesson() {
 
     showToast('تمت إضافة الدرس والمحتوى التعليمي بنجاح! 🟢');
     closeModal();
-    if (activeView === 'content') await renderActiveView('content');
+    window._activeAiStudioTab = 'lessons';
+    if (activeView === 'content' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+function onLessonModalStageSubjectChange() {
+  const stageId = document.getElementById('mLessonStage')?.value || '';
+  const subSel = document.getElementById('mLessonSubject');
+  const grpSel = document.getElementById('mLessonGroup');
+  const allSubs = window._allSubjectsCache || [];
+  const allGroups = window._allGroupsCache || [];
+
+  if (subSel && allSubs.length) {
+    const prevSub = subSel.value;
+    const filteredSubs = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+    subSel.innerHTML = `<option value="">— اختر المادة (${filteredSubs.length}) —</option>` +
+      filteredSubs.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('');
+    if (prevSub && filteredSubs.some(s => s.id === prevSub)) subSel.value = prevSub;
+  }
+
+  const subjectId = subSel?.value || '';
+  if (grpSel && allGroups.length) {
+    const prevGrp = grpSel.value;
+    const filteredGroups = allGroups.filter(g => (!stageId || g.stageId === stageId) && (!subjectId || !g.subjectId || g.subjectId === subjectId));
+    grpSel.innerHTML = `<option value="">— كل مجموعات المادة —</option>` +
+      filteredGroups.map(g => `<option value="${g.id}">${escapeHtmlAttr(g.name)}</option>`).join('');
+    if (prevGrp && filteredGroups.some(g => g.id === prevGrp)) grpSel.value = prevGrp;
   }
 }
 
@@ -13949,7 +13987,7 @@ async function submitCreateExam() {
     await callBackend('createExam', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       title, description, stageId, subjectId, groupId,
-      groupIds: groupId ? [groupId] : [],
+      groupIds: groupId ? [groupId] : null,
       examType, maxScore, passingScore,
       totalMarksHundredths: maxScore * 100,
       passingMarksHundredths: passingScore * 100,
@@ -13962,7 +14000,8 @@ async function submitCreateExam() {
     });
     showToast('تم إنشاء الاختبار بنجاح! 🟢');
     closeModal();
-    if (activeView === 'exams') await renderActiveView('exams');
+    window._activeAiStudioTab = 'exams';
+    if (activeView === 'exams' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   } finally {
@@ -13974,7 +14013,8 @@ async function publishExamAction(examId) {
   try {
     await callBackend('setCenterExamStatus', currentCallerToken, examId, 'PUBLISHED', currentCallerToken.institutionId);
     showToast('تم نشر الاختبار بنجاح — أصبح متاحاً لرصد النتائج 🟢');
-    if (activeView === 'exams') await renderActiveView('exams');
+    window._activeAiStudioTab = 'exams';
+    if (activeView === 'exams' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   }
@@ -13985,7 +14025,8 @@ async function closeExamAction(examId) {
   try {
     await callBackend('setCenterExamStatus', currentCallerToken, examId, 'CLOSED', currentCallerToken.institutionId);
     showToast('تم إغلاق الاختبار بنجاح ✅');
-    if (activeView === 'exams') await renderActiveView('exams');
+    window._activeAiStudioTab = 'exams';
+    if (activeView === 'exams' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   }
@@ -14424,14 +14465,14 @@ async function openAddHomeworkModal() {
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
             <div class="form-group">
               <label>المرحلة الدراسية *</label>
-              <select id="mHwStage" required>
+              <select id="mHwStage" required onchange="onHwModalStageSubjectChange()">
                 <option value="">— اختر المرحلة —</option>
                 ${stages.map(st => `<option value="${st.id}">${escapeHtmlAttr(st.name)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
               <label>المادة الدراسية *</label>
-              <select id="mHwSubject" required>
+              <select id="mHwSubject" required onchange="onHwModalStageSubjectChange()">
                 <option value="">— اختر المادة —</option>
                 ${subjects.map(sb => `<option value="${sb.id}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
               </select>
@@ -14441,7 +14482,7 @@ async function openAddHomeworkModal() {
             <div class="form-group">
               <label>الدرس المرتبط *</label>
               <select id="mHwLesson" required>
-                <option value="">— اختر الدرس —</option>
+                <option value="general_lesson">📌 واجب عام للمادة (بدون درس محدد)</option>
                 ${lessons.map(l => `<option value="${l.id}">${escapeHtmlAttr(l.title)}</option>`).join('')}
               </select>
             </div>
@@ -14520,19 +14561,55 @@ async function submitCreateHomework() {
     await callBackend('createHomeworkRecord', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       title, instructions, description: instructions,
-      stageId, subjectId, lessonId, groupId,
-      groupIds: groupId ? [groupId] : [],
+      stageId, subjectId, lessonId: lessonId || 'general_lesson', groupId,
+      groupIds: groupId ? [groupId] : null,
       mode, maxScore,
       attachmentUrl,
       dueAt: dueAt ? dueAt + 'T23:59:59Z' : null
     });
     showToast('تم تكليف الطلاب بالواجب بنجاح!');
     closeModal();
-    if (activeView === 'homework') await renderActiveView('homework');
+    window._activeAiStudioTab = 'homework';
+    if (activeView === 'homework' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+function onHwModalStageSubjectChange() {
+  const stageId = document.getElementById('mHwStage')?.value || '';
+  const subSel = document.getElementById('mHwSubject');
+  const lesSel = document.getElementById('mHwLesson');
+  const grpSel = document.getElementById('mHwGroup');
+  const allSubs = window._allSubjectsCache || [];
+  const allLessons = window._allLessonsCache || [];
+  const allGroups = window._allGroupsCache || [];
+
+  if (subSel && allSubs.length) {
+    const prevSub = subSel.value;
+    const filteredSubs = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+    subSel.innerHTML = `<option value="">— اختر المادة (${filteredSubs.length}) —</option>` +
+      filteredSubs.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('');
+    if (prevSub && filteredSubs.some(s => s.id === prevSub)) subSel.value = prevSub;
+  }
+
+  const subjectId = subSel?.value || '';
+  if (lesSel) {
+    const prevLes = lesSel.value;
+    const filteredLessons = allLessons.filter(l => (!stageId || l.stageId === stageId) && (!subjectId || l.subjectId === subjectId));
+    lesSel.innerHTML = `<option value="general_lesson">📌 واجب عام للمادة (بدون درس محدد)</option>` +
+      filteredLessons.map(l => `<option value="${l.id}">${escapeHtmlAttr(l.title)}</option>`).join('');
+    if (prevLes && (prevLes === 'general_lesson' || filteredLessons.some(l => l.id === prevLes))) lesSel.value = prevLes;
+  }
+
+  if (grpSel && allGroups.length) {
+    const prevGrp = grpSel.value;
+    const filteredGroups = allGroups.filter(g => (!stageId || g.stageId === stageId) && (!subjectId || !g.subjectId || g.subjectId === subjectId));
+    grpSel.innerHTML = `<option value="">— جميع مجموعات المادة —</option>` +
+      filteredGroups.map(g => `<option value="${g.id}">${escapeHtmlAttr(g.name)}</option>`).join('');
+    if (prevGrp && filteredGroups.some(g => g.id === prevGrp)) grpSel.value = prevGrp;
   }
 }
 
@@ -14570,7 +14647,8 @@ async function publishHomeworkAction(homeworkId) {
   try {
     await callBackend('setHomeworkStatusRecord', currentCallerToken, homeworkId, 'PUBLISHED', currentCallerToken.institutionId);
     showToast('تم نشر الواجب بنجاح — متاح للطلاب الآن 🟢');
-    if (activeView === 'homework') await renderActiveView('homework');
+    window._activeAiStudioTab = 'homework';
+    if (activeView === 'homework' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   }
@@ -14581,7 +14659,8 @@ async function closeHomeworkAction(homeworkId) {
   try {
     await callBackend('setHomeworkStatusRecord', currentCallerToken, homeworkId, 'CLOSED', currentCallerToken.institutionId);
     showToast('تم إغلاق تسليم الواجب بنجاح ✅');
-    if (activeView === 'homework') await renderActiveView('homework');
+    window._activeAiStudioTab = 'homework';
+    if (activeView === 'homework' || activeView === 'ai_studio') await renderActiveView(activeView);
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   }
@@ -15538,7 +15617,8 @@ async function adoptAndSaveAiExam() {
 
     closeModal();
     showToast(`تم اعتماد وحفظ الاختبار (${exam.title}) ونشره بنجاح! 🟢`);
-    await renderActiveView('exams');
+    window._activeAiStudioTab = 'exams';
+    await renderActiveView(activeView === 'exams' ? 'exams' : 'ai_studio');
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   }

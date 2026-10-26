@@ -28,7 +28,9 @@ const description = args[1] || 'تحديث فوري للنظام يتضمن تح
 const targetFiles = [
   'src/desktop_app.js',
   'src/center_desktop_services.js',
-  'src/hotpatch_service.js'
+  'src/hotpatch_service.js',
+  'src/device_fingerprint.js',
+  'src/content_upload_config.js'
 ];
 
 if (!fs.existsSync(outDir)) {

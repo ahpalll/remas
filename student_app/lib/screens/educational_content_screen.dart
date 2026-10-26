@@ -135,6 +135,7 @@ class _EducationalContentScreenState extends State<EducationalContentScreen> {
         await _studentService.verifyAndConsumeVideoWatchCode(
           enteredCode,
           subjectId: content.subjectId,
+          videoId: content.id,
         );
       } catch (e) {
         if (!mounted) return;

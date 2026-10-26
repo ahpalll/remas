@@ -783,6 +783,7 @@ class StudentService {
   Future<Map<String, dynamic>> verifyAndConsumeVideoWatchCode(
     String code, {
     String? subjectId,
+    String? videoId,
   }) async {
     final profile = await fetchCurrentStudentProfile();
     if (profile == null) {
@@ -811,6 +812,32 @@ class StudentService {
     final int maxViews = int.tryParse((data['maxViews'] ?? 2).toString()) ?? 2;
     final int viewsUsed = int.tryParse((data['viewsUsed'] ?? 0).toString()) ?? 0;
     final String? redeemedBy = data['redeemedByStudentId']?.toString();
+    final String? codeSubjectId = data['subjectId']?.toString();
+    final String? codeVideoId = data['videoId']?.toString();
+    final String? expiresAtStr = data['expiresAt']?.toString();
+
+    if (codeVideoId != null &&
+        codeVideoId.isNotEmpty &&
+        videoId != null &&
+        videoId.isNotEmpty &&
+        codeVideoId != videoId) {
+      throw Exception('هذا الكود مخصص لفيديو آخر (${data['videoTitle'] ?? 'حصة أخرى'})');
+    }
+
+    if (codeSubjectId != null &&
+        codeSubjectId.isNotEmpty &&
+        subjectId != null &&
+        subjectId.isNotEmpty &&
+        codeSubjectId != subjectId) {
+      throw Exception('هذا الكود مخصص لمادة أخرى (${data['subjectName'] ?? ''})');
+    }
+
+    if (expiresAtStr != null && expiresAtStr.isNotEmpty) {
+      final expDate = DateTime.tryParse(expiresAtStr);
+      if (expDate != null && DateTime.now().isAfter(expDate.add(const Duration(days: 1)))) {
+        throw Exception('انتهت فترة صلاحية كود المشاهدة ($expiresAtStr)');
+      }
+    }
 
     if (redeemedBy != null && redeemedBy.isNotEmpty && redeemedBy != profile.id) {
       throw Exception('هذا الكود مستخدم ومربوط بطالب آخر');

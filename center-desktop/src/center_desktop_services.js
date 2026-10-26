@@ -31,11 +31,19 @@ try {
       if (!module.paths.includes(p)) module.paths.push(p);
     }
   }
-  if (process.resourcesPath) {
-    const asarNodeModules = path.join(process.resourcesPath, 'app.asar', 'node_modules');
-    if (!module.paths.includes(asarNodeModules)) module.paths.unshift(asarNodeModules);
-    const unpackedNodeModules = path.join(process.resourcesPath, 'app', 'node_modules');
-    if (!module.paths.includes(unpackedNodeModules)) module.paths.unshift(unpackedNodeModules);
+  const extraSearchDirs = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'node_modules') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'app', 'node_modules') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'src') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'app', 'src') : null,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'remas-center-desktop', 'resources', 'app', 'node_modules') : null,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'remas-center-desktop', 'resources', 'app', 'src') : null,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'remas-center-desktop', 'resources', 'app.asar', 'node_modules') : null,
+    path.join(process.cwd(), 'center-desktop', 'node_modules'),
+    path.join(process.cwd(), 'node_modules')
+  ].filter(Boolean);
+  for (const dir of extraSearchDirs) {
+    if (!module.paths.includes(dir)) module.paths.unshift(dir);
   }
   // Cache hotpatched module in parent HotpatchService so it isn't re-evaluated on every IPC call
   if (module.parent && module.parent.exports && typeof module.parent.exports.loadHotpatchedModule === 'function' && !module.parent.exports._remasCachedLoaderInstalled) {
@@ -64,6 +72,22 @@ try {
     hpInstance._remasCachedLoaderInstalled = true;
   }
 } catch (_) {}
+
+function requireBundledSrcModule(relName) {
+  const cleanName = String(relName || '').replace(/^\.[\\/]/, '');
+  const candidates = [
+    path.join(__dirname, cleanName),
+    process.resourcesPath ? path.join(process.resourcesPath, 'app', 'src', cleanName) : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'src', cleanName) : null,
+    require.main && require.main.filename ? path.join(path.dirname(require.main.filename), 'src', cleanName) : null
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return require(candidate);
+    } catch (_) {}
+  }
+  return require(relName);
+}
 
 const { initializeApp, getApps, getApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword, updatePassword, signOut, connectAuthEmulator, EmailAuthProvider, reauthenticateWithCredential } = require('firebase/auth');
@@ -5908,7 +5932,7 @@ function contentConfigD2() {
   // D.2.1: packaged-local copy — `../../firebase/...` does NOT exist inside
   // the installed app (electron-builder ships center-desktop/ only).
   // Parity with firebase/content_config.js is enforced by automated test.
-  return require('./content_upload_config.js');
+  return requireBundledSrcModule('./content_upload_config.js');
 }
 
 async function getContentUploadConfig(callerToken) {
@@ -10045,7 +10069,7 @@ function getDeviceFunctionsClient() {
 }
 
 function getLocalDeviceIdentity() {
-  const { generateHardwareFingerprint, getSystemMetadata } = require('./device_fingerprint');
+  const { generateHardwareFingerprint, getSystemMetadata } = requireBundledSrcModule('./device_fingerprint');
   const meta = getSystemMetadata();
   return { fingerprint: generateHardwareFingerprint(meta), meta };
 }
@@ -13038,6 +13062,7 @@ async function generateVideoWatchCodes(callerToken, payload = {}) {
   const subjectName = payload.subjectName || 'عام';
   const videoId = payload.videoId || null;
   const videoTitle = payload.videoTitle || null;
+  const expiresAt = payload.expiresAt || null;
 
   const localList = readLocalData(`video_watch_codes_${instId}`, []);
   const createdCodes = [];
@@ -13057,6 +13082,7 @@ async function generateVideoWatchCodes(callerToken, payload = {}) {
       subjectName,
       videoId,
       videoTitle,
+      expiresAt,
       maxViews,
       viewsUsed: 0,
       status: 'AVAILABLE',
