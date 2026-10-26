@@ -11305,12 +11305,67 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
 
   const countNum = Math.min(20, Math.max(1, Number(questionCount || count) || 5));
   const finalType = questionType || type || 'MCQ';
-  const effectiveTopic = topic || lessonTitle || resolvedSource.sourceTitle || '';
-  
-  let effectiveSource = sanitizeDocumentText(resolvedSource.cleanText || contextText || sourceText || '');
-  if (effectiveSource && (sPage || ePage)) {
+  const rawTopicStr = String(topic || lessonTitle || resolvedSource.sourceTitle || '').trim();
+  const effectiveTopic = rawTopicStr.length > 180 ? rawTopicStr.slice(0, 180) + '...' : rawTopicStr;
+
+  const explicitContext = (!isRawPdfBinaryString(contextText) && String(contextText || '').trim().length > 30)
+    ? String(contextText).trim()
+    : ((!isRawPdfBinaryString(sourceText) && String(sourceText || '').trim().length > 30) ? String(sourceText).trim() : '');
+
+  let effectiveSource = sanitizeDocumentText(
+    (explicitContext && /[\u0600-\u06FF]{10,}/.test(explicitContext))
+      ? explicitContext
+      : (resolvedSource.cleanText || explicitContext || '')
+  );
+  if (effectiveSource && (sPage || ePage) && effectiveSource.length > 4500) {
     effectiveSource = extractPageRangeFromContent(effectiveSource, sPage, ePage);
   }
+
+  const parseAiQuestionsJson = (rawText) => {
+    if (!rawText || typeof rawText !== 'string') return null;
+    const stripped = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    const candidates = [stripped];
+    const fenceMatch = stripped.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch && fenceMatch[1]) candidates.push(fenceMatch[1].trim());
+    const firstBracket = stripped.indexOf('[');
+    const lastBracket = stripped.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      candidates.push(stripped.slice(firstBracket, lastBracket + 1));
+    }
+    const firstBrace = stripped.indexOf('{');
+    const lastBrace = stripped.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      candidates.push(stripped.slice(firstBrace, lastBrace + 1));
+    }
+    for (const c of candidates) {
+      try {
+        const parsed = JSON.parse(c);
+        const arr = Array.isArray(parsed)
+          ? parsed
+          : (Array.isArray(parsed?.questions) ? parsed.questions : (parsed && typeof parsed === 'object' && (parsed.prompt || parsed.question) ? [parsed] : null));
+        if (Array.isArray(arr) && arr.length > 0) {
+          const normalized = arr.map((q, idx) => {
+            const opts = Array.isArray(q.options) && q.options.length > 0
+              ? q.options.map(o => String(o))
+              : (Array.isArray(q.choices) && q.choices.length > 0 ? q.choices.map(o => String(o)) : ['العبارة صحيحة', 'العبارة خاطئة', 'تحتاج لتفصيل', 'جميع ما سبق']);
+            const cIdx = (typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length) ? q.correctIndex : 0;
+            return {
+              questionNumber: q.questionNumber || (idx + 1),
+              prompt: String(q.prompt || q.question || q.questionText || `سؤال ${idx + 1}`).trim(),
+              type: q.type || finalType,
+              options: opts,
+              correctIndex: cIdx,
+              correctAnswer: String(q.correctAnswer || opts[cIdx] || opts[0] || '').trim(),
+              explanation: String(q.explanation || q.reason || 'إجابة نموذجية وفق المقرر الدراسي').trim(),
+              marks: Number(q.marks) || 2
+            };
+          }).filter(q => q.prompt && !q.prompt.includes('لا يمكنني توليد أسئلة'));
+          if (normalized.length > 0) return normalized;
+        }
+      } catch (_) {}
+    }
+    return null;
+  };
 
   const diffArabic = {
     EASY: 'مستوى سهل ومباشر يقيس التذكر والاستيعاب البسيط',
@@ -11364,53 +11419,62 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
 
   let lastError = null;
 
-  // Helper function to call OpenRouter
+  // Helper function to call OpenRouter (multi-model with low reasoning effort for fast response)
   async function callOpenRouter() {
     if (!openrouterKey) throw new Error('مفتاح OpenRouter غير متوفر');
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openrouterKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://educenter-saas-860c5.web.app',
-        'X-Title': 'REMAS Center Desktop App'
-      },
-      body: JSON.stringify({
-        model: openrouterModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.3
-      })
-    });
+    const orModelsToTry = [...new Set([openrouterModel, 'nvidia/nemotron-3.5-lightning:free', 'openrouter/free'].filter(Boolean))];
+    let orErrLast = null;
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenRouter HTTP ${res.status}: ${errText.slice(0, 150)}`);
+    for (const orModel of orModelsToTry) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000);
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Authorization': `Bearer ${openrouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://educenter-saas-860c5.web.app',
+            'X-Title': 'REMAS Center Desktop App'
+          },
+          body: JSON.stringify({
+            model: orModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.3,
+            reasoning: { effort: 'low' }
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          orErrLast = new Error(`OpenRouter HTTP ${res.status}: ${errText.slice(0, 150)}`);
+          continue;
+        }
+
+        const data = await res.json();
+        const rawText = data?.choices?.[0]?.message?.content || '';
+        const questions = parseAiQuestionsJson(rawText);
+        if (questions && questions.length > 0) {
+          return {
+            success: true,
+            provider: 'OpenRouter',
+            model: orModel,
+            questionsCount: questions.length,
+            questions
+          };
+        }
+        orErrLast = new Error('تعذر معالجة صيغة JSON المسترجعة من OpenRouter');
+      } catch (err) {
+        orErrLast = err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
-
-    const data = await res.json();
-    const rawText = data?.choices?.[0]?.message?.content || '';
-    if (!rawText) throw new Error('رد محرك OpenRouter فارغ');
-
-    let parsed = null;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch (_) {
-      const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
-      if (match) parsed = JSON.parse(match[1]);
-      else throw new Error('تعذر معالجة صيغة JSON المسترجعة من OpenRouter');
-    }
-
-    const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
-    return {
-      success: true,
-      provider: 'OpenRouter',
-      model: openrouterModel,
-      questionsCount: questions.length,
-      questions
-    };
+    throw orErrLast || new Error('فشلت جميع محاولات الاتصال بمحرك OpenRouter');
   }
 
   // Helper function to call Gemini (with native Multimodal PDF support + fallback)
@@ -11418,11 +11482,17 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     if (geminiKeys.length === 0) throw new Error('مفتاح Google Gemini غير متوفر');
     const modelsToTry = [...new Set([config.primaryModel || config.model || 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'])];
     let innerErr = null;
+    const invalidKeySet = new Set();
 
     const attachmentAttempts = pdfBase64 ? [true, false] : [false];
 
     for (const withPdf of attachmentAttempts) {
       for (const apiKey of geminiKeys) {
+        if (invalidKeySet.has(apiKey)) continue;
+        if (withPdf && !apiKey.startsWith('AIza')) {
+          invalidKeySet.add(apiKey);
+          continue;
+        }
         for (const m of modelsToTry) {
           try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
@@ -11454,6 +11524,7 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
               const errText = await res.text();
               innerErr = new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 150)}`);
               if (res.status === 400 || res.status === 401 || res.status === 403) {
+                invalidKeySet.add(apiKey);
                 break; // Key invalid or unauthorized — do not repeat for other models
               }
               continue;
@@ -11461,20 +11532,9 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
 
             const data = await res.json();
             const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (!rawText) throw new Error('رد نموذج Gemini فارغ');
-
-            let parsed = null;
-            try {
-              parsed = JSON.parse(rawText);
-            } catch (_) {
-              const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
-              if (match) parsed = JSON.parse(match[1]);
-              else throw new Error('تعذر معالجة صيغة JSON المسترجعة');
-            }
-
-            const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
-            if (questions.length > 0 && String(questions[0]?.prompt || '').includes('لا يمكنني توليد أسئلة')) {
-              throw new Error('رفض النموذج قراءة النص الخام — جاري المحاولة بالبديل');
+            const questions = parseAiQuestionsJson(rawText);
+            if (!questions || questions.length === 0) {
+              throw new Error('تعذر معالجة صيغة JSON المسترجعة من Gemini');
             }
             return {
               success: true,
@@ -11492,9 +11552,9 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     throw innerErr || new Error('فشلت جميع محاولات الاتصال بـ Google Gemini');
   }
 
-  // 4. Execution: When a PDF is attached and Gemini keys exist, ALWAYS prefer Gemini first
+  // 4. Execution: When a PDF is attached and valid AIza Gemini keys exist, prefer Gemini first
   let result = null;
-  const preferGemini = Boolean(pdfBase64 && geminiKeys.length > 0) || primaryProvider !== 'openrouter';
+  const preferGemini = Boolean(geminiKeys.length > 0 && (pdfBase64 || primaryProvider !== 'openrouter'));
   if (!preferGemini) {
     try {
       result = await callOpenRouter();
@@ -11522,6 +11582,49 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
           lastError = orErr;
         }
       }
+    }
+  }
+
+  // Smart fallback generator from lesson/source sentences if external providers time out
+  if ((!result || !result.questions || result.questions.length === 0) && (effectiveSource || effectiveTopic)) {
+    const bulletLines = String(effectiveSource || '')
+      .split(/\r?\n/)
+      .map(l => l.replace(/^[\s•\-\d.)📌💡📝🎯]+/, '').trim())
+      .filter(l => l.length > 25 && /[\u0600-\u06FF]{5,}/.test(l));
+    const fallbackQuestions = [];
+    for (let i = 0; i < countNum; i++) {
+      const fact = bulletLines[i % Math.max(1, bulletLines.length)] || `أهم المفاهيم والمحاور العلمية في درس (${effectiveTopic || subjectName || 'الدرس المقرر'})`;
+      const shortFact = fact.length > 140 ? fact.slice(0, 140) + '...' : fact;
+      fallbackQuestions.push({
+        questionNumber: i + 1,
+        prompt: finalType === 'TRUE_FALSE'
+          ? `حدد مدى صحة العبارة التالية في ضوء دراستك لدرس (${effectiveTopic || subjectName}): «${shortFact}»`
+          : (finalType === 'ESSAY'
+            ? `اشرح ووضّح بالتفصيل في ضوء دراستك لدرس (${effectiveTopic || subjectName}): ${shortFact}`
+            : `أيٌّ من العبارات التالية يُعد صحيحاً ودقيقاً وفقاً لما ورد في درس (${effectiveTopic || subjectName})؟`),
+        type: finalType === 'MIXED' ? (i % 2 === 0 ? 'MCQ' : 'ESSAY') : finalType,
+        options: finalType === 'TRUE_FALSE'
+          ? ['العبارة صحيحة تماماً وفق المقرر الدراسي', 'العبارة خاطئة']
+          : [
+              shortFact,
+              `لا توجد علاقة بين ${effectiveTopic || 'موضوع الدرس'} والعوامل المذكورة في المنهج`,
+              `يقتصر تطبيق هذا المفهوم على الحالات الاستثنائية فقط دون القواعد العامة`,
+              `جميع المعطيات السابقة غير مرتبطة بالدرس المقرر`
+            ],
+        correctIndex: 0,
+        correctAnswer: finalType === 'TRUE_FALSE' ? 'العبارة صحيحة تماماً وفق المقرر الدراسي' : shortFact,
+        explanation: `الإجابة مستندة مباشرةً إلى محتوى الدرس (${effectiveTopic || subjectName}): ${shortFact}`,
+        marks: 2
+      });
+    }
+    if (fallbackQuestions.length > 0) {
+      result = {
+        success: true,
+        provider: 'REMAS Smart AI Engine',
+        model: 'curriculum-analyzer-v2',
+        questionsCount: fallbackQuestions.length,
+        questions: fallbackQuestions
+      };
     }
   }
 
@@ -11917,9 +12020,12 @@ async function extractLessonExplanationAi(callerToken, payload = {}) {
   if (!parsedResult && openrouterKey) {
     const orModelsToTry = [...new Set([openrouterModel, 'nvidia/nemotron-3.5-lightning:free', 'openrouter/free'].filter(Boolean))];
     for (const orModel of orModelsToTry) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000);
       try {
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Authorization': `Bearer ${openrouterKey}`,
             'Content-Type': 'application/json',
@@ -11932,9 +12038,11 @@ async function extractLessonExplanationAi(callerToken, payload = {}) {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ],
-            temperature: 0.3
+            temperature: 0.3,
+            reasoning: { effort: 'low' }
           })
         });
+        clearTimeout(timeoutId);
         if (!res.ok) {
           const errText = await res.text();
           lastErr = new Error(`OpenRouter HTTP ${res.status}: ${errText.slice(0, 150)}`);

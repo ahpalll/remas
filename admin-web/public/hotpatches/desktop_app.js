@@ -1368,7 +1368,8 @@ function friendlyBatchAError(err) {
   if (raw.includes('INVALID_PHONE') || raw.includes('INVALID_GUARDIAN_PHONE')) return 'رقم الهاتف غير صالح — يجب أن يكون رقماً مصرياً صحيحاً (مثال: 01012345678)';
   if (raw.includes('NOT_FOUND')) return 'السجل المطلوب غير موجود';
   if (raw.includes('PERMISSION') || raw.includes('UNAUTHENTICATED') || raw.includes('UNAUTHORIZED')) return 'غير مصرح — تحقق من الصلاحيات وتسجيل الدخول';
-  if (raw.includes('NETWORK') || raw.includes('unavailable')) return 'تعذر الاتصال — تحقق من الإنترنت وحاول مجدداً';
+  if (raw.includes('NETWORK_TIMEOUT')) return 'استغرقت العملية وقتاً أطول من المعتاد — يرجى المحاولة مرة أخرى أو تقليل عدد الأسئلة/الصفحات';
+  if (raw.includes('NETWORK_DISCONNECTED') || raw.includes('ERR_INTERNET_DISCONNECTED')) return 'تعذر الاتصال — تحقق من الإنترنت وحاول مجدداً';
   const parts = raw.split(':');
   return parts.length > 1 ? parts.slice(1).join(':').trim() : raw;
 }
@@ -4146,6 +4147,29 @@ async function renderAiStudioView(container, initialTab = null) {
           </button>
         </div>
 
+        <!-- AI Lesson Progress Tracker Bar -->
+        <div id="aiLessonProgressTracker" style="display:none; margin-top:1rem; background:#0f172a; border:1px solid #0284c7; border-radius:10px; padding:1rem 1.25rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span style="font-size:1.25rem;">🤖</span>
+              <strong id="aiLessonProgressTitle" style="color:#38bdf8; font-size:0.92rem;">جاري قراءة المذكرة واستخراج الشرح...</strong>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <span id="aiLessonProgressTimer" class="badge" style="background:#1e293b; color:#94a3b8; font-size:0.75rem;">⏱️ 0 ثانية</span>
+              <span id="aiLessonProgressPercent" class="badge" style="background:#0284c7; color:#fff; font-weight:800; font-size:0.8rem;">10%</span>
+            </div>
+          </div>
+          <div style="width:100%; height:10px; background:#1e293b; border-radius:999px; overflow:hidden; margin-bottom:0.75rem; border:1px solid #334155;">
+            <div id="aiLessonProgressBarFill" style="width:10%; height:100%; background:linear-gradient(90deg, #0284c7, #8b5cf6, #ec4899); border-radius:999px; transition:width 0.45s ease;"></div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:0.5rem; font-size:0.76rem;">
+            <div id="aiLessonStep1" style="padding:0.4rem 0.5rem; border-radius:6px; background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#38bdf8; font-weight:bold; text-align:center;">1. 📄 قراءة الصفحات</div>
+            <div id="aiLessonStep2" style="padding:0.4rem 0.5rem; border-radius:6px; background:#1e293b; border:1px solid #334155; color:#64748b; text-align:center;">2. 🧠 تحليل المحتوى</div>
+            <div id="aiLessonStep3" style="padding:0.4rem 0.5rem; border-radius:6px; background:#1e293b; border:1px solid #334155; color:#64748b; text-align:center;">3. 💡 صياغة المفاهيم</div>
+            <div id="aiLessonStep4" style="padding:0.4rem 0.5rem; border-radius:6px; background:#1e293b; border:1px solid #334155; color:#64748b; text-align:center;">4. 📝 تجهيز الملخص</div>
+          </div>
+        </div>
+
         <!-- AI Extraction Result Box (Hidden by default, shown upon generation) -->
         <div id="aiLessonExtractionResultBox" style="display:none; margin-top:1.25rem; border-top:1px dashed #334155; padding-top:1.25rem;">
           <div id="aiLessonExtractionStatusBanner" style="font-weight:bold; color:#4ade80; font-size:0.95rem; margin-bottom:0.75rem;">
@@ -4181,7 +4205,7 @@ async function renderAiStudioView(container, initialTab = null) {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>عنوان الدرس</th>
+                  <th style="min-width:300px;">عنوان الدرس ومحتواه</th>
                   <th>المادة والمرحلة</th>
                   <th>النطاق والصفحات</th>
                   <th>حالة النشر</th>
@@ -4194,12 +4218,31 @@ async function renderAiStudioView(container, initialTab = null) {
                   const subName = subjectMap.get(l.subjectId) || l.subjectId || 'عام';
                   const stName = stageMap.get(l.stageId) || l.stageId || 'عام';
                   const isPublished = l.status === 'PUBLISHED';
+                  const rawSummary = l.summary || (l.description ? String(l.description).replace(/📌 العناصر والأفكار الرئيسية:[\s\S]*?(?=💡|📝|$)/g, '').replace(/[📌💡📝🎯]/g, '').trim() : '');
+                  const cleanSnippet = String(rawSummary || l.description || '').replace(/\s+/g, ' ').trim().slice(0, 145);
+                  const hasOutlines = Boolean(l.outlines || (l.description && l.description.includes('العناصر')));
+                  const hasConcepts = Boolean(l.concepts || (l.description && l.description.includes('المفاهيم')));
+                  const hasSummary = Boolean(l.summary || (l.description && l.description.includes('ملخص')));
 
                   return `
                     <tr>
-                      <td>
-                        <strong style="color:#f8fafc; font-size:0.95rem;">${escapeHtmlAttr(l.title)}</strong>
-                        ${l.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(l.description)}</div>` : ''}
+                      <td style="max-width:440px; padding:0.75rem;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.35rem;">
+                          <div style="display:flex; align-items:center; gap:0.45rem; cursor:pointer;" onclick="openLessonDetailsModal('${l.id}')">
+                            <span style="font-size:1.1rem;">📖</span>
+                            <strong style="color:#f8fafc; font-size:0.96rem; line-height:1.4;">${escapeHtmlAttr(l.title)}</strong>
+                          </div>
+                        </div>
+                        <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.35rem;">
+                          ${hasOutlines ? '<span class="badge" style="background:rgba(2,132,199,0.18); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); font-size:0.68rem;">🎯 عناصر الدرس</span>' : ''}
+                          ${hasConcepts ? '<span class="badge" style="background:rgba(139,92,246,0.18); color:#c084fc; border:1px solid rgba(192,132,252,0.3); font-size:0.68rem;">💡 مفاهيم وتعريفات</span>' : ''}
+                          ${hasSummary ? '<span class="badge" style="background:rgba(16,185,129,0.18); color:#4ade80; border:1px solid rgba(74,222,128,0.3); font-size:0.68rem;">📝 ملخص الشرح</span>' : ''}
+                        </div>
+                        ${cleanSnippet ? `
+                          <div style="font-size:0.78rem; color:#94a3b8; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; background:#0f172a; padding:0.35rem 0.55rem; border-radius:6px; border-right:2px solid #38bdf8;">
+                            ${escapeHtmlAttr(cleanSnippet)}${cleanSnippet.length >= 140 ? '...' : ''}
+                          </div>
+                        ` : ''}
                       </td>
                       <td>
                         <div style="font-size:0.85rem; color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(subName)}</div>
@@ -4216,6 +4259,7 @@ async function renderAiStudioView(container, initialTab = null) {
                       <td style="color:#94a3b8; font-size:0.82rem;">${l.createdAt ? new Date(l.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
                       <td>
                         <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                          <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:#0284c7; color:#fff; font-weight:bold;" onclick="openLessonDetailsModal('${l.id}')">👁️ عرض الشرح</button>
                           <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:linear-gradient(135deg, #7c3aed, #db2777); color:#fff; font-weight:bold;" onclick="quickGenerateAiExamForLesson('${l.id}')">⚡ توليد امتحان</button>
                           ${!isPublished ? `<button class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="publishLessonAction('${l.id}')">📢 نشر</button>` : ''}
                           <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="archiveLessonAction('${l.id}')">🗑️</button>
@@ -5224,6 +5268,55 @@ async function runAiLessonExtraction() {
   const memo = allContents.find(c => c.id === sourceId);
 
   if (resBox) resBox.style.display = 'block';
+  const trackerBox = document.getElementById('aiLessonProgressTracker');
+  const progTitle = document.getElementById('aiLessonProgressTitle');
+  const progTimer = document.getElementById('aiLessonProgressTimer');
+  const progPct = document.getElementById('aiLessonProgressPercent');
+  const progFill = document.getElementById('aiLessonProgressBarFill');
+  const stepEls = [1, 2, 3, 4].map(n => document.getElementById(`aiLessonStep${n}`));
+
+  const setLessonProgressState = (pct, titleText, activeStepIdx, elapsedSec) => {
+    if (progPct) progPct.innerText = `${pct}%`;
+    if (progFill) progFill.style.width = `${pct}%`;
+    if (progTitle && titleText) progTitle.innerText = titleText;
+    if (progTimer && typeof elapsedSec === 'number') progTimer.innerText = `⏱️ ${elapsedSec} ثانية`;
+    stepEls.forEach((el, idx) => {
+      if (!el) return;
+      if (idx < activeStepIdx) {
+        el.style.background = 'rgba(34,197,94,0.18)';
+        el.style.borderColor = '#22c55e';
+        el.style.color = '#4ade80';
+        el.style.fontWeight = 'bold';
+      } else if (idx === activeStepIdx) {
+        el.style.background = 'rgba(2,132,199,0.22)';
+        el.style.borderColor = '#0284c7';
+        el.style.color = '#38bdf8';
+        el.style.fontWeight = 'bold';
+      } else {
+        el.style.background = '#1e293b';
+        el.style.borderColor = '#334155';
+        el.style.color = '#64748b';
+        el.style.fontWeight = 'normal';
+      }
+    });
+  };
+
+  if (trackerBox) trackerBox.style.display = 'block';
+  let lessonElapsed = 0;
+  setLessonProgressState(12, `جاري قراءة الصفحات (${startPage} إلى ${endPage || 'النهاية'}) من المذكرة...`, 0, 0);
+  const lessonTimerInterval = setInterval(() => {
+    lessonElapsed += 1;
+    if (lessonElapsed <= 3) {
+      setLessonProgressState(22 + lessonElapsed * 4, `جاري قراءة الصفحات (${startPage} إلى ${endPage || 'النهاية'}) من المذكرة...`, 0, lessonElapsed);
+    } else if (lessonElapsed <= 9) {
+      setLessonProgressState(Math.min(58, 34 + (lessonElapsed - 3) * 4), 'جاري تحليل المحتوى العلمي واستخلاص الأفكار الرئيسية...', 1, lessonElapsed);
+    } else if (lessonElapsed <= 17) {
+      setLessonProgressState(Math.min(84, 58 + (lessonElapsed - 9) * 3), 'جاري صياغة المفاهيم والتعريفات والقوانين العلمية...', 2, lessonElapsed);
+    } else {
+      setLessonProgressState(Math.min(95, 84 + Math.floor((lessonElapsed - 17) / 2)), 'جاري تجهيز وتنسيق الملخص الشامل للدرس...', 3, lessonElapsed);
+    }
+  }, 1000);
+
   const statusBanner = document.getElementById('aiLessonExtractionStatusBanner');
   const extractBtn = document.getElementById('btnRunAiLessonExtract');
   const outEl = document.getElementById('aiResultOutlines');
@@ -5300,6 +5393,9 @@ async function runAiLessonExtraction() {
       throw new Error('لم يتم استرجاع نصوص الشرح من مزود الذكاء الاصطناعي — يرجى المحاولة مرة أخرى');
     }
 
+    clearInterval(lessonTimerInterval);
+    setLessonProgressState(100, `✅ اكتمل استخراج وشرح الدرس بنجاح عبر (${res.provider || 'AI'})!`, 4, lessonElapsed);
+
     if (outEl) outEl.value = outlinesText;
     if (conEl) conEl.value = conceptsText;
     if (sumEl) sumEl.value = summaryText;
@@ -5316,6 +5412,8 @@ async function runAiLessonExtraction() {
 
     showToast(`✅ تم استخراج شرح الدرس بنجاح عبر (${res.provider || 'Gemini'}) من الصفحات المحددة! 🟢`);
   } catch (e) {
+    clearInterval(lessonTimerInterval);
+    if (trackerBox) trackerBox.style.display = 'none';
     if (outEl && outEl.value.startsWith('⏳')) outEl.value = '';
     if (conEl && conEl.value.startsWith('⏳')) conEl.value = '';
     if (sumEl && sumEl.value.startsWith('⏳')) sumEl.value = '';
@@ -5325,11 +5423,76 @@ async function runAiLessonExtraction() {
     }
     showToast(`❌ تعذر استخراج الشرح آلياً: ${(e && e.message) || e}`, true);
   } finally {
+    clearInterval(lessonTimerInterval);
     if (extractBtn) {
       extractBtn.disabled = false;
       extractBtn.innerText = '✨ استخراج وشرح الدرس بالذكاء الاصطناعي';
     }
   }
+}
+
+function openLessonDetailsModal(lessonId) {
+  const lesson = (window._allLessonsCache || []).find(l => l.id === lessonId);
+  if (!lesson) return showToast('تعذر العثور على بيانات الدرس', true);
+
+  let outlines = lesson.outlines || '';
+  let concepts = lesson.concepts || '';
+  let summary = lesson.summary || '';
+
+  if (!outlines && !concepts && !summary && lesson.description) {
+    const desc = String(lesson.description);
+    const outMatch = desc.match(/📌 العناصر والأفكار الرئيسية:\s*([\s\S]*?)(?=💡 التعريفات|📝 ملخص|$)/);
+    const conMatch = desc.match(/💡 التعريفات والمفاهيم والقوانين:\s*([\s\S]*?)(?=📝 ملخص|$)/);
+    const sumMatch = desc.match(/📝 ملخص الشرح:\s*([\s\S]*?)$/);
+    outlines = outMatch ? outMatch[1].trim() : '';
+    concepts = conMatch ? conMatch[1].trim() : '';
+    summary = sumMatch ? sumMatch[1].trim() : desc;
+  }
+
+  const container = document.getElementById('modalContainer');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-card" style="display:block; width:860px; max-width:95vw; max-height:90vh; overflow-y:auto; background:#0f172a; border:1px solid #38bdf8; padding:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #334155; padding-bottom:1rem; margin-bottom:1.25rem;">
+          <div>
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <span style="font-size:1.5rem;">📖</span>
+              <h2 style="margin:0; font-size:1.25rem; color:#f8fafc; font-weight:800;">${escapeHtmlAttr(lesson.title)}</h2>
+              <span class="badge" style="background:#1e3a8a; color:#93c5fd;">${escapeHtmlAttr(lesson.pageRange || (lesson.pageStart ? `صفحة ${lesson.pageStart} إلى ${lesson.pageEnd || 'النهاية'}` : 'كامل الدرس'))}</span>
+              ${lesson.status === 'PUBLISHED' ? '<span class="badge" style="background:#064e3b; color:#86efac;">منشور للطلاب 🟢</span>' : '<span class="badge" style="background:#78350f; color:#fde047;">مسودة 📝</span>'}
+            </div>
+          </div>
+          <button class="btn" style="background:#475569; padding:0.3rem 0.7rem;" onclick="closeModal()">✖️</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          ${outlines ? `
+            <div style="background:#1e293b; border:1px solid #0284c7; border-right:4px solid #38bdf8; border-radius:8px; padding:1rem;">
+              <div style="font-weight:800; color:#38bdf8; font-size:0.95rem; margin-bottom:0.5rem;">🎯 العناصر والأهداف الأساسية للدرس</div>
+              <div style="color:#f8fafc; font-size:0.88rem; line-height:1.75; white-space:pre-line;">${escapeHtml(outlines)}</div>
+            </div>
+          ` : ''}
+          ${concepts ? `
+            <div style="background:#1e293b; border:1px solid #7c3aed; border-right:4px solid #a855f7; border-radius:8px; padding:1rem;">
+              <div style="font-weight:800; color:#c084fc; font-size:0.95rem; margin-bottom:0.5rem;">💡 التعريفات والمفاهيم والقوانين العلمية</div>
+              <div style="color:#f8fafc; font-size:0.88rem; line-height:1.75; white-space:pre-line;">${escapeHtml(concepts)}</div>
+            </div>
+          ` : ''}
+          ${summary ? `
+            <div style="background:#1e293b; border:1px solid #059669; border-right:4px solid #10b981; border-radius:8px; padding:1rem;">
+              <div style="font-weight:800; color:#4ade80; font-size:0.95rem; margin-bottom:0.5rem;">📝 ملخص الشرح الشامل للطلاب</div>
+              <div style="color:#f8fafc; font-size:0.88rem; line-height:1.75; white-space:pre-line;">${escapeHtml(summary)}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #334155;">
+          <button class="btn" style="background:linear-gradient(135deg, #7c3aed, #db2777); color:#fff; font-weight:bold;" onclick="closeModal(); quickGenerateAiExamForLesson('${lesson.id}')">⚡ توليد امتحان ذكي على هذا الدرس</button>
+          <button class="btn btn-primary" onclick="closeModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 async function saveAiGeneratedLesson() {
@@ -11917,140 +12080,203 @@ async function viewStudentDetailsModal(studentId) {
 
     const guardianPhone = student.guardianPhone || student.parentPhone || student.phone || '';
     const guardianName = student.guardianName || student.parentName || 'ولي الأمر';
+    const stageLabel = stageMap.get(student.stageId) || student.stageName || student.stage || 'مرحلة دراسية غير محددة';
+    const yearLabel = yearMap.get(student.academicYearId) || student.academicYearName || 'العام الدراسي الحالي';
+    const regDate = student.createdAt ? new Date(student.createdAt).toLocaleDateString('ar-EG') : '—';
+    const isStudentActive = student.status !== 'SUSPENDED' && student.status !== 'ARCHIVED';
+    const groupMap = new Map((groups || []).map(g => [g.id, g.name]));
 
     container.innerHTML = `
-    <div class="modal-overlay">
-      <div class="modal-card" style="width:780px; max-height:90vh; overflow-y:auto; background:#0f172a; border:1px solid #38bdf8;">
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-card" style="display:block; width:920px; max-width:95vw; max-height:92vh; overflow-y:auto; background:#0f172a; border:1px solid #38bdf8; padding:1.5rem; box-shadow:0 20px 50px rgba(0,0,0,0.6);">
         <!-- Header Banner -->
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:1rem; margin-bottom:1rem;">
-          <div style="display:flex; align-items:center; gap:0.9rem;">
-            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:bold;">
-              ${(student.name || 'ط').charAt(0)}
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem; border-bottom:1px solid #334155; padding-bottom:1.1rem; margin-bottom:1.25rem; background:linear-gradient(135deg, rgba(2,132,199,0.12), rgba(30,41,59,0.4)); padding:1rem 1.15rem; border-radius:10px;">
+          <div style="display:flex; align-items:center; gap:1rem;">
+            <div style="width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.75rem; font-weight:bold; flex-shrink:0; box-shadow:0 4px 12px rgba(2,132,199,0.4);">
+              ${escapeHtmlAttr((student.name || 'ط').charAt(0))}
             </div>
             <div>
-              <div style="display:flex; align-items:center; gap:0.5rem;">
-                <h2 style="margin:0; font-size:1.35rem; color:#f8fafc; font-weight:800;">${escapeHtmlAttr(student.name)}</h2>
-                <span class="code-box" style="color:#38bdf8;">#${student.studentCode || student.id}</span>
+              <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <h2 style="margin:0; font-size:1.4rem; color:#f8fafc; font-weight:800;">${escapeHtmlAttr(student.name)}</h2>
+                <span class="code-box" style="color:#38bdf8; font-weight:bold; font-size:0.85rem;">#${escapeHtmlAttr(student.studentCode || student.id)}</span>
+                ${isStudentActive
+                  ? '<span class="badge" style="background:#064e3b; color:#86efac; border:1px solid #10b981;">🟢 نشط بالسنتر</span>'
+                  : '<span class="badge" style="background:#7f1d1d; color:#fca5a5; border:1px solid #ef4444;">🔴 موقوف / مؤرشف</span>'}
                 ${student.isVip ? '<span class="badge" style="background:#4c1d95; color:#c084fc; border:1px solid #7c3aed;">⭐ VIP AI</span>' : ''}
               </div>
-              <div style="color:#94a3b8; font-size:0.82rem; margin-top:0.2rem;">
-                ${escapeHtmlAttr(stageMap.get(student.stageId) || student.stage || 'مرحلة دراسية')} | ${escapeHtmlAttr(yearMap.get(student.academicYearId) || 'عام دراسي')}
+              <div style="color:#cbd5e1; font-size:0.86rem; margin-top:0.35rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                <span>🎓 المرحلة: <strong style="color:#38bdf8;">${escapeHtmlAttr(stageLabel)}</strong></span>
+                <span>•</span>
+                <span>📅 العام الدراسي: <strong style="color:#f8fafc;">${escapeHtmlAttr(yearLabel)}</strong></span>
+                <span>•</span>
+                <span>🕒 تاريخ التسجيل: <strong style="color:#94a3b8;">${escapeHtmlAttr(regDate)}</strong></span>
               </div>
             </div>
           </div>
-          <button class="btn" style="background:#475569; padding:0.3rem 0.7rem;" onclick="closeModal()">✖️</button>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <button class="btn" style="background:#0284c7; color:#fff; padding:0.4rem 0.75rem; font-size:0.8rem; font-weight:bold;" onclick="showStudentPinModal('${student.id}')">🔑 بيانات الدخول والـ PIN</button>
+            <button class="btn" style="background:#475569; padding:0.4rem 0.75rem;" onclick="closeModal()">✖️</button>
+          </div>
         </div>
 
         <!-- Metric KPI Cards -->
-        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-          <div style="background:#1e293b; padding:0.75rem; border-radius:8px; border-right:3px solid #22c55e;">
-            <span style="font-size:0.75rem; color:#94a3b8; display:block;">نسبة الحضور</span>
-            <strong style="font-size:1.25rem; color:#4ade80;">${attendanceRate}%</strong>
-            <small style="color:#64748b; display:block; font-size:0.7rem;">${attendedCount} حضور / ${absentCount} غياب</small>
+        <div class="stats-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; margin-bottom: 1.25rem;">
+          <div style="background:#1e293b; padding:0.85rem 1rem; border-radius:10px; border-right:4px solid #22c55e;">
+            <span style="font-size:0.78rem; color:#94a3b8; display:block; margin-bottom:0.2rem;">📊 نسبة الالتزام والحضور</span>
+            <strong style="font-size:1.35rem; color:#4ade80;">${attendanceRate}%</strong>
+            <small style="color:#cbd5e1; display:block; font-size:0.75rem; margin-top:0.2rem;">${attendedCount} حضور / ${absentCount} غياب (إجمالي ${totalSessions})</small>
           </div>
-          <div style="background:#1e293b; padding:0.75rem; border-radius:8px; border-right:3px solid #0284c7;">
-            <span style="font-size:0.75rem; color:#94a3b8; display:block;">إجمالي المسدد</span>
-            <strong style="font-size:1.25rem; color:#38bdf8;">${fmtMoney(totalPaid)}</strong>
-            <small style="color:#64748b; display:block; font-size:0.7rem;">${payments.length} إيصالات</small>
+          <div style="background:#1e293b; padding:0.85rem 1rem; border-radius:10px; border-right:4px solid #0284c7;">
+            <span style="font-size:0.78rem; color:#94a3b8; display:block; margin-bottom:0.2rem;">💰 إجمالي المبالغ المسددة</span>
+            <strong style="font-size:1.35rem; color:#38bdf8;">${fmtMoney(totalPaid)}</strong>
+            <small style="color:#cbd5e1; display:block; font-size:0.75rem; margin-top:0.2rem;">عبر ${payments.length} إيصال سداد معتمد</small>
           </div>
-          <div style="background:#1e293b; padding:0.75rem; border-radius:8px; border-right:3px solid ${stDues.netDue > 0 ? '#ef4444' : '#22c55e'};">
-            <span style="font-size:0.75rem; color:#94a3b8; display:block;">المستحق المطلوب</span>
-            <strong style="font-size:1.25rem; color:${stDues.netDue > 0 ? '#f87171' : '#4ade80'};">${fmtMoney(stDues.netDue)}</strong>
-            <small style="color:#64748b; display:block; font-size:0.7rem;">حسب الحصص المحضورة</small>
+          <div style="background:#1e293b; padding:0.85rem 1rem; border-radius:10px; border-right:4px solid ${stDues.netDue > 0 ? '#ef4444' : '#22c55e'};">
+            <span style="font-size:0.78rem; color:#94a3b8; display:block; margin-bottom:0.2rem;">🧾 الرصيد المستحق المطلوب</span>
+            <strong style="font-size:1.35rem; color:${stDues.netDue > 0 ? '#f87171' : '#4ade80'};">${fmtMoney(stDues.netDue)}</strong>
+            <small style="color:#cbd5e1; display:block; font-size:0.75rem; margin-top:0.2rem;">إجمالي الاستحقاق: ${fmtMoney(stDues.totalAccrued || 0)}</small>
           </div>
-          <div style="background:#1e293b; padding:0.75rem; border-radius:8px; border-right:3px solid #8b5cf6;">
-            <span style="font-size:0.75rem; color:#94a3b8; display:block;">المساعد الذكي VIP</span>
-            <strong style="font-size:1.25rem; color:#c084fc;">${student.aiQuestionsBalance || 0}</strong>
-            <small style="color:#64748b; display:block; font-size:0.7rem;">سؤال متبقي بالرصيد</small>
+          <div style="background:#1e293b; padding:0.85rem 1rem; border-radius:10px; border-right:4px solid #8b5cf6;">
+            <span style="font-size:0.78rem; color:#94a3b8; display:block; margin-bottom:0.2rem;">🤖 رصيد المساعد الذكي VIP</span>
+            <strong style="font-size:1.35rem; color:#c084fc;">${student.aiQuestionsBalance || 0}</strong>
+            <small style="color:#cbd5e1; display:block; font-size:0.75rem; margin-top:0.2rem;">سؤال متبقي بحساب الطالب</small>
           </div>
         </div>
 
-        <!-- 2 Columns Grid -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; margin-bottom:1rem;">
-          <!-- Basic & Parent Info -->
-          <div class="card" style="margin:0; padding:1rem; box-shadow:none; border:1px solid #334155;">
-            <div class="card-title" style="margin-bottom:0.6rem;">📱 بيانات الاتصال وولي الأمر</div>
-            <p style="margin:0 0 0.4rem 0;"><strong>هاتف الطالب:</strong> <span class="code-box">${student.phone || '-'}</span></p>
-            <p style="margin:0 0 0.4rem 0;"><strong>ولي الأمر:</strong> ${escapeHtmlAttr(guardianName)}</p>
-            <p style="margin:0 0 0.4rem 0;"><strong>هاتف ولي الأمر:</strong> <span class="code-box">${guardianPhone || '-'}</span></p>
-            <p style="margin:0 0 0.4rem 0;"><strong>كود QR الحضور:</strong> <span class="code-box" style="font-size:0.8rem;">${student.qrToken || ('QR_' + student.id)}</span></p>
+        <!-- 2 Columns Grid: Detailed Info + Enrolled Groups -->
+        <div style="display:grid; grid-template-columns:1.1fr 1fr; gap:1rem; margin-bottom:1.15rem;">
+          <!-- Complete Student & Guardian Info -->
+          <div class="card" style="margin:0; padding:1.1rem; box-shadow:none; border:1px solid #334155; background:#1e293b;">
+            <div class="card-title" style="margin-bottom:0.85rem; color:#38bdf8; font-size:0.95rem; border-bottom:1px solid #334155; padding-bottom:0.45rem;">📱 البيانات الشخصية وبيانات ولي الأمر</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem; font-size:0.84rem;">
+              <div style="background:#0f172a; padding:0.55rem 0.7rem; border-radius:6px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:0.74rem; display:block;">هاتف الطالب (تطبيق الموبايل)</span>
+                <strong class="code-box" style="color:#f8fafc; font-size:0.88rem;">${escapeHtmlAttr(student.phone || 'غير مسجل')}</strong>
+              </div>
+              <div style="background:#0f172a; padding:0.55rem 0.7rem; border-radius:6px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:0.74rem; display:block;">كود الطالب الرسمي</span>
+                <strong class="code-box" style="color:#38bdf8; font-size:0.88rem;">${escapeHtmlAttr(student.studentCode || student.id)}</strong>
+              </div>
+              <div style="background:#0f172a; padding:0.55rem 0.7rem; border-radius:6px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:0.74rem; display:block;">اسم ولي الأمر</span>
+                <strong style="color:#f8fafc; font-size:0.88rem;">${escapeHtmlAttr(guardianName)}</strong>
+              </div>
+              <div style="background:#0f172a; padding:0.55rem 0.7rem; border-radius:6px; border:1px solid #334155;">
+                <span style="color:#94a3b8; font-size:0.74rem; display:block;">هاتف ولي الأمر (للطوارئ والواتساب)</span>
+                <strong class="code-box" style="color:#4ade80; font-size:0.88rem;">${escapeHtmlAttr(guardianPhone || 'غير مسجل')}</strong>
+              </div>
+              <div style="background:#0f172a; padding:0.55rem 0.7rem; border-radius:6px; border:1px solid #334155; grid-column:span 2;">
+                <span style="color:#94a3b8; font-size:0.74rem; display:block;">رمز الباركود والـ QR للحضور الذكي</span>
+                <strong class="code-box" style="color:#facc15; font-size:0.85rem;">${escapeHtmlAttr(student.qrToken || ('QR_' + student.id))}</strong>
+              </div>
+            </div>
             ${guardianPhone ? `
-              <div style="margin-top:0.75rem;">
-                <button class="btn btn-success" style="padding:0.35rem 0.75rem; font-size:0.8rem; width:100%; display:flex; justify-content:center; align-items:center; gap:0.35rem;" onclick="window.open('https://web.whatsapp.com/send?phone=20${guardianPhone.replace(/\\D/g,'').replace(/^0+/,'')}', '_blank')">
-                  <span>💬 محادثة واتساب فورية مع ولي الأمر</span>
+              <div style="margin-top:0.85rem;">
+                <button class="btn btn-success" style="padding:0.45rem 0.85rem; font-size:0.85rem; width:100%; display:flex; justify-content:center; align-items:center; gap:0.4rem; font-weight:bold;" onclick="window.open('https://web.whatsapp.com/send?phone=20${guardianPhone.replace(/\\D/g,'').replace(/^0+/,'')}', '_blank')">
+                  <span>💬 محادثة واتساب فورية مع ولي الأمر (${escapeHtmlAttr(guardianPhone)})</span>
                 </button>
               </div>
             ` : ''}
           </div>
 
           <!-- Academic & Groups -->
-          <div class="card" style="margin:0; padding:1rem; box-shadow:none; border:1px solid #334155;">
-            <div class="card-title" style="margin-bottom:0.6rem;">📚 المجموعات المسجل بها (${groups.length})</div>
+          <div class="card" style="margin:0; padding:1.1rem; box-shadow:none; border:1px solid #334155; background:#1e293b;">
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.85rem; color:#38bdf8; font-size:0.95rem; border-bottom:1px solid #334155; padding-bottom:0.45rem;">
+              <span>📚 المجموعات المسجل بها (${groups.length})</span>
+              <button class="btn" style="background:#0284c7; color:#fff; padding:0.2rem 0.55rem; font-size:0.74rem;" onclick="openStudentGroupsModal('${student.id}')">+ إدارة المجموعات</button>
+            </div>
             ${groups.length ? `
-              <div style="display:flex; flex-direction:column; gap:0.4rem; max-height:160px; overflow-y:auto;">
-                ${groups.map(g => `
-                  <div style="background:#0f172a; padding:0.45rem 0.65rem; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; flex-direction:column; gap:0.55rem;">
+                ${groups.map(g => {
+                  const subText = subjectMap.get(g.subjectId) || g.subjectName || 'مادة عامة';
+                  const tchText = teacherMap.get(g.teacherId) || g.teacherName || 'غير محدد';
+                  const rmText = roomMap.get(g.roomId) || g.roomName || '';
+                  return `
+                  <div style="background:#0f172a; padding:0.65rem 0.8rem; border-radius:8px; border:1px solid #334155; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                     <div>
-                      <strong style="color:#f8fafc; font-size:0.85rem;">${escapeHtmlAttr(g.name)}</strong>
-                      <div style="color:#94a3b8; font-size:0.72rem;">${escapeHtmlAttr(subjectMap.get(g.subjectId) || g.subjectName || '-')} — ${escapeHtmlAttr(teacherMap.get(g.teacherId) || '-')}</div>
+                      <strong style="color:#f8fafc; font-size:0.9rem; display:block; margin-bottom:0.2rem;">${escapeHtmlAttr(g.name)}</strong>
+                      <div style="color:#94a3b8; font-size:0.78rem; display:flex; gap:0.45rem; flex-wrap:wrap;">
+                        <span style="color:#38bdf8;">📖 ${escapeHtmlAttr(subText)}</span>
+                        <span>•</span>
+                        <span style="color:#c084fc;">👨‍🏫 ${escapeHtmlAttr(tchText)}</span>
+                        ${rmText ? `<span>• 🏛️ ${escapeHtmlAttr(rmText)}</span>` : ''}
+                      </div>
+                      ${g.schedule ? `<div style="color:#64748b; font-size:0.74rem; margin-top:0.2rem;">🕒 المواعيد: ${escapeHtmlAttr(g.schedule)}</div>` : ''}
                     </div>
-                    <span style="color:#38bdf8; font-weight:bold; font-size:0.8rem;">${fmtMoney(g.price || 200)}</span>
+                    <span class="badge" style="background:rgba(2,132,199,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); font-weight:bold; font-size:0.82rem; white-space:nowrap;">${fmtMoney(g.price || 200)}</span>
                   </div>
-                `).join('')}
+                `;
+                }).join('')}
               </div>
-            ` : '<p style="color:#94a3b8; font-size:0.85rem;">الطالب غير مسجل في أي مجموعة حالياً.</p>'}
+            ` : '<p style="color:#94a3b8; font-size:0.85rem; text-align:center; padding:1.5rem 0;">الطالب غير مسجل في أي مجموعة حالياً.</p>'}
           </div>
         </div>
 
-        <!-- Financial Receipts History -->
-        <div class="card" style="margin:0 0 1rem 0; padding:1rem; box-shadow:none; border:1px solid #334155;">
-          <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-            <span>💳 سجل إيصالات المدفوعات الأخيرة (${payments.length})</span>
-            <button class="btn btn-success" style="padding:0.25rem 0.65rem; font-size:0.75rem;" onclick="closeModal(); openRecordPaymentModal(); setTimeout(() => { const ni = document.getElementById('mPayStudentName'); if (ni) ni.value = '${escapeHtmlAttr(student.name)}'; const ai = document.getElementById('mPayAmount'); if (ai && ${stDues.netDue > 0}) ai.value = ${stDues.netDue}; }, 200);">
-              💳 + تحصيل نقدية الآن
+        <!-- Financial Receipts History (Full Unclipped Table) -->
+        <div class="card" style="margin:0 0 1.15rem 0; padding:1.1rem; box-shadow:none; border:1px solid #334155; background:#1e293b;">
+          <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.85rem; border-bottom:1px solid #334155; padding-bottom:0.55rem;">
+            <span style="color:#4ade80; font-size:0.98rem;">💳 سجل إيصالات المدفوعات الكامل (${payments.length})</span>
+            <button class="btn btn-success" style="padding:0.35rem 0.85rem; font-size:0.8rem; font-weight:bold;" onclick="closeModal(); openRecordPaymentModal(); setTimeout(() => { const ni = document.getElementById('mPayStudentName'); if (ni) ni.value = '${escapeHtmlAttr(student.name)}'; const ai = document.getElementById('mPayAmount'); if (ai && ${stDues.netDue > 0}) ai.value = ${stDues.netDue}; }, 200);">
+              💳 + تحصيل نقدية وإصدار إيصال الآن
             </button>
           </div>
           ${payments.length ? `
-            <div style="max-height:140px; overflow-y:auto;">
-              <table class="data-table" style="font-size:0.82rem;">
-                <thead><tr><th>رقم الإيصال</th><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>معاينة</th></tr></thead>
+            <div style="overflow-x:auto;">
+              <table class="data-table" style="font-size:0.85rem; width:100%;">
+                <thead>
+                  <tr>
+                    <th>رقم الإيصال</th>
+                    <th>تاريخ السداد</th>
+                    <th>البند / المجموعة</th>
+                    <th>طريقة الدفع</th>
+                    <th>المبلغ المسدد</th>
+                    <th style="text-align:center;">طباعة ومعاينة</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  ${payments.slice(0, 5).map(p => `
+                  ${payments.map(p => {
+                    const grpLabel = p.groupId ? (groupMap.get(p.groupId) || '') : '';
+                    return `
                     <tr>
-                      <td><span class="code-box" style="color:#38bdf8;">${escapeHtmlAttr(p.humanReceiptNumber || p.receiptNumber || p.id)}</span></td>
-                      <td>${p.paymentDate || '—'}</td>
-                      <td>${escapeHtmlAttr(p.category || 'مصاريف')}</td>
-                      <td style="color:#4ade80; font-weight:bold;">
-                        ${fmtMoney(p.amount)}
-                        ${p.discount && Number(p.discount) > 0 ? `<small class="badge" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.68rem; margin-right:0.25rem;">خصم -${fmtMoney(p.discount)}</small>` : ''}
-                      </td>
+                      <td><span class="code-box" style="color:#38bdf8; font-weight:bold;">${escapeHtmlAttr(p.humanReceiptNumber || p.receiptNumber || p.id)}</span></td>
+                      <td style="color:#cbd5e1;">${escapeHtmlAttr(p.paymentDate || (p.createdAt ? new Date(p.createdAt).toLocaleDateString('ar-EG') : '—'))}</td>
                       <td>
-                        <button class="btn btn-primary" style="padding:0.15rem 0.45rem; font-size:0.7rem;" onclick="openReceiptPreviewModal(${escapeHtmlAttr(JSON.stringify(p))}, ${escapeHtmlAttr(JSON.stringify(student))})">
-                          🧾 طباعة
+                        <strong style="color:#f8fafc;">${escapeHtmlAttr(p.category || p.description || 'مصاريف دراسية')}</strong>
+                        ${grpLabel ? `<div style="font-size:0.74rem; color:#94a3b8;">${escapeHtmlAttr(grpLabel)}</div>` : ''}
+                      </td>
+                      <td><span class="badge" style="background:#0f172a; color:#cbd5e1; border:1px solid #334155;">${escapeHtmlAttr(p.method === 'CASH' || !p.method ? 'نقدي (Cash)' : p.method)}</span></td>
+                      <td style="color:#4ade80; font-weight:bold; font-size:0.9rem;">
+                        ${fmtMoney(p.amount)}
+                        ${p.discount && Number(p.discount) > 0 ? `<small class="badge" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.7rem; margin-right:0.3rem;">خصم -${fmtMoney(p.discount)}</small>` : ''}
+                      </td>
+                      <td style="text-align:center;">
+                        <button class="btn btn-primary" style="padding:0.25rem 0.65rem; font-size:0.78rem; font-weight:bold;" onclick="openReceiptPreviewModal(${escapeHtmlAttr(JSON.stringify(p))}, ${escapeHtmlAttr(JSON.stringify(student))})">
+                          🧾 طباعة الإيصال
                         </button>
                       </td>
                     </tr>
-                  `).join('')}
+                  `;
+                  }).join('')}
                 </tbody>
               </table>
             </div>
-          ` : '<p style="color:#94a3b8; font-size:0.85rem;">لا توجد إيصالات مدفوعات مسجلة لهذا الطالب حتى الآن.</p>'}
+          ` : '<p style="color:#94a3b8; font-size:0.88rem; text-align:center; padding:1.25rem 0;">لا توجد إيصالات مدفوعات مسجلة لهذا الطالب حتى الآن.</p>'}
         </div>
 
         <!-- Action Footer -->
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding-top:0.75rem; border-top:1px solid #334155;">
-          <div style="display:flex; gap:0.4rem;">
-            <button class="btn btn-warning" style="padding:0.45rem 0.85rem; font-size:0.82rem;" onclick="openRedeemVoucherModal(''); setTimeout(() => { const si = document.getElementById('mRedeemStudentId'); if (si) si.value = '${student.id}'; }, 200);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-top:1rem; padding-top:0.85rem; border-top:1px solid #334155;">
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-warning" style="padding:0.45rem 0.9rem; font-size:0.84rem; font-weight:bold;" onclick="openRedeemVoucherModal(''); setTimeout(() => { const si = document.getElementById('mRedeemStudentId'); if (si) si.value = '${student.id}'; }, 200);">
               🎟️ شحن كود VIP ذكي
             </button>
-            <button class="btn" style="background:#475569; padding:0.45rem 0.85rem; font-size:0.82rem;" onclick="openStudentGroupsModal('${student.id}')">
-              إدارة المجموعات
+            <button class="btn" style="background:#475569; padding:0.45rem 0.9rem; font-size:0.84rem;" onclick="openStudentGroupsModal('${student.id}')">
+              📚 إدارة المجموعات
             </button>
-            <button class="btn" style="background:#334155; padding:0.45rem 0.85rem; font-size:0.82rem;" onclick="openEditStudentModal('${student.id}')">
-              تعديل البيانات
+            <button class="btn" style="background:#334155; padding:0.45rem 0.9rem; font-size:0.84rem;" onclick="openEditStudentModal('${student.id}')">
+              ✏️ تعديل بيانات الطالب
             </button>
           </div>
-          <button class="btn btn-primary" style="padding:0.45rem 1.2rem;" onclick="closeModal()">إغلاق النافذة</button>
+          <button class="btn btn-primary" style="padding:0.45rem 1.4rem; font-weight:bold;" onclick="closeModal()">إغلاق النافذة</button>
         </div>
       </div>
     </div>`;
@@ -15365,6 +15591,13 @@ async function quickGenerateAiExamForLesson(lessonId) {
   await openAiExamGeneratorModal();
   if (!lesson) return;
 
+  window._aiLessonPrefilledContext = [
+    lesson.outlines ? `العناصر الأساسية:\n${lesson.outlines}` : '',
+    lesson.concepts ? `المفاهيم والتعريفات:\n${lesson.concepts}` : '',
+    lesson.summary ? `ملخص الشرح:\n${lesson.summary}` : '',
+    (!lesson.outlines && !lesson.concepts && !lesson.summary && lesson.description) ? lesson.description : ''
+  ].filter(Boolean).join('\n\n');
+
   setTimeout(() => {
     const stageSel = document.getElementById('mAiStage');
     const subSel = document.getElementById('mAiSubject');
@@ -15382,18 +15615,26 @@ async function quickGenerateAiExamForLesson(lessonId) {
     }
     if (groupSel && lesson.groupId) groupSel.value = lesson.groupId;
     if (titleInp) titleInp.value = `اختبار درس: ${lesson.title}`;
-    if (topicInp) topicInp.value = `${lesson.title}${lesson.description ? ' - ' + lesson.description : ''}`;
+    if (topicInp) topicInp.value = lesson.title;
 
-    if (lesson.pageStart || lesson.pageEnd) {
-      toggleAiSourceMode('FILE_UPLOAD');
-      const rad = document.querySelector('input[name="aiSourceMode"][value="FILE_UPLOAD"]');
+    if (lesson.sourceId) {
+      toggleAiSourceMode('SAVED_MEMO');
+      const rad = document.querySelector('input[name="aiSourceMode"][value="SAVED_MEMO"]');
       if (rad) rad.checked = true;
-      const sInp = document.getElementById('mAiPageStart');
-      const eInp = document.getElementById('mAiPageEnd');
+      const memoSel = document.getElementById('mAiSavedMemoSelect');
+      if (memoSel) memoSel.value = lesson.sourceId;
+      const sInp = document.getElementById('mAiSavedPageStart');
+      const eInp = document.getElementById('mAiSavedPageEnd');
       if (sInp && lesson.pageStart) sInp.value = lesson.pageStart;
       if (eInp && lesson.pageEnd) eInp.value = lesson.pageEnd;
+    } else if (window._aiLessonPrefilledContext) {
+      toggleAiSourceMode('TEXT_PASTE');
+      const rad = document.querySelector('input[name="aiSourceMode"][value="TEXT_PASTE"]');
+      if (rad) rad.checked = true;
+      const ctxEl = document.getElementById('mAiContextText');
+      if (ctxEl) ctxEl.value = window._aiLessonPrefilledContext;
     }
-  }, 100);
+  }, 120);
 }
 
 async function openAiExamGeneratorModal() {
@@ -15423,6 +15664,7 @@ async function openAiExamGeneratorModal() {
   window._allAiContents = contents;
 
   window._aiUploadedFileText = '';
+  window._aiLessonPrefilledContext = '';
   window._aiGeneratedExam = null;
 
   modal.innerHTML = `
@@ -15617,11 +15859,43 @@ async function openAiExamGeneratorModal() {
             </div>
           </div>
 
-          <!-- Loading Spinner -->
-          <div id="aiExamLoadingSection" style="display:none; text-align:center; padding:3rem 1rem;">
-            <div style="font-size:3.5rem; animation: pulse 1.5s infinite;">🤖✨</div>
-            <h3 style="color:#f8fafc; margin:0.75rem 0 0.5rem 0;">جاري صياغة وتوليد الأسئلة بالذكاء الاصطناعي...</h3>
-            <p style="color:#94a3b8; font-size:0.9rem;" id="aiLoadingStatusText">يتم التواصل مع محرك Gemini Flash / Groq وتحليل المحتوى...</p>
+          <!-- Loading Spinner & Live Progress Tracker Bar -->
+          <div id="aiExamLoadingSection" style="display:none; padding:2rem 1.5rem; background:#0f172a; border:1px solid #4338ca; border-radius:12px;">
+            <div style="text-align:center; margin-bottom:1.25rem;">
+              <div style="font-size:3.2rem; animation: pulse 1.5s infinite;">🤖✨</div>
+              <h3 style="color:#f8fafc; margin:0.5rem 0 0.35rem 0;">جاري صياغة وتوليد الأسئلة بالذكاء الاصطناعي...</h3>
+              <p style="color:#94a3b8; font-size:0.88rem; margin:0;" id="aiLoadingStatusText">يتم قراءة الصفحات المحددة وتحليل المحتوى العلمي...</p>
+            </div>
+
+            <!-- Interactive Progress Bar -->
+            <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:1rem 1.25rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.55rem;">
+                <span id="aiExamProgressStageText" style="color:#38bdf8; font-weight:bold; font-size:0.86rem;">المرحلة الحالية: قراءة المحتوى المرجعي</span>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  <span id="aiExamElapsedTimer" class="badge" style="background:#0f172a; color:#cbd5e1; border:1px solid #334155; font-size:0.76rem;">⏱️ 0 ثانية</span>
+                  <span id="aiExamProgressPercent" class="badge" style="background:linear-gradient(135deg, #7c3aed, #db2777); color:#fff; font-weight:800; font-size:0.82rem;">10%</span>
+                </div>
+              </div>
+
+              <div style="width:100%; height:12px; background:#0f172a; border-radius:999px; overflow:hidden; border:1px solid #334155; margin-bottom:0.9rem;">
+                <div id="aiExamProgressBarFill" style="width:10%; height:100%; background:linear-gradient(90deg, #0284c7, #8b5cf6, #ec4899); border-radius:999px; transition:width 0.45s ease;"></div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:0.5rem; font-size:0.76rem;">
+                <div id="aiExamStep1" style="padding:0.45rem 0.5rem; border-radius:6px; background:rgba(2,132,199,0.22); border:1px solid #0284c7; color:#38bdf8; font-weight:bold; text-align:center;">
+                  1. 📄 قراءة الصفحات
+                </div>
+                <div id="aiExamStep2" style="padding:0.45rem 0.5rem; border-radius:6px; background:#0f172a; border:1px solid #334155; color:#64748b; text-align:center;">
+                  2. 🧠 تحليل المفاهيم
+                </div>
+                <div id="aiExamStep3" style="padding:0.45rem 0.5rem; border-radius:6px; background:#0f172a; border:1px solid #334155; color:#64748b; text-align:center;">
+                  3. ✍️ صياغة الأسئلة
+                </div>
+                <div id="aiExamStep4" style="padding:0.45rem 0.5rem; border-radius:6px; background:#0f172a; border:1px solid #334155; color:#64748b; text-align:center;">
+                  4. ✅ التدقيق النهائي
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Questions Review Section -->
@@ -15685,21 +15959,24 @@ async function submitGenerateAiQuestions() {
     sourceId = memo.id;
     filePath = memo.localStoredPath || memo.filePath || null;
     fileName = memo.fileName || memo.title || null;
-    contextText = memo.textContent || memo.description || `مذكرة تعليمية: ${memo.title}`;
+    const cleanMemoText = (memo.textContent && !String(memo.textContent).trimStart().startsWith('%PDF-')) ? memo.textContent : '';
+    contextText = window._aiLessonPrefilledContext || cleanMemoText || memo.description || `مذكرة تعليمية: ${memo.title}`;
     startPage = parseInt(document.getElementById('mAiSavedPageStart')?.value, 10) || memo.pageStart || 1;
     endPage = parseInt(document.getElementById('mAiSavedPageEnd')?.value, 10) || memo.pageEnd || memo.pagesCount || null;
   } else if (mode === 'FILE_UPLOAD') {
-    contextText = window._aiUploadedFileText || '';
+    contextText = window._aiUploadedFileText || window._aiLessonPrefilledContext || '';
     pdfBase64 = window._aiUploadedFileBase64 || null;
     filePath = window._aiUploadedFilePath || null;
     fileName = window._aiUploadedFileName || null;
     startPage = parseInt(document.getElementById('mAiPageStart')?.value, 10) || null;
     endPage = parseInt(document.getElementById('mAiPageEnd')?.value, 10) || null;
-    if (!contextText && !pdfBase64 && !filePath) {
+    if (!contextText && !pdfBase64 && !filePath && !topic) {
       return showToast('يرجى اختيار ملف المذكرة من جهازك أولاً', true);
     }
   } else if (mode === 'TEXT_PASTE') {
-    contextText = (document.getElementById('mAiContextText')?.value || '').trim();
+    contextText = (document.getElementById('mAiContextText')?.value || '').trim() || window._aiLessonPrefilledContext || '';
+  } else if (mode === 'TOPIC_ONLY') {
+    contextText = window._aiLessonPrefilledContext || '';
   }
 
   if (!topic && !contextText && !sourceId && !pdfBase64 && !filePath) {
@@ -15712,6 +15989,55 @@ async function submitGenerateAiQuestions() {
 
   if (formSec) formSec.style.display = 'none';
   if (loadSec) loadSec.style.display = 'block';
+
+  const statusTextEl = document.getElementById('aiLoadingStatusText');
+  const stageTextEl = document.getElementById('aiExamProgressStageText');
+  const pctEl = document.getElementById('aiExamProgressPercent');
+  const fillEl = document.getElementById('aiExamProgressBarFill');
+  const timerEl = document.getElementById('aiExamElapsedTimer');
+  const stepEls = [1, 2, 3, 4].map(n => document.getElementById(`aiExamStep${n}`));
+
+  const updateExamProgressUi = (pct, stageMsg, detailMsg, activeStepIdx, elapsedSec) => {
+    if (pctEl) pctEl.innerText = `${pct}%`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+    if (stageTextEl && stageMsg) stageTextEl.innerText = stageMsg;
+    if (statusTextEl && detailMsg) statusTextEl.innerText = detailMsg;
+    if (timerEl && typeof elapsedSec === 'number') timerEl.innerText = `⏱️ ${elapsedSec} ثانية`;
+    stepEls.forEach((el, idx) => {
+      if (!el) return;
+      if (idx < activeStepIdx) {
+        el.style.background = 'rgba(34,197,94,0.18)';
+        el.style.borderColor = '#22c55e';
+        el.style.color = '#4ade80';
+        el.style.fontWeight = 'bold';
+      } else if (idx === activeStepIdx) {
+        el.style.background = 'rgba(2,132,199,0.22)';
+        el.style.borderColor = '#0284c7';
+        el.style.color = '#38bdf8';
+        el.style.fontWeight = 'bold';
+      } else {
+        el.style.background = '#0f172a';
+        el.style.borderColor = '#334155';
+        el.style.color = '#64748b';
+        el.style.fontWeight = 'normal';
+      }
+    });
+  };
+
+  let examElapsed = 0;
+  updateExamProgressUi(12, '1. 📄 جاري قراءة الصفحات المحددة...', `يتم فحص المحتوى العلمي للدرس (${topic || title})...`, 0, 0);
+  const examProgressInterval = setInterval(() => {
+    examElapsed += 1;
+    if (examElapsed <= 3) {
+      updateExamProgressUi(20 + examElapsed * 4, '1. 📄 قراءة الصفحات المحددة من المذكرة...', `يتم استخلاص الفقرات المستهدفة من الصفحات (${startPage || 1} إلى ${endPage || 'النهاية'})...`, 0, examElapsed);
+    } else if (examElapsed <= 9) {
+      updateExamProgressUi(Math.min(56, 32 + (examElapsed - 3) * 4), '2. 🧠 تحليل المفاهيم العلمية ونواتج التعلم...', 'يتم تحديد النقاط الجوهرية ومواضع الأسئلة بالدرس...', 1, examElapsed);
+    } else if (examElapsed <= 18) {
+      updateExamProgressUi(Math.min(86, 56 + (examElapsed - 9) * 3), `3. ✍️ صياغة عدد (${count}) سؤال مع البدائل والإجابات...`, 'يتم بناء الأسئلة والبدائل وتفسير الإجابة النموذجية لكل سؤال...', 2, examElapsed);
+    } else {
+      updateExamProgressUi(Math.min(96, 86 + Math.floor((examElapsed - 18) / 2)), '4. ✅ المراجعة اللغوية والتدقيق النهائي للاختبار...', 'يتم التحقق من دقة الإجابات وتجهيز نموذج المعاينة...', 3, examElapsed);
+    }
+  }, 1000);
 
   try {
     const stageEl = document.getElementById('mAiStage');
@@ -15747,6 +16073,9 @@ async function submitGenerateAiQuestions() {
       throw new Error('لم يتمكن محرك الذكاء الاصطناعي من استخراج أسئلة من المحتوى المقدم');
     }
 
+    clearInterval(examProgressInterval);
+    updateExamProgressUi(100, '✅ اكتمل توليد الاختبار بنجاح!', `تم توليد ${questions.length} سؤال بنجاح عبر (${res.provider || 'AI'})`, 4, examElapsed);
+
     // Attach mark to each question
     questions.forEach(q => {
       if (!q.marks) q.marks = scorePerQ;
@@ -15772,6 +16101,7 @@ async function submitGenerateAiQuestions() {
 
     renderGeneratedQuestionsReview();
   } catch (err) {
+    clearInterval(examProgressInterval);
     if (loadSec) loadSec.style.display = 'none';
     if (formSec) formSec.style.display = 'block';
     showToast(friendlyBatchAError(err), true);
