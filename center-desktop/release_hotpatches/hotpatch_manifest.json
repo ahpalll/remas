@@ -1,23 +1,23 @@
 {
-  "patchVersion": "1.0.0-hp.53.0.0",
+  "patchVersion": "1.0.0-hp.53.1.0",
   "targetVersion": "1.0.0-release.53.0.0",
-  "publishedAt": "2026-10-26T15:10:44.081Z",
+  "publishedAt": "2026-10-26T16:30:30.330Z",
   "active": true,
-  "description": "إظهار قسم التقارير والنتائج وتشخيص المستوى والواجبات تلقائيا في القائمة الجانبية",
-  "totalSizeKb": "1475.6",
+  "description": "إصلاح رفع المذكرات وربط المرحلة والصف بالمواد وتوليد الاختبارات",
+  "totalSizeKb": "1494.8",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 853722,
-      "sha256": "80a85c796496a6e5991a128c2cd551eb9acc481f2b7fde77cf0a80bf5b9ecb87",
+      "size": 872886,
+      "sha256": "46a50dffc8a57a3662a2d39bf97684599d77b58b781dcbca6d31bee779e1ff77",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
-      "size": 640010,
-      "sha256": "f862170cb05964d3997bcb54b5db0a44f518223499df713d83496a517114e327",
+      "size": 640474,
+      "sha256": "fb5edcbb4329c379092ff9cb294b4367f136932d32154292df4c263d1be24540",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {

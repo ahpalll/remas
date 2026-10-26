@@ -3965,7 +3965,7 @@ async function renderAiStudioView(container, initialTab = null) {
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem;">
           <div>
             <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">المرحلة الدراسية</label>
-            <select id="quickFilterStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterAiResourcesTable()">
+            <select id="quickFilterStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onAiResourcesStageFilterChange()">
               <option value="">جميع المراحل</option>
               ${stages.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
             </select>
@@ -3974,7 +3974,7 @@ async function renderAiStudioView(container, initialTab = null) {
             <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">المادة الدراسية</label>
             <select id="quickFilterSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="filterAiResourcesTable()">
               <option value="">جميع المواد</option>
-              ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+              ${subjects.map(s => `<option value="${s.id}" data-stage="${s.stageId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -4080,23 +4080,23 @@ async function renderAiStudioView(container, initialTab = null) {
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem; margin-bottom:1rem;">
           <div>
             <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">المرحلة الدراسية <span style="color:#ef4444;">*</span></label>
-            <select id="aiStudioLessonStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+            <select id="aiStudioLessonStage" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onAiStudioLessonStageChange()">
               <option value="">اختر المرحلة الدراسية...</option>
               ${stages.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
             </select>
           </div>
           <div>
             <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">المادة الدراسية <span style="color:#ef4444;">*</span></label>
-            <select id="aiStudioLessonSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+            <select id="aiStudioLessonSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onAiStudioLessonSubjectChange()">
               <option value="">اختر المادة...</option>
-              ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+              ${subjects.map(s => `<option value="${s.id}" data-stage="${s.stageId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('')}
             </select>
           </div>
           <div>
-            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">الملف المصدر المربوط</label>
+            <label style="font-size:0.82rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">الملف المصدر المربوط بالمادة</label>
             <select id="aiStudioLessonSource" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="syncAiLessonSourcePages(this)">
               <option value="">اختر مذكرة مرفوعة أو حدد صفحات...</option>
-              ${contents.map(c => `<option value="${c.id}" data-pages="${c.pageEnd || c.pagesCount || 10}">${escapeHtmlAttr(c.title)} (${c.pageEnd || c.pagesCount || '—'} صفحة)</option>`).join('')}
+              ${contents.map(c => `<option value="${c.id}" data-stage="${c.stageId || ''}" data-subject="${c.subjectId || ''}" data-pages="${c.pageEnd || c.pagesCount || 10}">${escapeHtmlAttr(c.title)} (${c.pageEnd || c.pagesCount || '—'} صفحة)</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4995,8 +4995,47 @@ function prefillLessonFromResource(contentId) {
   }
 }
 
-function prefillExamFromResource(contentId) {
-  openAiExamGeneratorModal();
+async function prefillExamFromResource(contentId) {
+  const contents = window._allContentsCache || [];
+  const content = contents.find(c => c.id === contentId);
+  await openAiExamGeneratorModal();
+
+  if (content) {
+    setTimeout(() => {
+      const stageSel = document.getElementById('mAiStage');
+      const subSel = document.getElementById('mAiSubject');
+      const titleInp = document.getElementById('mAiTitle');
+      const topicInp = document.getElementById('mAiTopic');
+
+      if (stageSel && content.stageId) {
+        stageSel.value = content.stageId;
+        onAiExamStageChange();
+      }
+      if (subSel && content.subjectId) {
+        subSel.value = content.subjectId;
+        onAiExamSubjectChange();
+      }
+
+      // Activate saved memo mode
+      const radSaved = document.querySelector('input[name="aiSourceMode"][value="SAVED_MEMO"]');
+      if (radSaved && !radSaved.disabled) {
+        radSaved.checked = true;
+        toggleAiSourceMode('SAVED_MEMO');
+        const memoSel = document.getElementById('mAiSavedMemoSelect');
+        if (memoSel) {
+          memoSel.value = content.id;
+          onAiSavedMemoSelectChange();
+        }
+      }
+
+      if (titleInp && content.title) {
+        titleInp.value = `اختبار: ${content.title}`;
+      }
+      if (topicInp && content.title) {
+        topicInp.value = content.title;
+      }
+    }, 150);
+  }
 }
 
 function syncAiLessonSourcePages(selectEl) {
@@ -5006,6 +5045,48 @@ function syncAiLessonSourcePages(selectEl) {
   const pages = opt.getAttribute('data-pages');
   const endInp = document.getElementById('aiStudioLessonPageEnd');
   if (endInp && pages) endInp.value = pages;
+}
+
+function onAiStudioLessonStageChange() {
+  const stageId = document.getElementById('aiStudioLessonStage')?.value || '';
+  const subSelect = document.getElementById('aiStudioLessonSubject');
+  const srcSelect = document.getElementById('aiStudioLessonSource');
+  const allSubs = window._allSubjectsCache || [];
+  const allContents = window._allContentsCache || [];
+
+  if (subSelect) {
+    const filteredSubs = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+    subSelect.innerHTML = `<option value="">اختر المادة (${filteredSubs.length} متاحة)...</option>` +
+      filteredSubs.map(s => `<option value="${s.id}" data-stage="${s.stageId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('');
+  }
+
+  if (srcSelect) {
+    const filteredContents = stageId ? allContents.filter(c => !c.stageId || c.stageId === stageId) : allContents;
+    srcSelect.innerHTML = `<option value="">اختر مذكرة مرفوعة (${filteredContents.length})...</option>` +
+      filteredContents.map(c => `<option value="${c.id}" data-stage="${c.stageId || ''}" data-subject="${c.subjectId || ''}" data-pages="${c.pageEnd || c.pagesCount || 10}">${escapeHtmlAttr(c.title)} (${c.pageEnd || c.pagesCount || '—'} صفحة)</option>`).join('');
+  }
+}
+
+function onAiStudioLessonSubjectChange() {
+  const stageId = document.getElementById('aiStudioLessonStage')?.value || '';
+  const subjectId = document.getElementById('aiStudioLessonSubject')?.value || '';
+  const srcSelect = document.getElementById('aiStudioLessonSource');
+  const allContents = window._allContentsCache || [];
+
+  if (srcSelect) {
+    const filteredContents = allContents.filter(c => {
+      const matchSub = !subjectId || c.subjectId === subjectId;
+      const matchStg = !stageId || !c.stageId || c.stageId === stageId;
+      return matchSub && matchStg;
+    });
+
+    if (filteredContents.length > 0) {
+      srcSelect.innerHTML = `<option value="">اختر مذكرة مرفوعة للمادة (${filteredContents.length})...</option>` +
+        filteredContents.map(c => `<option value="${c.id}" data-stage="${c.stageId || ''}" data-subject="${c.subjectId || ''}" data-pages="${c.pageEnd || c.pagesCount || 10}">${escapeHtmlAttr(c.title)} (${c.pageEnd || c.pagesCount || '—'} صفحة)</option>`).join('');
+    } else {
+      srcSelect.innerHTML = `<option value="">لا توجد مذكرات مرفوعة لهذه المادة حتى الآن</option>`;
+    }
+  }
 }
 
 function runAiLessonExtraction() {
@@ -5050,6 +5131,18 @@ async function saveAiGeneratedLesson() {
   } catch (e) {
     showToast(`❌ تعذر حفظ الدرس: ${(e && e.message) || e}`, true);
   }
+}
+
+function onAiResourcesStageFilterChange() {
+  const stFilter = document.getElementById('quickFilterStage')?.value || '';
+  const subSelect = document.getElementById('quickFilterSubject');
+  if (subSelect) {
+    const subjects = window._allSubjectsCache || [];
+    const filtered = stFilter ? subjects.filter(s => s.stageId === stFilter) : subjects;
+    subSelect.innerHTML = `<option value="">جميع المواد (${filtered.length})</option>` +
+      filtered.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('');
+  }
+  filterAiResourcesTable();
 }
 
 function filterAiResourcesTable() {
@@ -12543,15 +12636,69 @@ async function submitCreateLesson() {
 async function openAddContentModal() {
   const modal = document.getElementById('modalContainer');
   window._selectedContentFile = null;
+  window._selectedContentText = '';
+  window._selectedContentPages = 0;
+
+  let stages = [];
+  let years = [];
+  let subjects = [];
+  try {
+    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
+    const [stRes, yrRes, subRes] = await Promise.all([
+      callBackend('getStages', currentCallerToken, instId).catch(() => []),
+      callBackend('getAcademicYears', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, instId).catch(() => [])
+    ]);
+    stages = stRes || [];
+    years = yrRes || [];
+    subjects = subRes || [];
+  } catch (_) {}
+
+  window._allUploadStages = stages;
+  window._allUploadYears = years;
+  window._allUploadSubjects = subjects;
 
   modal.innerHTML = `
     <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
-      <div class="modal-content" style="max-width:580px;">
+      <div class="modal-content" style="max-width:620px;">
         <div class="modal-header">
-          <div class="modal-title">📁 رفع مذكرة أو ملف تعليمي من جهازك</div>
+          <div class="modal-title">📁 رفع مذكرة أو ملف تعليمي وربطه بالمنهج</div>
           <button class="modal-close" onclick="closeModal()">×</button>
         </div>
         <form onsubmit="event.preventDefault(); submitCreateContent();">
+          <!-- Academic Context: Stage, Grade, Subject -->
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin-bottom:1rem;">
+            <div style="font-weight:bold; color:#a855f7; display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem; font-size:0.95rem;">
+              <span>🏫</span> <span>تحديد التبعية الأكاديمية (المرحلة والصف والمادة) *</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.75rem;">
+              <div>
+                <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">المرحلة الدراسية *</label>
+                <select id="mContentStageId" required style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onContentModalStageChange()">
+                  <option value="">— اختر المرحلة الدراسية —</option>
+                  ${stages.map(st => `<option value="${st.id}">${escapeHtmlAttr(st.name)}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">الصف / السنة الدراسية</label>
+                <select id="mContentYearId" style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onContentModalStageChange()">
+                  <option value="">— كافة الصفوف / عام —</option>
+                  ${years.map(y => `<option value="${y.id}">${escapeHtmlAttr(y.name)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">المادة الدراسية التابعة للمذكرة *</label>
+              <select id="mContentSubjectId" required style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+                <option value="">— اختر المرحلة لعرض المواد التابعة —</option>
+                ${subjects.map(sb => `<option value="${sb.id}" data-stage="${sb.stageId || ''}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
+              </select>
+              <small style="color:#94a3b8; display:block; margin-top:0.35rem; font-size:0.75rem;">
+                📌 يتم ربط المذكرة بهذه المادة لتظهر تلقائياً عند اختيار المادة في بنك الأسئلة وتوليد الاختبارات.
+              </small>
+            </div>
+          </div>
+
           <!-- Device File Selector -->
           <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin-bottom:1rem;">
             <label style="font-weight:bold; color:#38bdf8; display:block; margin-bottom:0.5rem;">📂 اختر ملف المذكرة من جهاز الكمبيوتر *</label>
@@ -12604,12 +12751,32 @@ async function openAddContentModal() {
       </div>
     </div>
   `;
+
+  // Trigger initial filter on stage if pre-selected
+  onContentModalStageChange();
+}
+
+function onContentModalStageChange() {
+  const stageId = document.getElementById('mContentStageId')?.value || '';
+  const subSelect = document.getElementById('mContentSubjectId');
+  if (!subSelect) return;
+  const allSubs = window._allUploadSubjects || [];
+  const filtered = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+
+  if (filtered.length > 0) {
+    subSelect.innerHTML = `<option value="">— اختر المادة الدراسية (${filtered.length} مادة للمرحلة) —</option>` +
+      filtered.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('');
+  } else {
+    subSelect.innerHTML = `<option value="">⚠️ لا توجد مواد مسجلة لهذه المرحلة (يرجى تسجيل المادة أولاً)</option>`;
+  }
 }
 
 function handleContentFileSelect(input) {
   const status = document.getElementById('mContentFileStatus');
   if (!input.files || !input.files[0]) {
     window._selectedContentFile = null;
+    window._selectedContentText = '';
+    window._selectedContentPages = 0;
     if (status) status.innerText = 'لم يتم اختيار ملف.';
     return;
   }
@@ -12636,8 +12803,10 @@ function handleContentFileSelect(input) {
 
   // True page count detection if PDF
   if (file.name.toLowerCase().endsWith('.pdf')) {
-    if (status) status.innerHTML = `⏳ جاري فحص صفحات المذكرة بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
-    parsePdfMetadata(file).then(({ pageCount }) => {
+    if (status) status.innerHTML = `⏳ جاري فحص صفحات وقراءة نصوص المذكرة بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
+    parsePdfMetadata(file).then(({ pageCount, text }) => {
+      window._selectedContentText = text || '';
+      window._selectedContentPages = pageCount || 0;
       const startInp = document.getElementById('mContentPageStart');
       const endInp = document.getElementById('mContentPageEnd');
       if (startInp && !startInp.value) startInp.value = '1';
@@ -12645,22 +12814,33 @@ function handleContentFileSelect(input) {
       if (status) {
         status.innerHTML = `✅ تم الفحص بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr}${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''})`;
       }
+    }).catch(() => {
+      window._selectedContentText = '';
+      window._selectedContentPages = 0;
     });
   }
 }
 
 async function submitCreateContent() {
   const btn = document.getElementById('btnSubmitAddContent');
+  const stageId = document.getElementById('mContentStageId')?.value || '';
+  const academicYearId = document.getElementById('mContentYearId')?.value || null;
+  const subjectId = document.getElementById('mContentSubjectId')?.value || '';
   const title = document.getElementById('mContentTitle')?.value.trim();
   const type = document.getElementById('mContentType')?.value || 'PDF';
   const url = document.getElementById('mContentUrl')?.value.trim();
-  const pageStart = parseInt(document.getElementById('mContentPageStart')?.value, 10) || null;
+  const pageStart = parseInt(document.getElementById('mContentPageStart')?.value, 10) || 1;
   const pageEnd = parseInt(document.getElementById('mContentPageEnd')?.value, 10) || null;
   const pageRange = (pageStart || pageEnd) ? `من صفحة ${pageStart || 1} إلى ${pageEnd || 'نهاية المذكرة'}` : null;
 
+  if (!stageId) return showToast('يرجى اختيار المرحلة الدراسية للمذكرة', true);
+  if (!subjectId) return showToast('يرجى اختيار المادة الدراسية للمذكرة', true);
   if (!title) return showToast('عنوان المذكرة مطلوب', true);
 
   const fileInfo = window._selectedContentFile;
+  if (!fileInfo && !url) {
+    return showToast('يرجى اختيار ملف المذكرة من جهازك أو وضع رابط خارجي', true);
+  }
 
   if (btn) btn.disabled = true;
   try {
@@ -12668,16 +12848,27 @@ async function submitCreateContent() {
       institutionId: currentCallerToken.institutionId,
       title,
       type,
+      stageId,
+      academicYearId,
+      subjectId,
       fileName: fileInfo?.name || null,
+      filePath: fileInfo?.path || null,
       sizeBytes: fileInfo?.size || null,
       url: url || null,
+      pageStart: pageStart || 1,
+      pageEnd: pageEnd || window._selectedContentPages || null,
+      pagesCount: window._selectedContentPages || pageEnd || null,
+      textContent: window._selectedContentText || null,
       description: pageRange ? `نطاق الصفحات المعتمدة: ${pageRange}` : null,
+      status: 'PUBLISHED',
       createdAt: new Date().toISOString()
     };
     await callBackend('createDigitalContentItem', currentCallerToken, payload);
-    showToast('تمت إضافة المذكرة بنجاح في المكتبة الرقمية! 🟢');
+    showToast('تمت إضافة وربط المذكرة بالمادة والمرحلة بنجاح في المكتبة الرقمية! 🟢');
     closeModal();
-    if (activeView === 'content') await renderActiveView('content');
+    if (activeView === 'content' || activeView === 'ai_studio') {
+      await renderActiveView(activeView);
+    }
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
   } finally {
@@ -13744,25 +13935,125 @@ async function submitBulkHwGrades() {
 
 window._aiUploadedFileText = '';
 window._aiGeneratedExam = null;
+window._allAiStages = [];
+window._allAiSubjects = [];
+window._allAiGroups = [];
+window._allAiContents = [];
 
 function toggleAiSourceMode(mode) {
+  const savedBox = document.getElementById('aiSourceSavedMemoBox');
   const topicBox = document.getElementById('aiSourceTopicBox');
   const fileBox = document.getElementById('aiSourceFileBox');
   const textBox = document.getElementById('aiSourceTextBox');
-  if (topicBox) topicBox.style.display = (mode === 'TOPIC_ONLY') ? 'block' : 'none';
+
+  if (savedBox) savedBox.style.display = (mode === 'SAVED_MEMO') ? 'block' : 'none';
+  if (topicBox) topicBox.style.display = (mode === 'TOPIC_ONLY' || mode === 'SAVED_MEMO') ? 'block' : 'none';
   if (fileBox) fileBox.style.display = (mode === 'FILE_UPLOAD') ? 'block' : 'none';
   if (textBox) textBox.style.display = (mode === 'TEXT_PASTE') ? 'block' : 'none';
 }
 
-function filterAiGroupsByStage() {
-  const stageId = document.getElementById('mAiStage')?.value;
+function onAiExamStageChange() {
+  const stageId = document.getElementById('mAiStage')?.value || '';
   const groupSelect = document.getElementById('mAiGroup');
-  if (!groupSelect) return;
-  for (let i = 0; i < groupSelect.options.length; i++) {
-    const opt = groupSelect.options[i];
-    if (!opt.value) continue;
-    const optStage = opt.getAttribute('data-stage');
-    opt.style.display = (!stageId || !optStage || optStage === stageId) ? '' : 'none';
+  const subjectSelect = document.getElementById('mAiSubject');
+  const allSubs = window._allAiSubjects || [];
+  const allGroups = window._allAiGroups || [];
+
+  // 1. Filter Groups by stage
+  if (groupSelect) {
+    const filteredG = stageId ? allGroups.filter(g => !g.stageId || g.stageId === stageId) : allGroups;
+    groupSelect.innerHTML = `<option value="">— اختر المجموعة —</option>` +
+      filteredG.map(g => `<option value="${g.id}">${escapeHtmlAttr(g.name)}</option>`).join('');
+  }
+
+  // 2. Filter Subjects by stage
+  if (subjectSelect) {
+    const filteredS = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+    if (filteredS.length > 0) {
+      subjectSelect.innerHTML = `<option value="">— اختر المادة (${filteredS.length} مادة للمرحلة) —</option>` +
+        filteredS.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('');
+    } else {
+      subjectSelect.innerHTML = `<option value="">⚠️ لا توجد مواد مسجلة لهذه المرحلة</option>`;
+    }
+  }
+
+  onAiExamSubjectChange();
+}
+
+function onAiExamSubjectChange() {
+  const stageId = document.getElementById('mAiStage')?.value || '';
+  const subjectId = document.getElementById('mAiSubject')?.value || '';
+  const allContents = window._allAiContents || window._allContentsCache || [];
+
+  const memoSelect = document.getElementById('mAiSavedMemoSelect');
+  const memoBadge = document.getElementById('aiSavedMemoCountBadge');
+  const radSaved = document.querySelector('input[name="aiSourceMode"][value="SAVED_MEMO"]');
+  const radLabel = document.getElementById('aiSourceSavedMemoRadioLabel');
+
+  const filteredContents = allContents.filter(c => {
+    const matchSub = !subjectId || c.subjectId === subjectId;
+    const matchStg = !stageId || !c.stageId || c.stageId === stageId;
+    return matchSub && matchStg;
+  });
+
+  if (filteredContents.length > 0) {
+    if (memoSelect) {
+      memoSelect.innerHTML = filteredContents.map(c => {
+        const pages = c.pageEnd || c.pagesCount || c.pageRange || 'كامل';
+        return `<option value="${c.id}" data-pages="${pages}" data-start="${c.pageStart || 1}" data-end="${c.pageEnd || c.pagesCount || ''}">${escapeHtmlAttr(c.title)} (📖 ${pages} صفحة)</option>`;
+      }).join('');
+    }
+    if (memoBadge) {
+      memoBadge.innerText = `متوفر (${filteredContents.length}) مذكرة`;
+      memoBadge.style.display = 'inline-block';
+    }
+    if (radSaved) {
+      radSaved.disabled = false;
+      radSaved.checked = true;
+      toggleAiSourceMode('SAVED_MEMO');
+    }
+    if (radLabel) radLabel.style.opacity = '1';
+    onAiSavedMemoSelectChange();
+  } else {
+    if (memoSelect) {
+      memoSelect.innerHTML = `<option value="">لا توجد مذكرات محفوظة لهذه المادة بالمكتبة</option>`;
+    }
+    if (memoBadge) memoBadge.style.display = 'none';
+    if (radSaved) {
+      radSaved.disabled = true;
+      if (radSaved.checked) {
+        const radTopic = document.querySelector('input[name="aiSourceMode"][value="TOPIC_ONLY"]');
+        if (radTopic) {
+          radTopic.checked = true;
+          toggleAiSourceMode('TOPIC_ONLY');
+        }
+      }
+    }
+    if (radLabel) radLabel.style.opacity = '0.6';
+  }
+}
+
+function onAiSavedMemoSelectChange() {
+  const memoSelect = document.getElementById('mAiSavedMemoSelect');
+  if (!memoSelect || !memoSelect.value) return;
+  const memoId = memoSelect.value;
+  const allContents = window._allAiContents || window._allContentsCache || [];
+  const memo = allContents.find(c => c.id === memoId);
+  if (!memo) return;
+
+  const startInp = document.getElementById('mAiSavedPageStart');
+  const endInp = document.getElementById('mAiSavedPageEnd');
+  if (startInp) startInp.value = memo.pageStart || 1;
+  if (endInp) endInp.value = memo.pageEnd || memo.pagesCount || '';
+
+  const titleInp = document.getElementById('mAiTitle');
+  if (titleInp && !titleInp.value.trim()) {
+    titleInp.value = `اختبار: ${memo.title}`;
+  }
+
+  const topicInp = document.getElementById('mAiTopic');
+  if (topicInp && !topicInp.value.trim() && memo.title) {
+    topicInp.value = memo.title;
   }
 }
 
@@ -13839,9 +14130,12 @@ async function quickGenerateAiExamForLesson(lessonId) {
 
     if (stageSel && lesson.stageId) {
       stageSel.value = lesson.stageId;
-      filterAiGroupsByStage();
+      onAiExamStageChange();
     }
-    if (subSel && lesson.subjectId) subSel.value = lesson.subjectId;
+    if (subSel && lesson.subjectId) {
+      subSel.value = lesson.subjectId;
+      onAiExamSubjectChange();
+    }
     if (groupSel && lesson.groupId) groupSel.value = lesson.groupId;
     if (titleInp) titleInp.value = `اختبار درس: ${lesson.title}`;
     if (topicInp) topicInp.value = `${lesson.title}${lesson.description ? ' - ' + lesson.description : ''}`;
@@ -13863,17 +14157,26 @@ async function openAiExamGeneratorModal() {
   let stages = [];
   let subjects = [];
   let groups = [];
+  let contents = [];
 
   try {
-    const [stRes, subRes, gRes] = await Promise.all([
-      callBackend('getStages', currentCallerToken, currentCallerToken.institutionId).catch(() => []),
-      callBackend('getSubjects', currentCallerToken, currentCallerToken.institutionId).catch(() => []),
-      callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => [])
+    const instId = currentCallerToken ? currentCallerToken.institutionId : '';
+    const [stRes, subRes, gRes, cRes] = await Promise.all([
+      callBackend('getStages', currentCallerToken, instId).catch(() => []),
+      callBackend('getSubjects', currentCallerToken, instId).catch(() => []),
+      callBackend('getGroups', currentCallerToken, { institutionId: instId }).catch(() => []),
+      callBackend('getContent', currentCallerToken, { institutionId: instId }).catch(() => [])
     ]);
     stages = stRes || [];
     subjects = subRes || [];
     groups = gRes || [];
+    contents = cRes || [];
   } catch (_) {}
+
+  window._allAiStages = stages;
+  window._allAiSubjects = subjects;
+  window._allAiGroups = groups;
+  window._allAiContents = contents;
 
   window._aiUploadedFileText = '';
   window._aiGeneratedExam = null;
@@ -13888,7 +14191,7 @@ async function openAiExamGeneratorModal() {
               <span class="badge" style="background:#059669; color:#fff; font-size:0.75rem;">مجاني 100% — Gemini Flash / Groq</span>
             </div>
             <div style="font-size:0.8rem; color:#c7d2fe; margin-top:0.25rem;">
-              يمكنك رفع مذكرة/ملف الدرس أو إدخال الموضوع لتوليد أسئلة دقيقة مطابقة للمنهج ومراجعتها قبل اعتمادها ونشرها للمجموعة
+              اختر المرحلة والمادة لتظهر مذكرات المنهج المربوطة بها تلقائياً، أو ارفع مذكرة جديدة من جهازك
             </div>
           </div>
           <button class="modal-close" onclick="closeModal()" style="color:#fff;">×</button>
@@ -13899,17 +14202,17 @@ async function openAiExamGeneratorModal() {
           <div id="aiExamFormSection">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
               <div class="form-group">
-                <label>المرحلة الدراسية *</label>
-                <select id="mAiStage" required onchange="filterAiGroupsByStage()">
-                  <option value="">— اختر المرحلة —</option>
+                <label style="font-weight:bold; color:#38bdf8;">المرحلة الدراسية *</label>
+                <select id="mAiStage" required onchange="onAiExamStageChange()" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+                  <option value="">— اختر المرحلة الدراسية —</option>
                   ${stages.map(st => `<option value="${st.id}">${escapeHtmlAttr(st.name)}</option>`).join('')}
                 </select>
               </div>
               <div class="form-group">
-                <label>المادة الدراسية *</label>
-                <select id="mAiSubject" required>
-                  <option value="">— اختر المادة —</option>
-                  ${subjects.map(sb => `<option value="${sb.id}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
+                <label style="font-weight:bold; color:#a855f7;">المادة الدراسية (مربوطة بالمرحلة) *</label>
+                <select id="mAiSubject" required onchange="onAiExamSubjectChange()" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+                  <option value="">— اختر المرحلة أولاً —</option>
+                  ${subjects.map(sb => `<option value="${sb.id}" data-stage="${sb.stageId || ''}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -13917,7 +14220,7 @@ async function openAiExamGeneratorModal() {
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
               <div class="form-group">
                 <label>المجموعة المستهدفة بالسنتر *</label>
-                <select id="mAiGroup" required>
+                <select id="mAiGroup" required style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
                   <option value="">— اختر المجموعة —</option>
                   ${groups.map(g => `<option value="${g.id}" data-stage="${g.stageId || ''}">${escapeHtmlAttr(g.name)}</option>`).join('')}
                 </select>
@@ -13930,20 +14233,52 @@ async function openAiExamGeneratorModal() {
 
             <!-- Knowledge Source Selection -->
             <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin:0.75rem 0;">
-              <div style="font-weight:bold; color:#38bdf8; font-size:0.9rem; margin-bottom:0.6rem;">📂 مصدر الأسئلة والمحتوى التعليمي:</div>
-              <div style="display:flex; gap:1.5rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-                <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; color:#f8fafc;">
-                  <input type="radio" name="aiSourceMode" value="TOPIC_ONLY" checked onchange="toggleAiSourceMode('TOPIC_ONLY')">
-                  💡 من موضوع محدد ومخرجات التعلم للمنهج
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                <div style="font-weight:bold; color:#38bdf8; font-size:0.9rem;">📂 مصدر الأسئلة والمحتوى التعليمي للمادة:</div>
+                <span id="aiSavedMemoCountBadge" class="badge" style="background:#7c3aed; color:#fff; font-size:0.75rem; display:none;"></span>
+              </div>
+              <div style="display:flex; gap:1.25rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                <label id="aiSourceSavedMemoRadioLabel" style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; color:#c084fc; font-weight:bold;">
+                  <input type="radio" name="aiSourceMode" value="SAVED_MEMO" checked onchange="toggleAiSourceMode('SAVED_MEMO')">
+                  📚 من مذكرات المادة المحفوظة بالمكتبة
                 </label>
                 <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; color:#f8fafc;">
                   <input type="radio" name="aiSourceMode" value="FILE_UPLOAD" onchange="toggleAiSourceMode('FILE_UPLOAD')">
-                  📁 رفع ملف / مذكرة / شيت (PDF / TXT / Word)
+                  📁 رفع مذكرة جديدة من جهازك
+                </label>
+                <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; color:#f8fafc;">
+                  <input type="radio" name="aiSourceMode" value="TOPIC_ONLY" onchange="toggleAiSourceMode('TOPIC_ONLY')">
+                  💡 من موضوع محدد ومخرجات التعلم
                 </label>
                 <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; color:#f8fafc;">
                   <input type="radio" name="aiSourceMode" value="TEXT_PASTE" onchange="toggleAiSourceMode('TEXT_PASTE')">
-                  ✍️ لصق نص مباشر أو ملخص الدرس
+                  ✍️ لصق نص مباشر
                 </label>
+              </div>
+
+              <!-- Saved Memo Selection Box -->
+              <div id="aiSourceSavedMemoBox" style="margin-bottom:0.75rem; background:#1e293b; border:1px solid #7c3aed; border-radius:8px; padding:0.85rem;">
+                <label style="display:block; margin-bottom:0.35rem; color:#c084fc; font-weight:bold; font-size:0.85rem;">
+                  📚 اختر المذكرة المربوطة بالمادة لتوليد الامتحان منها:
+                </label>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <select id="mAiSavedMemoSelect" style="flex:1; padding:0.45rem; background:#0f172a; border:1px solid #475569; border-radius:6px; color:#fff; font-size:0.85rem;" onchange="onAiSavedMemoSelectChange()">
+                    <!-- Populated dynamically based on chosen subject -->
+                  </select>
+                  <button type="button" class="btn" style="background:#0284c7; padding:0.35rem 0.65rem; font-size:0.75rem; white-space:nowrap;" onclick="openAddContentModal()">+ رفع مذكرة جديدة</button>
+                </div>
+
+                <!-- Page range for saved memo -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-top:0.6rem;">
+                  <div>
+                    <label style="font-size:0.75rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">من صفحة بالمذكرة:</label>
+                    <input type="number" id="mAiSavedPageStart" min="1" placeholder="1" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem;">
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem; color:#cbd5e1; display:block; margin-bottom:0.2rem;">إلى صفحة بالمذكرة:</label>
+                    <input type="number" id="mAiSavedPageEnd" min="1" placeholder="مثال: 15" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff; font-size:0.85rem;">
+                  </div>
+                </div>
               </div>
 
               <!-- Topic Input -->
@@ -14064,6 +14399,9 @@ async function openAiExamGeneratorModal() {
       </div>
     </div>
   `;
+
+  // Trigger initial filter
+  onAiExamStageChange();
 }
 
 async function submitGenerateAiQuestions() {
@@ -14077,10 +14415,25 @@ async function submitGenerateAiQuestions() {
   const difficulty = document.getElementById('mAiDifficulty')?.value || 'MEDIUM';
   const scorePerQ = Number(document.getElementById('mAiScorePerQuestion')?.value || 2);
 
-  const mode = document.querySelector('input[name="aiSourceMode"]:checked')?.value || 'TOPIC_ONLY';
+  const mode = document.querySelector('input[name="aiSourceMode"]:checked')?.value || 'SAVED_MEMO';
   let contextText = '';
-  if (mode === 'FILE_UPLOAD') {
+  let startPage = null;
+  let endPage = null;
+
+  if (mode === 'SAVED_MEMO') {
+    const memoId = document.getElementById('mAiSavedMemoSelect')?.value;
+    const allContents = window._allAiContents || window._allContentsCache || [];
+    const memo = allContents.find(c => c.id === memoId);
+    if (!memo) {
+      return showToast('يرجى اختيار المذكرة أو رفع مذكرة جديدة من جهازك', true);
+    }
+    contextText = memo.textContent || memo.description || `مذكرة تعليمية: ${memo.title}`;
+    startPage = parseInt(document.getElementById('mAiSavedPageStart')?.value, 10) || memo.pageStart || 1;
+    endPage = parseInt(document.getElementById('mAiSavedPageEnd')?.value, 10) || memo.pageEnd || memo.pagesCount || null;
+  } else if (mode === 'FILE_UPLOAD') {
     contextText = window._aiUploadedFileText || '';
+    startPage = parseInt(document.getElementById('mAiPageStart')?.value, 10) || null;
+    endPage = parseInt(document.getElementById('mAiPageEnd')?.value, 10) || null;
   } else if (mode === 'TEXT_PASTE') {
     contextText = (document.getElementById('mAiContextText')?.value || '').trim();
   }
