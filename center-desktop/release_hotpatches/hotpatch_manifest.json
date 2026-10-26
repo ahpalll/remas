@@ -1,7 +1,7 @@
 {
   "patchVersion": "1.0.0-hp.52.7.1",
   "targetVersion": "1.0.0-release.52.7.0",
-  "publishedAt": "2026-10-26T02:39:16.000Z",
+  "publishedAt": "2026-10-26T02:43:00.000Z",
   "active": true,
   "description": "مزامنة كاملة: تقارير النتائج الحقيقية، تشخيص مستوى الطالب، توليد أكواد مشاهدة الفيديو، وإصلاح الاستخراج الذكي للدروس",
   "totalSizeKb": "1462.7",
@@ -11,21 +11,21 @@
       "filename": "desktop_app.js",
       "size": 853455,
       "sha256": "173329d38d764f57a72cf396252137abfc451dd22260ca30e5ca0127ff0f4550",
-      "url": "https://educenter-saas-860c5.web.app/hotpatches/desktop_app.js"
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
       "size": 640010,
       "sha256": "f862170cb05964d3997bcb54b5db0a44f518223499df713d83496a517114e327",
-      "url": "https://educenter-saas-860c5.web.app/hotpatches/center_desktop_services.js"
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {
       "relativePath": "src/hotpatch_service.js",
       "filename": "hotpatch_service.js",
       "size": 16214,
       "sha256": "75e1a97404e6d8758ba2a5ab86f58216663275b6d1053a90c3a735f3e58e1ac1",
-      "url": "https://educenter-saas-860c5.web.app/hotpatches/hotpatch_service.js"
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/hotpatch_service.js"
     }
   ]
 }
