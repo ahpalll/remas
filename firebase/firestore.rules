@@ -217,7 +217,7 @@ service cloud.firestore {
         || (from == 'CLOSED' && to == 'ARCHIVED');
     }
     function contentTypeOk(t) {
-      return t in ['VIDEO', 'PDF', 'IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF'];
+      return t in ['VIDEO', 'PDF', 'IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF', 'VIDEO_LINK', 'SUMMARY', 'EXERCISES'];
     }
     // CENTRAL CONTENT HUB CORE (additive validators; service validates deeply, rules backstop types/enums).
     function accessTypeOk(v) {
@@ -1165,7 +1165,7 @@ service cloud.firestore {
         && groupIdsOk(request.resource.data.get('groupIds', null))
         && academicYearOk(request.resource.data.get('academicYearId', null))
         && termOk(request.resource.data.get('termId', null));
-      allow delete: if isSuperAdmin();
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     match /institutions/{institutionId}/examQuestions/{examQuestionId} {
@@ -1364,7 +1364,7 @@ service cloud.firestore {
         && request.resource.data.institutionId == institutionId
         && request.resource.data.title is string && request.resource.data.title.size() > 0
         && request.resource.data.stageId is string && request.resource.data.subjectId is string
-        && request.resource.data.status == 'DRAFT'
+        && (request.resource.data.status in ['DRAFT', 'PUBLISHED'])
         && groupIdsOk(request.resource.data.get('groupIds', null))
         && accessTypeOk(request.resource.data.get('accessType', null))
         && academicYearOk(request.resource.data.get('academicYearId', null))
@@ -1378,7 +1378,7 @@ service cloud.firestore {
         && accessTypeOk(request.resource.data.get('accessType', null))
         && academicYearOk(request.resource.data.get('academicYearId', null))
         && termOk(request.resource.data.get('termId', null));
-      allow delete: if isSuperAdmin();
+      allow delete: if isTenantAdmin(institutionId) || isSuperAdmin();
     }
 
     // BATCH 1 — Central Knowledge/Source Library: tenant-admin managed.

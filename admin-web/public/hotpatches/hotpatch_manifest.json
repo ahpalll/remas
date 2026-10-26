@@ -1,0 +1,31 @@
+{
+  "patchVersion": "1.0.0-hp.53.2.0",
+  "targetVersion": "1.0.0-release.53.0.0",
+  "publishedAt": "2026-10-26T19:35:01.732Z",
+  "active": true,
+  "description": "قسم رفع الفيديوهات، ربط المعلم التلقائي بالمادة والصف، التسمية التلقائية للمجموعة، اشتراط المجموعة في مولد الاختبارات، تفعيل حذف الدروس وتعديل المصادر، وقراءة صفحات PDF بالذكاء الاصطناعي",
+  "totalSizeKb": "1565.9",
+  "files": [
+    {
+      "relativePath": "src/desktop_app.js",
+      "filename": "desktop_app.js",
+      "size": 917383,
+      "sha256": "080c8a9b8c5d1cee4cf0874be5a9b59f26e5918d7af9181e5e209c1bcc3e856a",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
+    },
+    {
+      "relativePath": "src/center_desktop_services.js",
+      "filename": "center_desktop_services.js",
+      "size": 668749,
+      "sha256": "c46bb7c41030350d8edaa7ca15721b35a3881a3928fe90594833d27854f80dcf",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
+    },
+    {
+      "relativePath": "src/hotpatch_service.js",
+      "filename": "hotpatch_service.js",
+      "size": 17316,
+      "sha256": "2f845049c91dd69212ddf402e215fcdd54ecaed951dda4f0cbe7e1cc87c7baf0",
+      "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/hotpatch_service.js"
+    }
+  ]
+}

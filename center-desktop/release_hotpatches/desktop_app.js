@@ -4036,8 +4036,14 @@ async function renderAiStudioView(container, initialTab = null) {
                           <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#7c3aed; color:#fff;" onclick="prefillExamFromResource('${c.id}')" title="توليد اختبار ذكي">
                             ⚡ اختبار
                           </button>
-                          ${c.url || c.attachmentPath ? `
-                            <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(c.url || c.attachmentPath)}', '${escapeHtmlAttr(c.title)}')">
+                          <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#f59e0b; color:#0f172a; font-weight:bold;" onclick="openEditContentModal('${c.id}')" title="تعديل بيانات المذكرة أو الصفحات أو استبدال الملف">
+                            ✏️ تعديل
+                          </button>
+                          <button class="btn btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="deleteContentResourceAction('${c.id}')" title="حذف المصدر">
+                            🗑️ حذف
+                          </button>
+                          ${c.url || c.attachmentPath || c.filePath ? `
+                            <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(c.url || c.attachmentPath || c.filePath)}', '${escapeHtmlAttr(c.title)}')">
                               📥 عرض
                             </button>
                           ` : ''}
@@ -4376,21 +4382,115 @@ async function renderAiStudioView(container, initialTab = null) {
 
     <!-- TAB 5: TEACHER VIDEOS & ANDROID DRM PROTECTION -->
     <div id="tab_pane_videos" class="ai-studio-pane" style="display:${activeTab === 'videos' ? 'block' : 'none'};">
-      <!-- Android Hardware Security Banner -->
-      <div class="card" style="margin-bottom:1.25rem; background:linear-gradient(135deg, rgba(6,78,59,0.7) 0%, rgba(15,23,42,0.9) 100%); border:1px solid #10b981; padding:1.25rem;">
-        <div style="display:flex; align-items:flex-start; gap:0.75rem;">
-          <div style="font-size:2rem; line-height:1;">🛡️</div>
-          <div style="flex:1;">
-            <div style="font-size:1.05rem; font-weight:800; color:#34d399;">
-              منظومة حماية وتأمين فيديوهات المعلمين في تطبيق الطالب (Android DRM Active)
-            </div>
-            <div style="font-size:0.86rem; color:#cbd5e1; margin-top:0.3rem; line-height:1.5;">
-              • <strong>حظر تصوير وتسجيل الشاشة:</strong> يتم فرض معيار الأمان <code>FLAG_SECURE</code> في تطبيق الطالب أندرويد تلقائياً عند فتح الفيديو، مما يجعل أي محاولة لتسجيل الشاشة أو التقاط Screenshot تظهر <strong>شاشة سوداء بالكامل</strong>.<br>
-              • <strong>العلامة المائية الديناميكية:</strong> تطفو فوق شاشة الموبايل علامة مائية متحركة تحتوي على <code>اسم السنتر - اسم الطالب - كود الطالب - رقم الهاتف</code> لمنع التصوير بكاميرا خارجية.<br>
-              • <strong>نظام الأكواد:</strong> لا يفتح أي فيديو إلا بإدخال كود مشاهدة مفعّل من السنتر لعدد مرات محدد.
+      <!-- Android Hardware Security + Storage Architecture Banner -->
+      <div class="card" style="margin-bottom:1.25rem; background:linear-gradient(135deg, rgba(6,78,59,0.75) 0%, rgba(15,23,42,0.95) 100%); border:1px solid #10b981; padding:1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+          <div style="display:flex; align-items:flex-start; gap:0.75rem; flex:1; min-width:300px;">
+            <div style="font-size:2.2rem; line-height:1;">📹🛡️</div>
+            <div style="flex:1;">
+              <div style="font-size:1.08rem; font-weight:800; color:#34d399;">
+                قسم رفع وتخزين فيديوهات الشرح المحمية (Cloudflare R2 + Local Storage + Android DRM)
+              </div>
+              <div style="font-size:0.84rem; color:#cbd5e1; margin-top:0.4rem; line-height:1.6;">
+                • <strong>أين يتم تخزين الفيديوهات المرفوعة؟</strong><br>
+                &nbsp;&nbsp;1️⃣ <strong>التخزين السحابي المشفر (Cloudflare R2 — <code>mana-videos</code>):</strong> تُحفظ الفيديوهات السحابية عبر بوابة <code>remas-media-worker</code> داخل مسار معزول خاص بالسنتر <code>institutions/${escapeHtmlAttr(instId)}/videos/</code> ولا يمكن فتحها إلا بتصريح مؤقت.<br>
+                &nbsp;&nbsp;2️⃣ <strong>التخزين المحلي بالسنتر (Local Center Storage):</strong> يتم حفظ نسخة محلية فورية من الفيديو المرفوع على جهاز الكمبيوتر في المسار <code>%APPDATA%/remas-center-desktop/center_storage/videos/</code> للتشغيل السريع والنسخ الاحتياطي.<br>
+                &nbsp;&nbsp;3️⃣ <strong>روابط المنصات الخارجية المؤمنة:</strong> يمكنك أيضاً ربط فيديو خاص (YouTube غير مدرج / Google Drive / BunnyCDN / Vimeo) وتشغيله داخل مشغل التطبيق المحمي بـ <code>FLAG_SECURE</code> (شاشة سوداء عند التسجيل) + العلامة المائية المتحركة + أكواد المشاهدة.
+              </div>
             </div>
           </div>
+          <div style="display:flex; flex-direction:column; gap:0.5rem; align-items:flex-end;">
+            <button type="button" class="btn btn-success" style="font-weight:bold; padding:0.65rem 1.25rem; font-size:0.92rem; box-shadow:0 4px 14px rgba(16,185,129,0.4);" onclick="openAddVideoModal()">
+              📹 + رفع فيديو شرح جديد
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- Uploaded Videos Library Card -->
+      <div class="card" style="margin-bottom:1.5rem; background:rgba(15,23,42,0.85); border:1px solid #334155; padding:1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+          <div>
+            <div style="font-weight:bold; color:#38bdf8; font-size:1.05rem;">🎬 مكتبة فيديوهات الشرح المرفوعة (${contents.filter(c => c.contentType === 'VIDEO' || c.type === 'VIDEO' || c.type === 'VIDEO_LINK').length} فيديو)</div>
+            <div style="font-size:0.78rem; color:#94a3b8; margin-top:0.15rem;">جميع الفيديوهات المرفوعة مرتبطة بالمرحلة والمادة ومحمية بأكواد المشاهدة في تطبيق الطالب</div>
+          </div>
+          <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold; font-size:0.82rem;" onclick="openAddVideoModal()">
+            + إضافة / رفع فيديو
+          </button>
+        </div>
+
+        ${(() => {
+          const videoItems = contents.filter(c => c.contentType === 'VIDEO' || c.type === 'VIDEO' || c.type === 'VIDEO_LINK');
+          if (videoItems.length === 0) {
+            return `
+              <div style="text-align:center; padding:2.2rem 1rem; background:#0f172a; border:1px dashed #334155; border-radius:8px; color:#94a3b8;">
+                <div style="font-size:2.5rem; margin-bottom:0.4rem;">🎥</div>
+                <div style="font-weight:bold; color:#f8fafc; margin-bottom:0.3rem;">لا توجد فيديوهات مرفوعة حتى الآن</div>
+                <div style="font-size:0.82rem; margin-bottom:0.85rem;">اضغط على زر "رفع فيديو شرح جديد" لرفع ملف فيديو من جهازك (MP4/MKV/WebM) أو ربط فيديو مشفر</div>
+                <button type="button" class="btn btn-success" onclick="openAddVideoModal()">📹 + رفع أول فيديو الآن</button>
+              </div>
+            `;
+          }
+          return `
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>عنوان الفيديو</th>
+                    <th>المرحلة والمادة</th>
+                    <th>مكان التخزين / المصدر</th>
+                    <th>الحجم / المدة</th>
+                    <th>تاريخ الرفع</th>
+                    <th style="text-align:center;">إجراءات التحكم</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${videoItems.map(v => {
+                    const vSubName = subjectMap.get(v.subjectId) || 'عام';
+                    const vStName = stageMap.get(v.stageId) || 'عام';
+                    const vSize = v.sizeBytes ? `${(v.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : (v.durationMinutes ? `${v.durationMinutes} دقيقة` : 'رابط سحابي');
+                    const storageBadge = v.localStoredPath || v.filePath
+                      ? `<span class="badge" style="background:#065f46; color:#6ee7b7;" title="${escapeHtmlAttr(v.localStoredPath || v.filePath)}">💾 مخزن محلياً + R2 (${escapeHtmlAttr(v.fileName || 'MP4')})</span>`
+                      : `<span class="badge" style="background:#1e3a8a; color:#93c5fd;">☁️ سحابي (${escapeHtmlAttr(v.videoProvider || 'رابط مباشر')})</span>`;
+                    return `
+                      <tr>
+                        <td>
+                          <div style="font-weight:bold; color:#f8fafc;">🎥 ${escapeHtmlAttr(v.title || 'فيديو شرح')}</div>
+                          ${v.description ? `<div style="font-size:0.75rem; color:#94a3b8;">${escapeHtmlAttr(v.description)}</div>` : ''}
+                        </td>
+                        <td>
+                          <div style="color:#38bdf8; font-weight:bold; font-size:0.85rem;">${escapeHtmlAttr(vSubName)}</div>
+                          <div style="color:#94a3b8; font-size:0.75rem;">${escapeHtmlAttr(vStName)}</div>
+                        </td>
+                        <td>${storageBadge}</td>
+                        <td style="color:#cbd5e1; font-size:0.82rem;">${vSize}</td>
+                        <td style="color:#94a3b8; font-size:0.8rem;">${v.createdAt ? new Date(v.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
+                        <td>
+                          <div style="display:flex; gap:0.35rem; justify-content:center; flex-wrap:wrap;">
+                            <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#7c3aed; color:#fff;" onclick="prefillWatchCodeForVideo('${v.id}', '${v.subjectId || ''}')" title="توليد أكواد مشاهدة لهذا الفيديو">
+                              🔑 أكواد
+                            </button>
+                            ${(v.url || v.filePath || v.localStoredPath) ? `
+                              <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#0284c7; color:#fff;" onclick="openOrDownloadFile('${escapeHtmlAttr(v.url || v.filePath || v.localStoredPath)}', '${escapeHtmlAttr(v.title)}')">
+                                ▶️ معاينة
+                              </button>
+                            ` : ''}
+                            <button class="btn" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:#f59e0b; color:#0f172a; font-weight:bold;" onclick="openEditContentModal('${v.id}')">
+                              ✏️ تعديل
+                            </button>
+                            <button class="btn btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" onclick="deleteContentResourceAction('${v.id}')">
+                              🗑️ حذف
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        })()}
       </div>
 
       <!-- Video Watch Code Generator Card -->
@@ -4399,7 +4499,7 @@ async function renderAiStudioView(container, initialTab = null) {
           <span>🔑 مولد وتتبع أكواد المشاهدة للطلاب (Watch Access Tokens)</span>
         </div>
 
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem; margin-bottom:1rem;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap:0.75rem; margin-bottom:1rem;">
           <div>
             <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">عدد الأكواد المراد توليدها</label>
             <input type="number" id="vCodeCount" min="1" max="100" value="10" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
@@ -4413,10 +4513,17 @@ async function renderAiStudioView(container, initialTab = null) {
             <input type="date" id="vCodeExpireDate" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
           </div>
           <div>
-            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">تخصيص لمادة أو درس معين</label>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">تخصيص لمادة معينة</label>
             <select id="vCodeTargetSubject" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
               <option value="">عام (أي فيديو مصرح)</option>
               ${subjects.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">تخصيص لفيديو محدد (اختياري)</label>
+            <select id="vCodeTargetVideo" class="form-control" style="width:100%; padding:0.45rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#fff;">
+              <option value="">جميع فيديوهات المادة</option>
+              ${contents.filter(c => c.contentType === 'VIDEO' || c.type === 'VIDEO' || c.type === 'VIDEO_LINK').map(v => `<option value="${v.id}">${escapeHtmlAttr(v.title)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -5089,26 +5196,80 @@ function onAiStudioLessonSubjectChange() {
   }
 }
 
-function runAiLessonExtraction() {
-  const title = document.getElementById('aiStudioLessonTitle')?.value.trim();
-  const stage = document.getElementById('aiStudioLessonStage')?.value;
+async function runAiLessonExtraction() {
+  const sourceId = document.getElementById('aiStudioLessonSource')?.value || '';
+  const title = document.getElementById('aiStudioLessonTitle')?.value.trim() || '';
+  const stageId = document.getElementById('aiStudioLessonStage')?.value || '';
+  const subjectId = document.getElementById('aiStudioLessonSubject')?.value || '';
+  const startPage = parseInt(document.getElementById('aiStudioLessonPageStart')?.value, 10) || 1;
+  const endPage = parseInt(document.getElementById('aiStudioLessonPageEnd')?.value, 10) || null;
   const resBox = document.getElementById('aiLessonExtractionResultBox');
 
-  if (!title && !stage) {
-    return showToast('يرجى تحديد عنوان الدرس أو اختيار المرحلة والمادة', true);
+  if (!sourceId && !title && (!stageId || !subjectId)) {
+    return showToast('يرجى اختيار المذكرة المرفوعة أو تحديد المرحلة والمادة وعنوان الدرس أولاً', true);
   }
 
-  showToast('ℹ️ محرك استخراج محاور الدروس المباشر من المذكرات قيد الربط بمحرك التلخيص. تم فتح حقول العناصر والمفاهيم لتسجيلها يدوياً الآن، أو استخدم تبويب الاختبارات لتوليد الأسئلة بالذكاء.');
+  const allContents = window._allContentsCache || [];
+  const memo = allContents.find(c => c.id === sourceId);
+
   if (resBox) resBox.style.display = 'block';
+  const outEl = document.getElementById('aiResultOutlines');
+  const conEl = document.getElementById('aiResultConcepts');
+  const sumEl = document.getElementById('aiResultSummary');
+
+  if (outEl) outEl.value = '⏳ جاري قراءة الصفحات المحددة من المذكرة واستخراج العناصر الرئيسية بالذكاء الاصطناعي...';
+  if (conEl) conEl.value = '⏳ جاري استخراج المفاهيم والتعريفات...';
+  if (sumEl) sumEl.value = '⏳ جاري صياغة الملخص الشامل للدرس...';
+
+  showToast(`🤖 جاري قراءة المذكرة من صفحة ${startPage} إلى ${endPage || 'النهاية'} واستخراج الشرح...`);
+
+  try {
+    const res = await callBackend('extractLessonExplanationAi', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      sourceId: sourceId || null,
+      stageId: stageId || memo?.stageId || null,
+      subjectId: subjectId || memo?.subjectId || null,
+      title: title || memo?.title || '',
+      filePath: memo?.localStoredPath || memo?.filePath || null,
+      fileName: memo?.fileName || null,
+      startPage,
+      endPage
+    });
+
+    if (outEl) outEl.value = res.outlines || '';
+    if (conEl) conEl.value = res.concepts || '';
+    if (sumEl) sumEl.value = res.summary || '';
+
+    const titleInp = document.getElementById('aiStudioLessonTitle');
+    if (titleInp && !titleInp.value.trim() && res.suggestedTitle) {
+      titleInp.value = res.suggestedTitle;
+    }
+
+    showToast(`✅ تم استخراج شرح الدرس بنجاح عبر (${res.provider || 'Gemini'}) من الصفحات المحددة! 🟢`);
+  } catch (e) {
+    if (outEl && outEl.value.startsWith('⏳')) outEl.value = '';
+    if (conEl && conEl.value.startsWith('⏳')) conEl.value = '';
+    if (sumEl && sumEl.value.startsWith('⏳')) sumEl.value = '';
+    showToast(`❌ تعذر استخراج الشرح آلياً: ${(e && e.message) || e}`, true);
+  }
 }
 
 async function saveAiGeneratedLesson() {
   const title = document.getElementById('aiStudioLessonTitle')?.value.trim() || 'درس جديد';
   const stageId = document.getElementById('aiStudioLessonStage')?.value;
   const subjectId = document.getElementById('aiStudioLessonSubject')?.value;
+  const sourceId = document.getElementById('aiStudioLessonSource')?.value || null;
   const pageStart = parseInt(document.getElementById('aiStudioLessonPageStart')?.value, 10) || 1;
   const pageEnd = parseInt(document.getElementById('aiStudioLessonPageEnd')?.value, 10) || null;
-  const desc = document.getElementById('aiResultOutlines')?.value.trim() || '';
+  const outlines = document.getElementById('aiResultOutlines')?.value.trim() || '';
+  const concepts = document.getElementById('aiResultConcepts')?.value.trim() || '';
+  const summary = document.getElementById('aiResultSummary')?.value.trim() || '';
+
+  const combinedBody = [
+    outlines ? `📌 العناصر والأفكار الرئيسية:\n${outlines}` : '',
+    concepts ? `💡 التعريفات والمفاهيم والقوانين:\n${concepts}` : '',
+    summary ? `📝 ملخص الشرح:\n${summary}` : ''
+  ].filter(Boolean).join('\n\n');
 
   if (!stageId || !subjectId) {
     return showToast('يرجى اختيار المرحلة والمادة أولاً لحفظ الدرس', true);
@@ -5118,7 +5279,12 @@ async function saveAiGeneratedLesson() {
     await callBackend('createLesson', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       title,
-      description: desc,
+      description: combinedBody.slice(0, 2000) || outlines || summary || title,
+      contentBody: combinedBody || null,
+      outlines: outlines || null,
+      concepts: concepts || null,
+      summary: summary || null,
+      sourceId: sourceId || null,
       stageId,
       subjectId,
       pageStart,
@@ -5127,10 +5293,478 @@ async function saveAiGeneratedLesson() {
       status: 'PUBLISHED'
     });
     showToast('🎉 تم حفظ ونشر الدرس بنجاح في تطبيق الطلاب!');
-    renderActiveView('ai_studio');
+    await renderActiveView('ai_studio');
   } catch (e) {
     showToast(`❌ تعذر حفظ الدرس: ${(e && e.message) || e}`, true);
   }
+}
+
+async function publishLessonAction(lessonId) {
+  if (!lessonId) return;
+  try {
+    await callBackend('publishLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
+    showToast('تم نشر الدرس للطلاب بنجاح! 🟢');
+    await renderActiveView(activeView || 'ai_studio');
+  } catch (e) {
+    showToast(`❌ تعذر نشر الدرس: ${(e && e.message) || e}`, true);
+  }
+}
+
+async function archiveLessonAction(lessonId) {
+  if (!lessonId) return;
+  if (!confirm('هل أنت متأكد من حذف هذا الدرس نهائياً من قائمة الدروس؟')) return;
+  try {
+    await callBackend('deleteLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
+    showToast('🗑️ تم حذف الدرس بنجاح!');
+    await renderActiveView(activeView || 'ai_studio');
+  } catch (e) {
+    // Fallback to archive if delete fails
+    try {
+      await callBackend('archiveLesson', currentCallerToken, lessonId, currentCallerToken.institutionId);
+      showToast('تم أرشفة/إخفاء الدرس بنجاح');
+      await renderActiveView(activeView || 'ai_studio');
+    } catch (err2) {
+      showToast(`❌ تعذر حذف الدرس: ${(e && e.message) || e}`, true);
+    }
+  }
+}
+
+async function archiveExamAction(examId) {
+  if (!examId) return;
+  if (!confirm('هل أنت متأكد من حذف هذا الاختبار؟')) return;
+  try {
+    await callBackend('deleteExamRecord', currentCallerToken, examId, currentCallerToken.institutionId);
+    showToast('🗑️ تم حذف الاختبار بنجاح!');
+    await renderActiveView(activeView || 'ai_studio');
+  } catch (e) {
+    try {
+      await callBackend('archiveExam', currentCallerToken, examId, currentCallerToken.institutionId);
+      showToast('تم أرشفة الاختبار بنجاح');
+      await renderActiveView(activeView || 'ai_studio');
+    } catch (_) {
+      showToast(`❌ تعذر حذف الاختبار: ${(e && e.message) || e}`, true);
+    }
+  }
+}
+
+async function openExamResultsModal(examId) {
+  const exams = window._allExamsCache || [];
+  const ex = exams.find(x => x.id === examId);
+  let grades = [];
+  try {
+    grades = await callBackend('getGrades', currentCallerToken, { institutionId: currentCallerToken.institutionId, examId }) || [];
+  } catch (_) {}
+  const modal = document.getElementById('modalContainer');
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-content" style="max-width:700px;">
+        <div class="modal-header">
+          <div class="modal-title">📊 نتائج وإحصائيات الاختبار: ${escapeHtmlAttr(ex?.title || examId)}</div>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div style="padding:1rem;">
+          <div style="margin-bottom:1rem; color:#94a3b8; font-size:0.88rem;">
+            عدد الطلاب المختبرين: <strong style="color:#38bdf8;">${grades.length}</strong> | الدرجة العظمى: <strong style="color:#4ade80;">${ex?.maxScore || ex?.totalMarks || 100}</strong>
+          </div>
+          ${grades.length > 0 ? `
+            <table class="data-table">
+              <thead><tr><th>الطالب</th><th>الدرجة</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+              <tbody>
+                ${grades.map(g => `
+                  <tr>
+                    <td>${escapeHtmlAttr(g.studentName || g.studentId || 'طالب')}</td>
+                    <td><strong style="color:#38bdf8;">${g.score ?? g.marks ?? 0}</strong> / ${ex?.maxScore || 100}</td>
+                    <td><span class="badge badge-success">${escapeHtmlAttr(g.status || 'تم التصحيح')}</span></td>
+                    <td>${g.createdAt ? new Date(g.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : `<div style="text-align:center; padding:2rem; color:#64748b;">لا توجد تسليمات مسجلة لهذا الاختبار حتى الآن.</div>`}
+          <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+            <button class="btn" onclick="closeModal()">إغلاق</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function deleteContentResourceAction(contentId) {
+  if (!contentId) return;
+  if (!confirm('هل أنت متأكد من حذف هذا المصدر من المكتبة الرقمية؟')) return;
+  try {
+    await callBackend('deleteDigitalContentItem', currentCallerToken, contentId, currentCallerToken.institutionId);
+    showToast('🗑️ تم حذف المصدر من المكتبة الرقمية بنجاح');
+    await renderActiveView(activeView || 'ai_studio');
+  } catch (e) {
+    showToast(`❌ تعذر حذف المصدر: ${(e && e.message) || e}`, true);
+  }
+}
+
+async function openEditContentModal(contentId) {
+  const allContents = window._allContentsCache || [];
+  const item = allContents.find(c => c.id === contentId);
+  if (!item) {
+    return showToast('المصدر غير موجود في الذاكرة الحالية، يرجى تحديث الصفحة', true);
+  }
+
+  window._selectedContentFile = null;
+  window._selectedContentText = '';
+  window._selectedContentBase64 = null;
+  window._selectedContentPages = item.pagesCount || item.pageEnd || 0;
+
+  const stages = window._allStagesCache || [];
+  const years = window._allYearsCache || [];
+  const subjects = window._allSubjectsCache || [];
+  window._allUploadStages = stages;
+  window._allUploadYears = years;
+  window._allUploadSubjects = subjects;
+
+  const modal = document.getElementById('modalContainer');
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+          <div class="modal-title">✏️ تعديل بيانات المصدر المرفوع: ${escapeHtmlAttr(item.title || '')}</div>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <form onsubmit="event.preventDefault(); submitEditContent('${escapeHtmlAttr(item.id)}');">
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin-bottom:1rem;">
+            <div style="font-weight:bold; color:#a855f7; margin-bottom:0.75rem; font-size:0.95rem;">
+              🏫 تعديل التبعية الأكاديمية (المرحلة والصف والمادة)
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.75rem;">
+              <div>
+                <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">المرحلة الدراسية *</label>
+                <select id="mContentStageId" required style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;" onchange="onContentModalStageChange()">
+                  <option value="">— اختر المرحلة الدراسية —</option>
+                  ${stages.map(st => `<option value="${st.id}" ${st.id === item.stageId ? 'selected' : ''}>${escapeHtmlAttr(st.name)}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">الصف / السنة الدراسية</label>
+                <select id="mContentYearId" style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+                  <option value="">— كافة الصفوف / عام —</option>
+                  ${years.map(y => `<option value="${y.id}" ${y.id === item.academicYearId ? 'selected' : ''}>${escapeHtmlAttr(y.name)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:#cbd5e1; display:block; margin-bottom:0.3rem;">المادة الدراسية التابعة للمصدر *</label>
+              <select id="mContentSubjectId" required style="width:100%; padding:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#fff;">
+                ${subjects.filter(sb => !item.stageId || sb.stageId === item.stageId).map(sb => `<option value="${sb.id}" ${sb.id === item.subjectId ? 'selected' : ''}>${escapeHtmlAttr(sb.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #1e293b; margin-bottom:1rem;">
+            <label style="font-weight:bold; color:#38bdf8; display:block; margin-bottom:0.5rem;">📂 استبدال أو إعادة ربط ملف المذكرة/الفيديو من جهاز الكمبيوتر (اختياري)</label>
+            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold;" onclick="document.getElementById('mContentFileInput').click()">
+                💻 اختيار ملف جديد من جهازك
+              </button>
+              <input type="file" id="mContentFileInput" accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.png,.jpg,.mp4,.mkv,.webm" style="display:none;" onchange="handleContentFileSelect(this)">
+              <span id="mContentFileStatus" style="font-size:0.85rem; color:#94a3b8;">
+                ${item.fileName ? `الملف الحالي: <strong style="color:#4ade80;">${escapeHtmlAttr(item.fileName)}</strong>` : 'لم يتم إرفاق ملف محلي بعد'}
+              </span>
+            </div>
+
+            <div id="mContentPageRangeBox" style="background:#1e293b; border-radius:6px; padding:0.65rem; margin-top:0.75rem;">
+              <div style="font-size:0.8rem; color:#cbd5e1; margin-bottom:0.35rem; font-weight:bold;">📄 نطاق صفحات المذكرة (من — إلى):</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">من صفحة:</label>
+                  <input type="number" id="mContentPageStart" min="1" value="${item.pageStart || 1}" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:#94a3b8;">إلى صفحة (إجمالي الصفحات):</label>
+                  <input type="number" id="mContentPageEnd" min="1" value="${item.pageEnd || item.pagesCount || ''}" style="width:100%; padding:0.35rem; background:#0f172a; border:1px solid #334155; border-radius:4px; color:#fff; font-size:0.85rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>عنوان المصدر أو المذكرة *</label>
+            <input type="text" id="mContentTitle" required value="${escapeHtmlAttr(item.title || '')}">
+          </div>
+          <div class="form-group">
+            <label>نوع الملف / المحتوى *</label>
+            <select id="mContentType">
+              <option value="PDF" ${(item.type || item.contentType) === 'PDF' ? 'selected' : ''}>مذكرة رقمية (PDF)</option>
+              <option value="SUMMARY" ${item.type === 'SUMMARY' ? 'selected' : ''}>ملخص تدريبي</option>
+              <option value="EXERCISES" ${item.type === 'EXERCISES' ? 'selected' : ''}>نماذج تدريبية وتدريبات</option>
+              <option value="VIDEO" ${(item.type === 'VIDEO' || item.contentType === 'VIDEO') ? 'selected' : ''}>فيديو شرح محمي</option>
+              <option value="VIDEO_LINK" ${item.type === 'VIDEO_LINK' ? 'selected' : ''}>رابط فيديو خارجي</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الرابط الخارجي (اختياري)</label>
+            <input type="text" id="mContentUrl" value="${escapeHtmlAttr(item.url || '')}" placeholder="https://...">
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
+            <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
+            <button type="submit" class="btn btn-success" id="btnSubmitEditContent" style="font-weight:bold;">💾 حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function submitEditContent(contentId) {
+  const btn = document.getElementById('btnSubmitEditContent');
+  const stageId = document.getElementById('mContentStageId')?.value || '';
+  const academicYearId = document.getElementById('mContentYearId')?.value || null;
+  const subjectId = document.getElementById('mContentSubjectId')?.value || '';
+  const title = document.getElementById('mContentTitle')?.value.trim();
+  const type = document.getElementById('mContentType')?.value || 'PDF';
+  const url = document.getElementById('mContentUrl')?.value.trim();
+  const pageStart = parseInt(document.getElementById('mContentPageStart')?.value, 10) || 1;
+  const pageEnd = parseInt(document.getElementById('mContentPageEnd')?.value, 10) || null;
+  const pageRange = (pageStart || pageEnd) ? `من صفحة ${pageStart || 1} إلى ${pageEnd || 'نهاية المذكرة'}` : null;
+
+  if (!stageId) return showToast('يرجى اختيار المرحلة الدراسية', true);
+  if (!subjectId) return showToast('يرجى اختيار المادة الدراسية', true);
+  if (!title) return showToast('العنوان مطلوب', true);
+
+  const fileInfo = window._selectedContentFile;
+  if (btn) btn.disabled = true;
+
+  try {
+    const payload = {
+      institutionId: currentCallerToken.institutionId,
+      title,
+      type,
+      stageId,
+      academicYearId,
+      subjectId,
+      url: url || null,
+      pageStart,
+      pageEnd: pageEnd || window._selectedContentPages || null,
+      pagesCount: window._selectedContentPages || pageEnd || null,
+      description: pageRange ? `نطاق الصفحات المعتمدة: ${pageRange}` : null
+    };
+    if (fileInfo) {
+      payload.fileName = fileInfo.name;
+      payload.filePath = fileInfo.path || null;
+      payload.sizeBytes = fileInfo.size || null;
+    }
+    if (window._selectedContentBase64) {
+      payload.fileBase64 = window._selectedContentBase64;
+    }
+    if (window._selectedContentText) {
+      payload.textContent = window._selectedContentText;
+    }
+
+    await callBackend('updateDigitalContentItem', currentCallerToken, contentId, payload, currentCallerToken.institutionId);
+    showToast('✅ تم تحديث بيانات المصدر بنجاح!');
+    closeModal();
+    await renderActiveView(activeView || 'ai_studio');
+  } catch (err) {
+    showToast(friendlyBatchAError(err), true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function openAddVideoModal() {
+  const modal = document.getElementById('modalContainer');
+  window._selectedVideoFile = null;
+  window._selectedVideoBase64 = null;
+
+  let stages = window._allStagesCache || [];
+  let subjects = window._allSubjectsCache || [];
+  if (!stages.length || !subjects.length) {
+    try {
+      const instId = currentCallerToken?.institutionId;
+      const [stRes, subRes] = await Promise.all([
+        callBackend('getStages', currentCallerToken, instId).catch(() => []),
+        callBackend('getSubjects', currentCallerToken, instId).catch(() => [])
+      ]);
+      stages = stRes || [];
+      subjects = subRes || [];
+    } catch (_) {}
+  }
+  window._allUploadStages = stages;
+  window._allUploadSubjects = subjects;
+
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
+      <div class="modal-content" style="max-width:650px;">
+        <div class="modal-header" style="background:linear-gradient(135deg, #064e3b, #0f172a); border-bottom:1px solid #10b981;">
+          <div class="modal-title" style="color:#34d399;">📹 رفع فيديو شرح جديد وتأمينه (Android DRM + R2 Storage)</div>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <form onsubmit="event.preventDefault(); submitCreateVideo();">
+          <div style="background:#0f172a; border:1px solid #10b981; border-radius:8px; padding:0.85rem; margin-bottom:1rem; font-size:0.8rem; color:#cbd5e1; line-height:1.5;">
+            <strong style="color:#34d399;">📍 مسار تخزين الفيديو المرفوع:</strong><br>
+            • <strong>التخزين السحابي:</strong> Cloudflare R2 Bucket (<code>mana-videos/institutions/${escapeHtmlAttr(currentCallerToken?.institutionId || '')}/videos/</code>)<br>
+            • <strong>التخزين المحلي بالسنتر:</strong> <code>%APPDATA%/remas-center-desktop/center_storage/videos/</code>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+            <div class="form-group" style="margin:0;">
+              <label>المرحلة الدراسية *</label>
+              <select id="mVideoStageId" required onchange="onVideoModalStageChange()">
+                <option value="">— اختر المرحلة —</option>
+                ${stages.map(st => `<option value="${st.id}">${escapeHtmlAttr(st.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>المادة الدراسية *</label>
+              <select id="mVideoSubjectId" required>
+                <option value="">— اختر المرحلة أولاً —</option>
+                ${subjects.map(sb => `<option value="${sb.id}" data-stage="${sb.stageId || ''}">${escapeHtmlAttr(sb.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>عنوان فيديو الشرح / الحصة *</label>
+            <input type="text" id="mVideoTitle" required placeholder="مثال: شرح الدرس الأول - الحضارة والتاريخ (الجزء الأول)">
+          </div>
+
+          <div style="background:#0f172a; padding:1rem; border-radius:8px; border:1px solid #334155; margin-bottom:1rem;">
+            <div style="font-weight:bold; color:#38bdf8; margin-bottom:0.5rem;">1️⃣ خيار (أ): رفع ملف فيديو مباشر من جهاز الكمبيوتر (MP4 / MKV / WebM)</div>
+            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+              <button type="button" class="btn" style="background:#0284c7; color:#fff; font-weight:bold;" onclick="document.getElementById('mVideoFileInput').click()">
+                💻 اختيار ملف الفيديو من جهازك
+              </button>
+              <input type="file" id="mVideoFileInput" accept="video/*,.mp4,.mkv,.webm,.mov" style="display:none;" onchange="handleVideoFileSelect(this)">
+              <span id="mVideoFileStatus" style="font-size:0.84rem; color:#94a3b8;">لم يتم تحديد ملف فيديو محلي بعد</span>
+            </div>
+
+            <div style="margin-top:0.85rem; padding-top:0.85rem; border-top:1px solid #1e293b;">
+              <div style="font-weight:bold; color:#c084fc; margin-bottom:0.4rem;">2️⃣ خيار (ب): أو وضع رابط فيديو سحابي مشفر (YouTube غير مدرج / Drive / BunnyCDN / R2)</div>
+              <input type="url" id="mVideoUrl" placeholder="https://www.youtube.com/watch?v=... أو رابط بث مباشر MP4/HLS" style="width:100%; padding:0.45rem; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff;">
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+            <div class="form-group">
+              <label>نوع الاستضافة / المشغل</label>
+              <select id="mVideoProvider">
+                <option value="R2_AND_LOCAL">تخزين السنتر السحابي والمحلي (R2 + Local)</option>
+                <option value="YOUTUBE_UNLISTED">يوتيوب خاص / غير مدرج (محمي بـ DRM)</option>
+                <option value="BUNNY_CDN">BunnyCDN / Vimeo Stream</option>
+                <option value="GOOGLE_DRIVE">Google Drive Stream</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>مدة الفيديو بالتقريب (دقيقة)</label>
+              <input type="number" id="mVideoDuration" min="1" placeholder="مثال: 45">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>ملاحظات أو وصف الحصة للطالب (اختياري)</label>
+            <textarea id="mVideoDesc" rows="2" placeholder="أهم النقاط المشروحة في هذا الفيديو..."></textarea>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+            <button type="button" class="btn" onclick="closeModal()">إلغاء</button>
+            <button type="submit" class="btn btn-success" id="btnSubmitAddVideo" style="font-weight:bold;">📹 رفع وحفظ الفيديو في المكتبة</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  onVideoModalStageChange();
+}
+
+function onVideoModalStageChange() {
+  const stageId = document.getElementById('mVideoStageId')?.value || '';
+  const subSel = document.getElementById('mVideoSubjectId');
+  if (!subSel) return;
+  const allSubs = window._allUploadSubjects || [];
+  const filtered = stageId ? allSubs.filter(s => s.stageId === stageId) : allSubs;
+  subSel.innerHTML = filtered.length > 0
+    ? `<option value="">— اختر المادة الدراسية (${filtered.length}) —</option>` + filtered.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')
+    : `<option value="">⚠️ لا توجد مواد مسجلة لهذه المرحلة</option>`;
+}
+
+function handleVideoFileSelect(input) {
+  const status = document.getElementById('mVideoFileStatus');
+  if (!input.files || !input.files[0]) {
+    window._selectedVideoFile = null;
+    if (status) status.innerText = 'لم يتم تحديد ملف فيديو.';
+    return;
+  }
+  const file = input.files[0];
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  window._selectedVideoFile = {
+    name: file.name,
+    size: file.size,
+    type: file.type || 'video/mp4',
+    path: file.path || ''
+  };
+  if (status) {
+    status.innerHTML = `✅ تم اختيار الفيديو: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeMb} MB)`;
+  }
+  const titleInp = document.getElementById('mVideoTitle');
+  if (titleInp && !titleInp.value.trim()) {
+    titleInp.value = file.name.replace(/\.[^/.]+$/, '').replace(/[_\\-]/g, ' ');
+  }
+}
+
+async function submitCreateVideo() {
+  const btn = document.getElementById('btnSubmitAddVideo');
+  const stageId = document.getElementById('mVideoStageId')?.value || '';
+  const subjectId = document.getElementById('mVideoSubjectId')?.value || '';
+  const title = document.getElementById('mVideoTitle')?.value.trim() || '';
+  const url = document.getElementById('mVideoUrl')?.value.trim() || '';
+  const videoProvider = document.getElementById('mVideoProvider')?.value || 'R2_AND_LOCAL';
+  const durationMinutes = parseInt(document.getElementById('mVideoDuration')?.value, 10) || null;
+  const description = document.getElementById('mVideoDesc')?.value.trim() || '';
+  const fileInfo = window._selectedVideoFile;
+
+  if (!stageId || !subjectId) return showToast('يرجى اختيار المرحلة والمادة الدراسية للفيديو', true);
+  if (!title) return showToast('يرجى إدخال عنوان الفيديو', true);
+  if (!fileInfo && !url) return showToast('يرجى اختيار ملف الفيديو من جهازك أو وضع رابط الفيديو', true);
+
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ جاري رفع وحفظ الفيديو...'; }
+  try {
+    await callBackend('createDigitalContentItem', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      title,
+      stageId,
+      subjectId,
+      contentType: 'VIDEO',
+      type: fileInfo ? 'VIDEO' : 'VIDEO_LINK',
+      videoProvider,
+      durationMinutes,
+      description: description || (durationMinutes ? `مدة الفيديو: ${durationMinutes} دقيقة` : null),
+      fileName: fileInfo?.name || null,
+      filePath: fileInfo?.path || null,
+      sizeBytes: fileInfo?.size || null,
+      mimeType: fileInfo?.type || 'video/mp4',
+      url: url || null,
+      status: 'PUBLISHED'
+    });
+    showToast('🎬 تم رفع وحفظ الفيديو بنجاح في مكتبة الفيديوهات المحمية! 🟢');
+    closeModal();
+    window._currentAiStudioTab = 'videos';
+    await renderActiveView('ai_studio');
+  } catch (err) {
+    showToast(friendlyBatchAError(err), true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = '📹 رفع وحفظ الفيديو في المكتبة'; }
+  }
+}
+
+function prefillWatchCodeForVideo(videoId, subjectId) {
+  const subSel = document.getElementById('vCodeTargetSubject');
+  const vidSel = document.getElementById('vCodeTargetVideo');
+  if (subSel && subjectId) subSel.value = subjectId;
+  if (vidSel && videoId) vidSel.value = videoId;
+  const countInp = document.getElementById('vCodeCount');
+  if (countInp) {
+    countInp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    countInp.focus();
+  }
+  showToast('🔑 تم تحديد الفيديو والمادة في مولد الأكواد بالأسفل — اضغط "توليد حزمة أكواد المشاهدة"');
 }
 
 function onAiResourcesStageFilterChange() {
@@ -8217,6 +8851,8 @@ async function openAddTeacherModal() {
   try { stages = await callBackend('getStages', currentCallerToken, { institutionId: currentCallerToken.institutionId }) || []; } catch(e){ stages=[]; }
   const activeSubjects = subjects.filter(s=>s.status!=='ARCHIVED');
   const activeStages = stages.filter(s=>s.status!=='ARCHIVED');
+  const stageNameMap = new Map(stages.map(st => [st.id, st.name]));
+  window._tchModalSubjects = activeSubjects;
   const container = document.getElementById('modalContainer');
   container.innerHTML = `
     <div class="modal-overlay">
@@ -8227,11 +8863,11 @@ async function openAddTeacherModal() {
         <div class="form-group"><label>البريد الإلكتروني (اختياري)</label><input type="email" id="mTchEmail" placeholder="teacher@center.com"></div>
         <div class="form-group"><label>التخصص * (مثال: الرياضيات، الفيزياء)</label><input type="text" id="mTchSpec" placeholder="الرياضيات"></div>
         <div class="form-group">
-          <label>المواد التي يدرسها (اختياري — صفر أو أكثر)</label>
-          ${activeSubjects.length>0 ? `<div style="max-height:100px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;">${activeSubjects.map(s=>`<label style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem; cursor:pointer;"><input type="checkbox" value="${s.id}" class="mTchSubjectChk"> <span>${s.name} <span class="code-box" style="font-size:0.7rem;">${s.code||s.id}</span></span></label>`).join('')}</div>` : '<p style="color:#f59e0b; font-size:0.85rem;">لا توجد مواد دراسية نشطة. أضف المواد من الإعداد الأكاديمي أولاً.</p>'}
+          <label>المواد التي يدرسها (مع المرحلة التابعة لها)</label>
+          ${activeSubjects.length>0 ? `<div style="max-height:130px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;">${activeSubjects.map(s=>`<label style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem; cursor:pointer;"><input type="checkbox" value="${s.id}" data-stage="${s.stageId||''}" class="mTchSubjectChk"> <span><strong>${escapeHtmlAttr(s.name)}</strong> ${s.stageId ? `<span style="color:#38bdf8; font-size:0.78rem;">(${escapeHtmlAttr(stageNameMap.get(s.stageId)||s.stageId)})</span>` : ''} <span class="code-box" style="font-size:0.7rem;">${s.code||s.id}</span></span></label>`).join('')}</div>` : '<p style="color:#f59e0b; font-size:0.85rem;">لا توجد مواد دراسية نشطة. أضف المواد من الإعداد الأكاديمي أولاً.</p>'}
         </div>
         <div class="form-group">
-          <label>المراحل التي يدرسها (اختياري — صفر أو أكثر)</label>
+          <label>المراحل التي يدرسها (تُضاف تلقائياً عند اختيار المادة أو يدوياً)</label>
           ${activeStages.length>0 ? `<div style="max-height:100px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;">${activeStages.map(s=>`<label style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem; cursor:pointer;"><input type="checkbox" value="${s.id}" class="mTchStageChk"> <span>${s.name} <span class="code-box" style="font-size:0.7rem;">${s.code||s.id}</span></span></label>`).join('')}</div>` : '<p style="color:#f59e0b; font-size:0.85rem;">لا توجد مراحل دراسية نشطة. أضف المراحل من الإعداد الأكاديمي أولاً.</p>'}
         </div>
         <div style="background:#0f172a; padding:0.75rem; border-radius:6px; border:1px solid #1e293b; margin-top:0.75rem;">
@@ -8252,8 +8888,10 @@ async function submitAddTeacher() {
   const phone = (document.getElementById('mTchPhone').value || '').trim();
   const email = (document.getElementById('mTchEmail').value || '').trim();
   const specialization = (document.getElementById('mTchSpec').value || '').trim();
-  const selectedSubjects = Array.from(document.querySelectorAll('.mTchSubjectChk:checked')).map(cb=>cb.value);
-  const selectedStages = Array.from(document.querySelectorAll('.mTchStageChk:checked')).map(cb=>cb.value);
+  const checkedSubEls = Array.from(document.querySelectorAll('.mTchSubjectChk:checked'));
+  const selectedSubjects = checkedSubEls.map(cb=>cb.value);
+  const autoStageIds = checkedSubEls.map(cb=>cb.getAttribute('data-stage')).filter(Boolean);
+  const selectedStages = [...new Set([...Array.from(document.querySelectorAll('.mTchStageChk:checked')).map(cb=>cb.value), ...autoStageIds])];
 
   if (!fullName) { showToast('يرجى إدخال اسم المعلم', true); return; }
   if (!phone) { showToast('يرجى إدخال رقم هاتف المعلم', true); return; }
@@ -8324,6 +8962,7 @@ async function openEditTeacherModal(id) {
     try { stageAssignments = await callBackend('getTeacherStages', currentCallerToken, id, currentCallerToken.institutionId) || []; } catch(e){ stageAssignments=[]; }
     const activeSubjects = subjects.filter(s=>s.status!=='ARCHIVED');
     const activeStages = stages.filter(s=>s.status!=='ARCHIVED');
+    const stageNameMap = new Map(stages.map(st => [st.id, st.name]));
     const assignedSubjectIds = new Set(subjectAssignments.map(a=>a.subjectId));
     const assignedStageIds = new Set(stageAssignments.map(a=>a.stageId));
     const container = document.getElementById('modalContainer');
@@ -8337,8 +8976,8 @@ async function openEditTeacherModal(id) {
           <div class="form-group"><label>التخصص *</label><input type="text" id="mEditTchSpec" value="${(t.specialization||t.subject||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>كود المعلم (ثابت)</label><input type="text" value="${t.teacherCode||t.id}" disabled style="background:#0f172a; color:#94a3b8;"></div>
           <div class="form-group">
-            <label>المواد التي يدرسها</label>
-            ${activeSubjects.length>0 ? `<div style="max-height:110px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;">${activeSubjects.map(s=>`<label style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem; cursor:pointer;"><input type="checkbox" value="${s.id}" class="mEditTchSubjectChk" ${assignedSubjectIds.has(s.id)?'checked':''}> <span>${s.name} <span class="code-box" style="font-size:0.7rem;">${s.code||s.id}</span></span></label>`).join('')}</div>` : '<p style="color:#f59e0b; font-size:0.85rem;">لا توجد مواد دراسية نشطة. أضف المواد من الإعداد الأكاديمي أولاً.</p>'}
+            <label>المواد التي يدرسها (مع المرحلة التابعة لها)</label>
+            ${activeSubjects.length>0 ? `<div style="max-height:130px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;">${activeSubjects.map(s=>`<label style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem; cursor:pointer;"><input type="checkbox" value="${s.id}" data-stage="${s.stageId||''}" class="mEditTchSubjectChk" ${assignedSubjectIds.has(s.id)?'checked':''}> <span><strong>${escapeHtmlAttr(s.name)}</strong> ${s.stageId ? `<span style="color:#38bdf8; font-size:0.78rem;">(${escapeHtmlAttr(stageNameMap.get(s.stageId)||s.stageId)})</span>` : ''} <span class="code-box" style="font-size:0.7rem;">${s.code||s.id}</span></span></label>`).join('')}</div>` : '<p style="color:#f59e0b; font-size:0.85rem;">لا توجد مواد دراسية نشطة. أضف المواد من الإعداد الأكاديمي أولاً.</p>'}
           </div>
           <div class="form-group">
             <label>المراحل التي يدرسها</label>
@@ -8359,8 +8998,10 @@ async function submitEditTeacher(id){
   const phone = document.getElementById('mEditTchPhone').value;
   const email = document.getElementById('mEditTchEmail').value;
   const specialization = document.getElementById('mEditTchSpec').value;
-  const selectedSubjects = Array.from(document.querySelectorAll('.mEditTchSubjectChk:checked')).map(cb=>cb.value);
-  const selectedStages = Array.from(document.querySelectorAll('.mEditTchStageChk:checked')).map(cb=>cb.value);
+  const checkedSubEls = Array.from(document.querySelectorAll('.mEditTchSubjectChk:checked'));
+  const selectedSubjects = checkedSubEls.map(cb=>cb.value);
+  const autoStageIds = checkedSubEls.map(cb=>cb.getAttribute('data-stage')).filter(Boolean);
+  const selectedStages = [...new Set([...Array.from(document.querySelectorAll('.mEditTchStageChk:checked')).map(cb=>cb.value), ...autoStageIds])];
   try {
     await callBackend('updateTeacher', currentCallerToken, id, { institutionId: currentCallerToken.institutionId, fullName, name: fullName, phone, email, specialization, subject: specialization });
     // Sync subject assignments: preserve existing, add new, remove deselected, avoid duplicates
@@ -8474,7 +9115,8 @@ async function openAddGroupModal() {
     const subjects = await callBackend('getSubjects', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
     const teachers = await callBackend('getTeachers', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
     const rooms = await callBackend('getRooms', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
-    window._batchAGroup = { years, stages, subjects, teachers, rooms };
+    const existingGroups = await callBackend('getGroups', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
+    window._batchAGroup = { years, stages, subjects, teachers, rooms, existingGroups };
     const activeYears = years.filter(y => y.status === 'ACTIVE');
     const activeStages = stages.filter(s => s.status !== 'ARCHIVED');
     const activeSubjects = subjects.filter(s => s.status !== 'ARCHIVED');
@@ -8491,7 +9133,10 @@ async function openAddGroupModal() {
     <div class="modal-overlay">
       <div class="modal-card" style="width:620px; max-height:88vh; overflow-y:auto;">
         <div class="modal-header">+ إنشاء مجموعة دراسية جديدة (علاقات حقيقية)</div>
-        <div class="form-group"><label>اسم المجموعة *</label><input type="text" id="mGrpName" placeholder="الصف الثالث الثانوي — تاريخ (أ)"></div>
+        <div class="form-group">
+          <label>اسم المجموعة * <span style="color:#38bdf8; font-size:0.75rem;">(يُكتب تلقائياً عند اختيار المرحلة والمادة ويمكنك تعديله)</span></label>
+          <input type="text" id="mGrpName" placeholder="الصف الثالث الثانوي — تاريخ (أ)" oninput="this.dataset.userEdited='1'">
+        </div>
         <div class="form-group"><label>كود المجموعة (اختياري — يولد تلقائياً)</label><input type="text" id="mGrpCode" placeholder="GRP-1001"></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
           <div class="form-group"><label>السنة الدراسية *</label><select id="mGrpYear" onchange="onGroupModalYearChange()">${activeYears.map(y => `<option value="${y.id}">${escapeHtmlAttr(y.name)}</option>`).join('')}</select></div>
@@ -8520,10 +9165,33 @@ async function openAddGroupModal() {
   } catch (err) { showToast(friendlyBatchAError(err), true); }
 }
 
+function updateAutoGroupName() {
+  const nameInp = document.getElementById('mGrpName');
+  if (!nameInp) return;
+  const stageSel = document.getElementById('mGrpStage');
+  const subjSel = document.getElementById('mGrpSubject');
+  const stageId = stageSel?.value || '';
+  const subjId = subjSel?.value || '';
+  const stages = (window._batchAGroup && window._batchAGroup.stages) || [];
+  const subjects = (window._batchAGroup && window._batchAGroup.subjects) || [];
+  const existingGroups = (window._batchAGroup && window._batchAGroup.existingGroups) || [];
+
+  const stageObj = stages.find(s => s.id === stageId);
+  const subjObj = subjects.find(s => s.id === subjId);
+  const stageName = stageObj ? stageObj.name : (stageSel?.selectedOptions?.[0]?.text || '');
+  const subjName = subjObj ? subjObj.name : (subjSel?.selectedOptions?.[0]?.text || '');
+
+  if (stageName && subjName) {
+    const arabicLetters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط', 'ي'];
+    const sameComboCount = existingGroups.filter(g => g.stageId === stageId && g.subjectId === subjId && g.status !== 'ARCHIVED').length;
+    const suffix = arabicLetters[sameComboCount] || String(sameComboCount + 1);
+    nameInp.value = `${stageName} — ${subjName} (${suffix})`;
+  }
+}
+
 function onGroupModalYearChange() {
   const yearId = document.getElementById('mGrpYear')?.value || '';
   const stageSel = document.getElementById('mGrpStage');
-  const subjSel = document.getElementById('mGrpSubject');
   if (!window._batchAGroup) return;
   if (stageSel) {
     Array.from(stageSel.options).forEach(o => { const y = o.getAttribute('data-year'); o.style.display = (!y || !yearId || y === yearId) ? '' : 'none'; });
@@ -8552,6 +9220,7 @@ function onGroupModalSubjectChange() {
   if (helper) {
     helper.innerText = subjId ? `سعر مادة المجموعة: ${fmtMoney(price)} | السعر المبدئي: 0 ج.م (0 طلاب مسجلين حالياً) — يُحسب إجمالي المجموعة تلقائياً فور اشتراك الطلاب.` : 'سعر مادة المجموعة: —';
   }
+  updateAutoGroupName();
 }
 
 async function submitAddGroup() {
@@ -8571,6 +9240,10 @@ async function submitAddGroup() {
   if (!Number.isInteger(maxCapacity) || maxCapacity <= 0) { showToast('سعة المجموعة يجب أن تكون رقماً صحيحاً موجباً', true); return; }
   if (btn) { btn.disabled = true; btn.innerText = 'جاري الإنشاء... ⏳'; }
   try {
+    // Ensure teacher is linked to stage & subject before creating the group
+    try { await callBackend('assignTeacherSubject', currentCallerToken, { institutionId: currentCallerToken.institutionId, teacherId, subjectId, stageIds: [stageId] }); } catch (_) {}
+    try { await callBackend('assignTeacherStage', currentCallerToken, { institutionId: currentCallerToken.institutionId, teacherId, stageId }); } catch (_) {}
+
     const res = await callBackend('createGroup', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       name: name.trim(), code: code.trim(), academicYearId, stageId, subjectId, teacherId, roomId,
@@ -12487,11 +13160,11 @@ async function openAddLessonModal() {
   `;
 }
 
-// Robust PDF metadata & page count extractor (Fixes the 500KB & 7-page limitation)
+// Robust PDF metadata & page count extractor (Fixes the 500KB & 7-page limitation + provides Base64 for Gemini Multimodal PDF)
 async function parsePdfMetadata(file) {
   return new Promise((resolve) => {
     if (!file || !file.name || !file.name.toLowerCase().endsWith('.pdf')) {
-      return resolve({ pageCount: 0, text: '' });
+      return resolve({ pageCount: 0, text: '', base64: '' });
     }
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -12518,12 +13191,28 @@ async function parsePdfMetadata(file) {
           if (pageMatches) detectedPages = pageMatches.length;
         }
 
-        resolve({ pageCount: detectedPages, text: str });
+        // Convert ArrayBuffer to Base64 so backend can persist the PDF locally and pass native application/pdf to Gemini
+        let base64 = '';
+        try {
+          if (typeof Buffer !== 'undefined') {
+            base64 = Buffer.from(buf).toString('base64');
+          } else {
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            base64 = btoa(binary);
+          }
+        } catch (_) {}
+
+        resolve({ pageCount: detectedPages, text: '', base64 });
       } catch (err) {
-        resolve({ pageCount: 0, text: '' });
+        resolve({ pageCount: 0, text: '', base64: '' });
       }
     };
-    reader.onerror = () => resolve({ pageCount: 0, text: '' });
+    reader.onerror = () => resolve({ pageCount: 0, text: '', base64: '' });
 
     // Read full file up to 35MB safely
     const maxBytes = Math.min(file.size, 35 * 1024 * 1024);
@@ -12536,6 +13225,7 @@ function handleLessonFileSelect(input) {
   const pBox = document.getElementById('mLessonPageRangeBox');
   if (!input.files || !input.files[0]) {
     window._selectedLessonFile = null;
+    window._selectedLessonBase64 = '';
     if (status) status.innerText = 'لم يتم اختيار ملف.';
     return;
   }
@@ -12550,6 +13240,7 @@ function handleLessonFileSelect(input) {
     type: file.type,
     path: file.path || ''
   };
+  window._selectedLessonBase64 = '';
 
   if (status) {
     status.innerHTML = `✅ تم التحديد: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
@@ -12564,7 +13255,8 @@ function handleLessonFileSelect(input) {
   // True page count detection if PDF
   if (file.name.toLowerCase().endsWith('.pdf')) {
     if (status) status.innerHTML = `⏳ جاري فحص صفحات الملف بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
-    parsePdfMetadata(file).then(({ pageCount }) => {
+    parsePdfMetadata(file).then(({ pageCount, base64 }) => {
+      window._selectedLessonBase64 = base64 || '';
       const startInp = document.getElementById('mLessonPageStart');
       const endInp = document.getElementById('mLessonPageEnd');
       if (startInp && !startInp.value) startInp.value = '1';
@@ -12600,7 +13292,7 @@ async function submitCreateLesson() {
     await callBackend('createLesson', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       title, description, stageId, subjectId, groupId,
-      groupIds: groupId ? [groupId] : [],
+      groupIds: groupId ? [groupId] : null,
       lessonOrder, lessonNumber: lessonOrder,
       videoUrl,
       attachmentName: fileInfo?.name || null,
@@ -12615,8 +13307,14 @@ async function submitCreateLesson() {
         await callBackend('createDigitalContentItem', currentCallerToken, {
           institutionId: currentCallerToken.institutionId,
           title: `${title} — مذكرة وشيت الشرح`,
+          stageId,
+          subjectId,
           fileName: fileInfo.name,
+          filePath: fileInfo.path || null,
+          fileBase64: window._selectedLessonBase64 || null,
           sizeBytes: fileInfo.size,
+          pageStart: pageStart || 1,
+          pageEnd: pageEnd || null,
           type: fileInfo.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'SUMMARY',
           description: `مذكرة مرفقة للدرس: ${title} (${pageRange || ''})`
         });
@@ -12637,6 +13335,7 @@ async function openAddContentModal() {
   const modal = document.getElementById('modalContainer');
   window._selectedContentFile = null;
   window._selectedContentText = '';
+  window._selectedContentBase64 = '';
   window._selectedContentPages = 0;
 
   let stages = [];
@@ -12776,6 +13475,7 @@ function handleContentFileSelect(input) {
   if (!input.files || !input.files[0]) {
     window._selectedContentFile = null;
     window._selectedContentText = '';
+    window._selectedContentBase64 = '';
     window._selectedContentPages = 0;
     if (status) status.innerText = 'لم يتم اختيار ملف.';
     return;
@@ -12791,6 +13491,7 @@ function handleContentFileSelect(input) {
     type: file.type,
     path: file.path || ''
   };
+  window._selectedContentBase64 = '';
 
   if (status) {
     status.innerHTML = `✅ تم التحديد: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})`;
@@ -12804,8 +13505,9 @@ function handleContentFileSelect(input) {
   // True page count detection if PDF
   if (file.name.toLowerCase().endsWith('.pdf')) {
     if (status) status.innerHTML = `⏳ جاري فحص صفحات وقراءة نصوص المذكرة بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
-    parsePdfMetadata(file).then(({ pageCount, text }) => {
+    parsePdfMetadata(file).then(({ pageCount, text, base64 }) => {
       window._selectedContentText = text || '';
+      window._selectedContentBase64 = base64 || '';
       window._selectedContentPages = pageCount || 0;
       const startInp = document.getElementById('mContentPageStart');
       const endInp = document.getElementById('mContentPageEnd');
@@ -12816,8 +13518,15 @@ function handleContentFileSelect(input) {
       }
     }).catch(() => {
       window._selectedContentText = '';
+      window._selectedContentBase64 = '';
       window._selectedContentPages = 0;
     });
+  } else {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      window._selectedContentText = e.target.result || '';
+    };
+    reader.readAsText(file);
   }
 }
 
@@ -12853,6 +13562,7 @@ async function submitCreateContent() {
       subjectId,
       fileName: fileInfo?.name || null,
       filePath: fileInfo?.path || null,
+      fileBase64: window._selectedContentBase64 || null,
       sizeBytes: fileInfo?.size || null,
       url: url || null,
       pageStart: pageStart || 1,
@@ -13984,6 +14694,29 @@ function onAiExamSubjectChange() {
   const stageId = document.getElementById('mAiStage')?.value || '';
   const subjectId = document.getElementById('mAiSubject')?.value || '';
   const allContents = window._allAiContents || window._allContentsCache || [];
+  const allGroups = window._allAiGroups || [];
+
+  // Filter target groups by Stage AND Subject so exam is strictly directed to matching groups
+  const grpSelect = document.getElementById('mAiGroup');
+  if (grpSelect) {
+    const prevVal = grpSelect.value;
+    const filteredGroups = allGroups.filter(g => {
+      const matchStg = !stageId || g.stageId === stageId;
+      const matchSub = !subjectId || !g.subjectId || g.subjectId === subjectId;
+      return matchStg && matchSub;
+    });
+    if (filteredGroups.length > 0) {
+      grpSelect.innerHTML = `<option value="">— اختر المجموعة المستهدفة (${filteredGroups.length} مجموعة) * —</option>` +
+        filteredGroups.map(g => `<option value="${g.id}">${escapeHtmlAttr(g.name)}</option>`).join('');
+      if (prevVal && filteredGroups.some(g => g.id === prevVal)) {
+        grpSelect.value = prevVal;
+      } else if (filteredGroups.length === 1) {
+        grpSelect.value = filteredGroups[0].id;
+      }
+    } else {
+      grpSelect.innerHTML = `<option value="">⚠️ لا توجد مجموعات مسجلة لهذه المرحلة والمادة (أضف مجموعة أولاً)</option>`;
+    }
+  }
 
   const memoSelect = document.getElementById('mAiSavedMemoSelect');
   const memoBadge = document.getElementById('aiSavedMemoCountBadge');
@@ -14062,6 +14795,9 @@ function handleAiFileUpload(input) {
   const pBox = document.getElementById('aiPageSelectionBox');
   if (!input.files || !input.files[0]) {
     window._aiUploadedFileText = '';
+    window._aiUploadedFileBase64 = '';
+    window._aiUploadedFilePath = '';
+    window._aiUploadedFileName = '';
     if (status) status.innerText = 'لم يتم اختيار ملف.';
     if (pBox) pBox.style.display = 'none';
     return;
@@ -14071,11 +14807,16 @@ function handleAiFileUpload(input) {
   const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
   const sizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
 
+  window._aiUploadedFilePath = file.path || '';
+  window._aiUploadedFileName = file.name || '';
+  window._aiUploadedFileBase64 = '';
+
   if (status) status.innerHTML = `جاري قراءة وتحليل صفحات الملف بالكامل: <strong style="color:#38bdf8;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})...`;
 
   if (file.name.toLowerCase().endsWith('.pdf')) {
-    parsePdfMetadata(file).then(({ pageCount, text }) => {
+    parsePdfMetadata(file).then(({ pageCount, text, base64 }) => {
       window._aiUploadedFileText = text || '';
+      window._aiUploadedFileBase64 = base64 || '';
       if (status) {
         status.innerHTML = `✅ تم فحص الملف بنجاح: <strong style="color:#4ade80;">${escapeHtmlAttr(file.name)}</strong> (${sizeStr})${pageCount > 0 ? ` — إجمالي الصفحات: <strong style="color:#38bdf8;">${pageCount} صفحة</strong>` : ''}`;
       }
@@ -14088,6 +14829,7 @@ function handleAiFileUpload(input) {
       }
     }).catch(() => {
       window._aiUploadedFileText = '';
+      window._aiUploadedFileBase64 = '';
       if (status) status.innerHTML = `<span style="color:#f87171;">⚠️ تعذر قراءة الملف — يمكنك نسخ ولصق النص مباشرة في خانة اللصق المباشر.</span>`;
       if (pBox) pBox.style.display = 'none';
     });
@@ -14415,10 +15157,21 @@ async function submitGenerateAiQuestions() {
   const difficulty = document.getElementById('mAiDifficulty')?.value || 'MEDIUM';
   const scorePerQ = Number(document.getElementById('mAiScorePerQuestion')?.value || 2);
 
+  if (!stageId || !subjectId) {
+    return showToast('يرجى اختيار المرحلة والمادة الدراسية أولاً', true);
+  }
+  if (!groupId) {
+    return showToast('يرجى تحديد المجموعة المستهدفة بالسنتر أولاً — الاختبارات موجهة للمجموعات المحددة فقط', true);
+  }
+
   const mode = document.querySelector('input[name="aiSourceMode"]:checked')?.value || 'SAVED_MEMO';
   let contextText = '';
   let startPage = null;
   let endPage = null;
+  let sourceId = null;
+  let filePath = null;
+  let fileName = null;
+  let pdfBase64 = null;
 
   if (mode === 'SAVED_MEMO') {
     const memoId = document.getElementById('mAiSavedMemoSelect')?.value;
@@ -14427,21 +15180,27 @@ async function submitGenerateAiQuestions() {
     if (!memo) {
       return showToast('يرجى اختيار المذكرة أو رفع مذكرة جديدة من جهازك', true);
     }
+    sourceId = memo.id;
+    filePath = memo.localStoredPath || memo.filePath || null;
+    fileName = memo.fileName || memo.title || null;
     contextText = memo.textContent || memo.description || `مذكرة تعليمية: ${memo.title}`;
     startPage = parseInt(document.getElementById('mAiSavedPageStart')?.value, 10) || memo.pageStart || 1;
     endPage = parseInt(document.getElementById('mAiSavedPageEnd')?.value, 10) || memo.pageEnd || memo.pagesCount || null;
   } else if (mode === 'FILE_UPLOAD') {
     contextText = window._aiUploadedFileText || '';
+    pdfBase64 = window._aiUploadedFileBase64 || null;
+    filePath = window._aiUploadedFilePath || null;
+    fileName = window._aiUploadedFileName || null;
     startPage = parseInt(document.getElementById('mAiPageStart')?.value, 10) || null;
     endPage = parseInt(document.getElementById('mAiPageEnd')?.value, 10) || null;
+    if (!contextText && !pdfBase64 && !filePath) {
+      return showToast('يرجى اختيار ملف المذكرة من جهازك أولاً', true);
+    }
   } else if (mode === 'TEXT_PASTE') {
     contextText = (document.getElementById('mAiContextText')?.value || '').trim();
   }
 
-  if (!stageId || !subjectId) {
-    return showToast('المرحلة والمادة الدراسية مطلوبة', true);
-  }
-  if (!topic && !contextText) {
+  if (!topic && !contextText && !sourceId && !pdfBase64 && !filePath) {
     return showToast('يرجى تحديد موضوع الاختبار أو رفع مذكرة/لصق نص الدرس', true);
   }
 
@@ -14453,9 +15212,6 @@ async function submitGenerateAiQuestions() {
   if (loadSec) loadSec.style.display = 'block';
 
   try {
-    const startPage = mode === 'FILE_UPLOAD' ? (parseInt(document.getElementById('mAiPageStart')?.value, 10) || null) : null;
-    const endPage = mode === 'FILE_UPLOAD' ? (parseInt(document.getElementById('mAiPageEnd')?.value, 10) || null) : null;
-
     const stageEl = document.getElementById('mAiStage');
     const subjectEl = document.getElementById('mAiSubject');
     const stageName = stageEl?.options[stageEl.selectedIndex]?.text?.replace(/^[—\-]\s*/, '') || '';
@@ -14468,7 +15224,11 @@ async function submitGenerateAiQuestions() {
       subjectId,
       stageName,
       subjectName,
-      topic,
+      topic: topic || fileName || title,
+      sourceId,
+      filePath,
+      fileName,
+      pdfBase64,
       contextText,
       startPage,
       endPage,
@@ -14602,7 +15362,7 @@ async function adoptAndSaveAiExam() {
       stageId: exam.stageId,
       subjectId: exam.subjectId,
       groupId: exam.groupId || null,
-      groupIds: exam.groupId ? [exam.groupId] : [],
+      groupIds: exam.groupId ? [exam.groupId] : null,
       examType: 'DIGITAL',
       maxScore: exam.totalMarks,
       passingScore: exam.passingScore,

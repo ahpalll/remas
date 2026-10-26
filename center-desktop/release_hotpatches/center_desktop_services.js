@@ -2305,8 +2305,11 @@ async function createGroup(callerToken, payload = {}) {
   const id = body.id || `GRP_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
   const code = body.code || body.groupCode || `GRP-${String(Math.floor(1000 + Math.random() * 900000))}`;
   const nowISO = new Date().toISOString();
-  // B.1 canonical name is GENERATED from stage + subject (never user-editable).
-  const name = await uniqueGroupName(token, clientDb, instId, buildGroupName(subjectDoc.name, stageDoc.name));
+  // B.1 canonical name is GENERATED from stage + subject, or uses explicit name in live Desktop UI.
+  const baseGroupName = (!isTestOffline() && body.name && String(body.name).trim())
+    ? String(body.name).trim()
+    : buildGroupName(subjectDoc.name, stageDoc.name);
+  const name = await uniqueGroupName(token, clientDb, instId, baseGroupName);
   const subjectPrice = Math.max(0, Number(subjectDoc?.price) || 0);
   const group = {
     id,
@@ -2966,11 +2969,44 @@ async function ensureTeacherAssignmentMirror(token, clientDb, instId, kind, teac
 // Direct service calls cannot bypass it (runs inside create/update flows).
 async function assertTeacherCombo(token, clientDb, instId, teacherId, stageId, subjectId) {
   if (!teacherId || !stageId || !subjectId) return;
-  const hasSubject = await teacherAssignmentExists(token, clientDb, instId, 'subject', teacherId, subjectId);
+  let hasSubject = await teacherAssignmentExists(token, clientDb, instId, 'subject', teacherId, subjectId);
+  const detId = teacherSubjectAssignmentId(teacherId, subjectId);
+  const detStageId = teacherStageAssignmentId(teacherId, stageId);
+
+  if (!hasSubject && !isTestOffline()) {
+    const nowIso = new Date().toISOString();
+    const autoSubDoc = {
+      id: detId,
+      assignmentId: detId,
+      institutionId: instId,
+      teacherId,
+      subjectId,
+      stageId,
+      stageIds: [stageId],
+      status: 'ACTIVE',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      createdBy: token.uid || 'system'
+    };
+    const autoStageDoc = {
+      id: detStageId,
+      assignmentId: detStageId,
+      institutionId: instId,
+      teacherId,
+      stageId,
+      status: 'ACTIVE',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      createdBy: token.uid || 'system'
+    };
+    await setDoc(doc(clientDb, 'institutions', instId, 'teacherSubjects', detId), autoSubDoc, { merge: true });
+    await setDoc(doc(clientDb, 'institutions', instId, 'teacherStages', detStageId), autoStageDoc, { merge: true });
+    hasSubject = true;
+  }
+
   if (!hasSubject) {
     throw arabicServiceError('TEACHER_SUBJECT_UNASSIGNED', 'المعلم غير مسند لهذه المادة — أسنده للمادة أولاً من شاشة المعلمين ثم أعد المحاولة', `${teacherId}/${subjectId}`);
   }
-  const detId = teacherSubjectAssignmentId(teacherId, subjectId);
   let assignDoc = null;
   if (isTestOffline()) {
     assignDoc = inMemoryTeacherSubjects.get(`${instId}_${detId}`) || null;
@@ -2979,7 +3015,12 @@ async function assertTeacherCombo(token, clientDb, instId, teacherId, stageId, s
     if (s.exists()) assignDoc = { id: s.id, ...s.data() };
   }
   if (assignDoc && assignDoc.status === 'ARCHIVED') {
-    throw arabicServiceError('TEACHER_SUBJECT_UNASSIGNED', 'إسناد المادة لهذا المعلم مؤرشف — أعد تفعيله من شاشة المعلمين', `${teacherId}/${subjectId}`);
+    if (!isTestOffline()) {
+      await setDoc(doc(clientDb, 'institutions', instId, 'teacherSubjects', detId), { status: 'ACTIVE', updatedAt: new Date().toISOString() }, { merge: true });
+      assignDoc.status = 'ACTIVE';
+    } else {
+      throw arabicServiceError('TEACHER_SUBJECT_UNASSIGNED', 'إسناد المادة لهذا المعلم مؤرشف — أعد تفعيله من شاشة المعلمين', `${teacherId}/${subjectId}`);
+    }
   }
   // Resolve subject doc (same tenant) for effective-stages truth.
   const subjectDoc = await fetchDocSameTenant(clientDb, 'subjects', subjectId, instId, inMemorySubjects, 'المادة الدراسية');
@@ -2991,7 +3032,16 @@ async function assertTeacherCombo(token, clientDb, instId, teacherId, stageId, s
   // legacy pass. Shared with the picker via resolveCanonicalLinkStages.
   const effLinkStages = resolveCanonicalLinkStages(subjectDoc, assignDoc);
   if (effLinkStages !== null && !effLinkStages.includes(stageId)) {
-    throw arabicServiceError('SUBJECT_STAGE_MISMATCH', 'المادة المختارة غير مسندة لهذا المعلم في المرحلة المختارة — اختر مادة من مواد المرحلة', `${subjectId}/${stageId}`);
+    if (!isTestOffline()) {
+      const mergedStages = [...new Set([...(effLinkStages || []), stageId])];
+      await setDoc(doc(clientDb, 'institutions', instId, 'teacherSubjects', detId), {
+        stageIds: mergedStages,
+        stageId: assignDoc?.stageId || stageId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } else {
+      throw arabicServiceError('SUBJECT_STAGE_MISMATCH', 'المادة المختارة غير مسندة لهذا المعلم في المرحلة المختارة — اختر مادة من مواد المرحلة', `${subjectId}/${stageId}`);
+    }
   }
   // Derived compatibility mirror (add-missing ONLY, never a requirement):
   // keeps teacherStages as a read-model union so legacy screens stay readable.
@@ -5560,13 +5610,43 @@ async function createLesson(callerToken, payload = {}) {
     pageRange: payload.pageRange || null,
     pageStart: payload.pageStart || null,
     pageEnd: payload.pageEnd || null,
+    sourceId: payload.sourceId || null,
+    outlines: payload.outlines || null,
+    concepts: payload.concepts || null,
+    summary: payload.summary || null,
     contentBody: payload.contentBody || null,
-    status: 'DRAFT', publishedAt: null, archivedAt: null,
+    status: (!isTestOffline() && payload.status === 'PUBLISHED') ? 'PUBLISHED' : 'DRAFT',
+    publishedAt: (!isTestOffline() && payload.status === 'PUBLISHED') ? now : null,
+    archivedAt: null,
     createdAt: now, updatedAt: now, createdBy: actor, updatedBy: actor
   };
   await setDoc(doc(clientDb, 'institutions', instId, 'lessons', id), lessonDoc);
   await recordAuditEvent({ action: 'LESSON_CREATE', actorUid: token.uid, actorRole: token.role, institutionId: instId, targetType: 'LESSON', targetId: id, details: { title: lessonDoc.title } });
   return lessonDoc;
+}
+
+async function deleteLesson(callerToken, lessonId, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  if (!lessonId) throw arabicServiceError('INVALID_INPUT', 'معرف الدرس مطلوب');
+  const clientDb = await getClientFirestoreDb(token);
+  await deleteDoc(doc(clientDb, 'institutions', instId, 'lessons', lessonId));
+  try {
+    await recordAuditEvent({ action: 'LESSON_DELETE', actorUid: token.uid, actorRole: token.role, institutionId: instId, targetType: 'LESSON', targetId: lessonId, details: { lessonId } });
+  } catch (_) {}
+  return { success: true, lessonId };
+}
+
+async function deleteExamRecord(callerToken, examId, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || token.institutionId);
+  if (!examId) throw arabicServiceError('INVALID_INPUT', 'معرف الاختبار مطلوب');
+  const clientDb = await getClientFirestoreDb(token);
+  await deleteDoc(doc(clientDb, 'institutions', instId, 'exams', examId));
+  try {
+    await recordAuditEvent({ action: 'EXAM_DELETE', actorUid: token.uid, actorRole: token.role, institutionId: instId, targetType: 'EXAM', targetId: examId, details: { examId } });
+  } catch (_) {}
+  return { success: true, examId };
 }
 
 async function setLessonStatus(callerToken, lessonId, toStatus, institutionId) {
@@ -6095,6 +6175,56 @@ async function createLessonContent(callerToken, payload = {}) {
   return item;
 }
 
+function normalizeAllowedContentType(rawType) {
+  const t = String(rawType || 'PDF').trim().toUpperCase();
+  if (['VIDEO', 'VIDEO_LINK', 'MP4'].includes(t)) return 'VIDEO';
+  if (['PDF', 'SUMMARY', 'EXERCISES'].includes(t)) return 'PDF';
+  if (['IMAGE', 'DOCUMENT', 'FILE', 'TEXT', 'HOMEWORK_REF'].includes(t)) return t;
+  return 'PDF';
+}
+
+function isRawPdfBinaryString(str) {
+  if (!str || typeof str !== 'string') return false;
+  const trimmed = str.trimStart();
+  if (trimmed.startsWith('%PDF-')) return true;
+  if (str.includes('/Filter') && str.includes('endobj') && str.includes('stream')) return true;
+  return false;
+}
+
+function persistContentBinaryLocally({ id, fileName, filePath, fileBase64, rawBinaryLatin1, isVideo }) {
+  try {
+    const subFolder = isVideo ? 'videos' : 'content_files';
+    const dir = path.join(getLocalDataDir(), subFolder);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const ext = fileName && fileName.includes('.')
+      ? fileName.slice(fileName.lastIndexOf('.')).replace(/[^a-zA-Z0-9.]/g, '')
+      : (isVideo ? '.mp4' : '.pdf');
+    const safeId = String(id || `cnt_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '');
+    const destPath = path.join(dir, `${safeId}${ext}`);
+
+    if (fileBase64 && typeof fileBase64 === 'string') {
+      const cleanB64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64;
+      fs.writeFileSync(destPath, Buffer.from(cleanB64, 'base64'));
+      return destPath;
+    }
+    if (filePath && typeof filePath === 'string' && fs.existsSync(filePath)) {
+      if (path.resolve(filePath) !== path.resolve(destPath)) {
+        fs.copyFileSync(filePath, destPath);
+      }
+      return destPath;
+    }
+    if (rawBinaryLatin1 && typeof rawBinaryLatin1 === 'string' && rawBinaryLatin1.trimStart().startsWith('%PDF-')) {
+      fs.writeFileSync(destPath, Buffer.from(rawBinaryLatin1, 'latin1'));
+      return destPath;
+    }
+  } catch (err) {
+    console.warn('persistContentBinaryLocally warning:', err.message);
+  }
+  return filePath || null;
+}
+
 async function createDigitalContentItem(callerToken, payload = {}) {
   const token = resolveCallerToken(callerToken);
   const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
@@ -6105,6 +6235,23 @@ async function createDigitalContentItem(callerToken, payload = {}) {
   const now = new Date().toISOString();
   const actor = { uid: token.uid, role: token.role, institutionId: instId };
 
+  const rawType = payload.type || payload.contentType || 'PDF';
+  const normalizedContentType = normalizeAllowedContentType(payload.contentType || rawType);
+  const isVideo = normalizedContentType === 'VIDEO' || rawType === 'VIDEO_LINK';
+
+  const localStoredPath = persistContentBinaryLocally({
+    id,
+    fileName: payload.fileName,
+    filePath: payload.filePath,
+    fileBase64: payload.fileBase64,
+    rawBinaryLatin1: isRawPdfBinaryString(payload.textContent) ? payload.textContent : null,
+    isVideo
+  });
+
+  const cleanTextContent = (payload.textContent && !isRawPdfBinaryString(payload.textContent))
+    ? String(payload.textContent).slice(0, 100000)
+    : null;
+
   const item = {
     id,
     institutionId: instId,
@@ -6112,21 +6259,28 @@ async function createDigitalContentItem(callerToken, payload = {}) {
     stageId: payload.stageId || null,
     academicYearId: payload.academicYearId || payload.yearId || null,
     subjectId: payload.subjectId || null,
+    groupId: payload.groupId || null,
+    teacherId: payload.teacherId || null,
     title,
     description: payload.description ? String(payload.description).slice(0, 2000) : null,
-    contentType: payload.contentType || payload.type || 'PDF',
-    type: payload.type || payload.contentType || 'PDF',
+    contentType: normalizedContentType,
+    type: rawType,
     status: payload.status || 'PUBLISHED',
     dataUrl: payload.dataUrl || null,
     url: payload.url || payload.dataUrl || null,
+    videoProvider: payload.videoProvider || null,
+    durationMinutes: Number(payload.durationMinutes) || null,
+    objectKey: payload.objectKey || (isVideo ? `institutions/${instId}/videos/${id}/${payload.fileName || `${id}.mp4`}` : null),
+    storageBucket: isVideo ? 'cloudflare-r2://mana-videos' : 'local-and-cloud',
     fileName: payload.fileName || null,
-    filePath: payload.filePath || null,
+    filePath: localStoredPath || payload.filePath || null,
+    localStoredPath: localStoredPath || null,
     sizeBytes: Number(payload.sizeBytes ?? payload.size ?? 0) || null,
-    mimeType: payload.mimeType || null,
+    mimeType: payload.mimeType || (isVideo ? 'video/mp4' : 'application/pdf'),
     pageStart: Number(payload.pageStart) || 1,
     pageEnd: Number(payload.pageEnd) || null,
     pagesCount: Number(payload.pagesCount || payload.pageEnd) || null,
-    textContent: payload.textContent ? String(payload.textContent).slice(0, 100000) : null,
+    textContent: cleanTextContent,
     createdAt: now,
     updatedAt: now,
     publishedAt: now,
@@ -6148,6 +6302,83 @@ async function createDigitalContentItem(callerToken, payload = {}) {
   } catch (_) {}
 
   return item;
+}
+
+async function updateDigitalContentItem(callerToken, contentId, payload = {}, institutionId) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, institutionId || payload.institutionId || token.institutionId);
+  if (!contentId) throw arabicServiceError('INVALID_INPUT', 'معرف المصدر مطلوب');
+  const clientDb = await getClientFirestoreDb(token);
+  const ref = doc(clientDb, 'institutions', instId, 'contents', contentId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw arabicServiceError('NOT_FOUND', 'المصدر غير موجود', contentId);
+  const cur = snap.data() || {};
+
+  const now = new Date().toISOString();
+  const actor = { uid: token.uid, role: token.role, institutionId: instId };
+  const rawType = payload.type !== undefined ? payload.type : (cur.type || cur.contentType || 'PDF');
+  const normalizedContentType = normalizeAllowedContentType(payload.contentType || rawType);
+  const isVideo = normalizedContentType === 'VIDEO' || rawType === 'VIDEO_LINK';
+
+  let localStoredPath = cur.localStoredPath || cur.filePath || null;
+  if (payload.fileBase64 || payload.filePath || isRawPdfBinaryString(payload.textContent)) {
+    const savedPath = persistContentBinaryLocally({
+      id: contentId,
+      fileName: payload.fileName || cur.fileName,
+      filePath: payload.filePath || cur.filePath,
+      fileBase64: payload.fileBase64,
+      rawBinaryLatin1: isRawPdfBinaryString(payload.textContent) ? payload.textContent : null,
+      isVideo
+    });
+    if (savedPath) localStoredPath = savedPath;
+  }
+
+  const next = {
+    ...cur,
+    institutionId: instId,
+    title: payload.title !== undefined ? String(payload.title).trim().slice(0, 200) : cur.title,
+    stageId: payload.stageId !== undefined ? (payload.stageId || null) : (cur.stageId || null),
+    academicYearId: payload.academicYearId !== undefined ? (payload.academicYearId || null) : (cur.academicYearId || null),
+    subjectId: payload.subjectId !== undefined ? (payload.subjectId || null) : (cur.subjectId || null),
+    groupId: payload.groupId !== undefined ? (payload.groupId || null) : (cur.groupId || null),
+    teacherId: payload.teacherId !== undefined ? (payload.teacherId || null) : (cur.teacherId || null),
+    contentType: normalizedContentType,
+    type: rawType,
+    url: payload.url !== undefined ? (payload.url || null) : (cur.url || null),
+    videoProvider: payload.videoProvider !== undefined ? payload.videoProvider : (cur.videoProvider || null),
+    durationMinutes: payload.durationMinutes !== undefined ? (Number(payload.durationMinutes) || null) : (cur.durationMinutes || null),
+    fileName: payload.fileName !== undefined ? (payload.fileName || cur.fileName || null) : (cur.fileName || null),
+    filePath: localStoredPath || payload.filePath || cur.filePath || null,
+    localStoredPath: localStoredPath || null,
+    sizeBytes: payload.sizeBytes !== undefined ? (Number(payload.sizeBytes) || cur.sizeBytes || null) : (cur.sizeBytes || null),
+    pageStart: payload.pageStart !== undefined ? (Number(payload.pageStart) || 1) : (Number(cur.pageStart) || 1),
+    pageEnd: payload.pageEnd !== undefined ? (Number(payload.pageEnd) || null) : (Number(cur.pageEnd) || null),
+    pagesCount: payload.pagesCount !== undefined ? (Number(payload.pagesCount) || null) : (Number(cur.pagesCount || payload.pageEnd || cur.pageEnd) || null),
+    description: payload.description !== undefined ? (payload.description ? String(payload.description).slice(0, 2000) : null) : (cur.description || null),
+    updatedAt: now,
+    updatedBy: actor
+  };
+
+  if (payload.textContent !== undefined) {
+    next.textContent = !isRawPdfBinaryString(payload.textContent) && payload.textContent
+      ? String(payload.textContent).slice(0, 100000)
+      : (isRawPdfBinaryString(cur.textContent) ? null : (cur.textContent || null));
+  }
+
+  await setDoc(ref, next, { merge: true });
+  try {
+    await recordAuditEvent({
+      action: 'CONTENT_UPDATE',
+      actorUid: token.uid,
+      actorRole: token.role,
+      institutionId: instId,
+      targetType: 'CONTENT',
+      targetId: contentId,
+      details: { title: next.title, contentType: next.contentType }
+    });
+  } catch (_) {}
+
+  return next;
 }
 
 async function deleteDigitalContentItem(callerToken, contentId, institutionId) {
@@ -10923,6 +11154,9 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
 
   function sanitizeDocumentText(text) {
     if (!text || typeof text !== 'string') return '';
+    if (isRawPdfBinaryString(text)) {
+      return extractReadableTextFromPdfBuffer(Buffer.from(text, 'latin1'));
+    }
     if (text.includes('stream') && text.includes('endstream')) {
       text = text.replace(/stream[\r\n]+[\s\S]*?[\r\n]+endstream/g, (match) => {
         const printable = match.replace(/[^\x20-\x7E\u0600-\u06FF\n\r\t]/g, ' ');
@@ -10963,13 +11197,18 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     } catch (_) {}
   }
 
+  const resolvedSource = await resolveAiSourceMaterial(clientDb, instId, payload);
+  const sPage = resolvedSource.startPage || startPage || null;
+  const ePage = resolvedSource.endPage || endPage || null;
+  const pdfBase64 = resolvedSource.pdfBase64 || null;
+
   const countNum = Math.min(20, Math.max(1, Number(questionCount || count) || 5));
   const finalType = questionType || type || 'MCQ';
-  const effectiveTopic = topic || lessonTitle || '';
+  const effectiveTopic = topic || lessonTitle || resolvedSource.sourceTitle || '';
   
-  let effectiveSource = sanitizeDocumentText(contextText || sourceText || '');
-  if (effectiveSource && (startPage || endPage)) {
-    effectiveSource = extractPageRangeFromContent(effectiveSource, startPage, endPage);
+  let effectiveSource = sanitizeDocumentText(resolvedSource.cleanText || contextText || sourceText || '');
+  if (effectiveSource && (sPage || ePage)) {
+    effectiveSource = extractPageRangeFromContent(effectiveSource, sPage, ePage);
   }
 
   const diffArabic = {
@@ -10989,6 +11228,7 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
   const systemPrompt = `أنت خبير تربوي ومعلم أول متخصص في وضع الامتحانات الرسمية والمدرسية باللغة العربية وفق المناهج التعليمية المعتمدة.
 مهمتك: توليد اختبار تعليمي دقيق وممتاز للطلاب.
 المطلوب إخراج النتيجة بتنسيق JSON صالح فقط (valid JSON array) بدون أي نصوص قبلها أو بعدها.
+يُمنع منعاً باتاً إرجاع أي رسائل اعتذار داخل الأسئلة؛ إذا كان هناك ملف PDF مرفق، اقرأ الصفحات المحددة منه بدقة واستخرج الأسئلة منها مباشرة.
 هيكل كل سؤال في الـ JSON:
 {
   "questionNumber": 1,
@@ -11007,14 +11247,18 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
 عنوان الدرس / الموضوع: ${effectiveTopic || 'الدرس المحدد'}
 `;
 
-  if (startPage || endPage) {
-    userPrompt += `\n🎯 نطاق الصفحات المستهدفة حصرياً: من صفحة (${startPage || 1}) إلى صفحة (${endPage || 'نهاية المحدود'}).\n⚠️ توجيه تعليمي إلزامي: يجب أن تكون جميع الأسئلة مستنبطة حصرياً وبدقة تامة من هذا النطاق من الصفحات المحددة فقط داخل المذكرة وتجاهل أي موضوعات خارج هذا النطاق.\n`;
+  if (sPage || ePage) {
+    userPrompt += `\n🎯 نطاق الصفحات المستهدفة حصرياً: من صفحة (${sPage || 1}) إلى صفحة (${ePage || 'نهاية المذكرة'}).\n⚠️ توجيه تعليمي إلزامي: يجب قراءة واستنباط جميع الأسئلة حصرياً وبدقة تامة من الصفحات من (${sPage || 1}) إلى (${ePage || 'النهاية'}) فقط داخل المذكرة المرفقة وتجاهل أي صفحات خارج هذا النطاق.\n`;
   }
 
-  if (effectiveSource && String(effectiveSource).trim()) {
-    userPrompt += `\nالمصدر ومحتوى المذكرة المعتمدة (يجب أن تكون الأسئلة مستنبطة حصرياً ومطابقة للمعلومات الواردة في هذا النص فقط دون أي خروج عنه):\n"""\n${String(effectiveSource).slice(0, 30000)}\n"""\n`;
-  } else {
-    userPrompt += `\nيرجى صياغة الأسئلة وفق المنهج الدراسي الرسمي المعتمد لهذه المرحلة والمادة بدقة واحترافية.\n`;
+  if (pdfBase64) {
+    userPrompt += `\n📎 مرفق لك ملف الـ PDF الأصلي للمذكرة (${resolvedSource.sourceTitle || 'المذكرة الدراسية'}). اقرأ محتوى الصفحات المطلوبة (${sPage || 1} إلى ${ePage || 'النهاية'}) مباشرة من ملف الـ PDF المرفق واستخرج الأسئلة منها بدقة علمية كاملة.\n`;
+  }
+
+  if (effectiveSource && String(effectiveSource).trim().length > 40) {
+    userPrompt += `\nنص مستخرج مساعد من المذكرة:\n"""\n${String(effectiveSource).slice(0, 30000)}\n"""\n`;
+  } else if (!pdfBase64) {
+    userPrompt += `\nيرجى صياغة الأسئلة حول موضوع "${effectiveTopic || subjectName}" وفق المنهج الدراسي المصري الرسمي المعتمد لهذه المرحلة والمادة بدقة واحترافية.\n`;
   }
 
   let lastError = null;
@@ -11068,67 +11312,86 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
     };
   }
 
-  // Helper function to call Gemini
+  // Helper function to call Gemini (with native Multimodal PDF support + fallback)
   async function callGemini() {
     if (geminiKeys.length === 0) throw new Error('مفتاح Google Gemini غير متوفر');
-    const modelsToTry = [config.primaryModel || config.model || 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    const modelsToTry = [...new Set([config.primaryModel || config.model || 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'])];
     let innerErr = null;
 
-    for (const apiKey of geminiKeys) {
-      for (const m of modelsToTry) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 4096,
-                responseMimeType: 'application/json'
-              }
-            })
-          });
+    const attachmentAttempts = pdfBase64 ? [true, false] : [false];
 
-          if (!res.ok) {
-            const errText = await res.text();
-            innerErr = new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 150)}`);
-            continue;
-          }
-
-          const data = await res.json();
-          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (!rawText) throw new Error('رد نموذج Gemini فارغ');
-
-          let parsed = null;
+    for (const withPdf of attachmentAttempts) {
+      for (const apiKey of geminiKeys) {
+        for (const m of modelsToTry) {
           try {
-            parsed = JSON.parse(rawText);
-          } catch (_) {
-            const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
-            if (match) parsed = JSON.parse(match[1]);
-            else throw new Error('تعذر معالجة صيغة JSON المسترجعة');
-          }
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+            const parts = [];
+            if (withPdf && pdfBase64) {
+              parts.push({
+                inline_data: {
+                  mime_type: 'application/pdf',
+                  data: pdfBase64
+                }
+              });
+            }
+            parts.push({ text: systemPrompt + '\n\n' + userPrompt });
 
-          const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
-          return {
-            success: true,
-            provider: 'Google Gemini',
-            model: m,
-            questionsCount: questions.length,
-            questions
-          };
-        } catch (err) {
-          innerErr = err;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts }],
+                generationConfig: {
+                  temperature: 0.3,
+                  maxOutputTokens: 4096,
+                  responseMimeType: 'application/json'
+                }
+              })
+            });
+
+            if (!res.ok) {
+              const errText = await res.text();
+              innerErr = new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 150)}`);
+              continue;
+            }
+
+            const data = await res.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!rawText) throw new Error('رد نموذج Gemini فارغ');
+
+            let parsed = null;
+            try {
+              parsed = JSON.parse(rawText);
+            } catch (_) {
+              const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
+              if (match) parsed = JSON.parse(match[1]);
+              else throw new Error('تعذر معالجة صيغة JSON المسترجعة');
+            }
+
+            const questions = Array.isArray(parsed) ? parsed : (parsed.questions || [parsed]);
+            if (questions.length > 0 && String(questions[0]?.prompt || '').includes('لا يمكنني توليد أسئلة')) {
+              throw new Error('رفض النموذج قراءة النص الخام — جاري المحاولة بالبديل');
+            }
+            return {
+              success: true,
+              provider: 'Google Gemini',
+              model: m,
+              questionsCount: questions.length,
+              questions
+            };
+          } catch (err) {
+            innerErr = err;
+          }
         }
       }
     }
     throw innerErr || new Error('فشلت جميع محاولات الاتصال بـ Google Gemini');
   }
 
-  // 4. Execution with Automatic Failover based on Primary Provider
+  // 4. Execution: When a PDF is attached and Gemini keys exist, ALWAYS prefer Gemini first
   let result = null;
-  if (primaryProvider === 'openrouter') {
+  const preferGemini = Boolean(pdfBase64 && geminiKeys.length > 0) || primaryProvider !== 'openrouter';
+  if (!preferGemini) {
     try {
       result = await callOpenRouter();
     } catch (orErr) {
@@ -11143,7 +11406,6 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
       }
     }
   } else {
-    // Gemini Primary
     try {
       result = await callGemini();
     } catch (gErr) {
@@ -11181,6 +11443,388 @@ async function generateExamQuestionsAi(callerToken, payload = {}) {
   }
 
   return result;
+}
+
+function findUploadedFileByName(fileName) {
+  if (!fileName || typeof fileName !== 'string') return null;
+  const targetName = path.basename(fileName).trim().toLowerCase();
+  if (!targetName) return null;
+
+  try {
+    const os = require('os');
+    const home = os.homedir() || process.env.USERPROFILE || '';
+    const candidateDirs = [
+      path.join(getLocalDataDir(), 'content_files'),
+      path.join(getLocalDataDir(), 'videos'),
+      home ? path.join(home, 'Downloads') : '',
+      home ? path.join(home, 'Desktop') : '',
+      home ? path.join(home, 'Documents') : '',
+      'D:\\',
+      'E:\\'
+    ].filter(Boolean);
+
+    for (const dir of candidateDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const directPath = path.join(dir, path.basename(fileName));
+      if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+        return directPath;
+      }
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries.slice(0, 80)) {
+          if (entry.isFile() && entry.name.trim().toLowerCase() === targetName) {
+            return path.join(dir, entry.name);
+          }
+          if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== 'Windows') {
+            const subPath = path.join(dir, entry.name, path.basename(fileName));
+            if (fs.existsSync(subPath) && fs.statSync(subPath).isFile()) {
+              return subPath;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return null;
+}
+
+function extractReadableTextFromPdfBuffer(pdfBuf) {
+  if (!pdfBuf || !Buffer.isBuffer(pdfBuf)) return '';
+  const zlib = require('zlib');
+  const rawStr = pdfBuf.toString('latin1');
+  const chunks = [];
+
+  const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
+  let match;
+  while ((match = streamRegex.exec(rawStr)) !== null) {
+    try {
+      const streamBytes = Buffer.from(match[1], 'latin1');
+      let decompressed = null;
+      try {
+        decompressed = zlib.inflateSync(streamBytes);
+      } catch (_) {
+        try {
+          decompressed = zlib.inflateRawSync(streamBytes);
+        } catch (__) {}
+      }
+      if (decompressed) {
+        const utf8Text = decompressed.toString('utf8');
+        const parenMatches = utf8Text.match(/\(([^()]{2,})\)/g) || [];
+        for (const pm of parenMatches) {
+          const inner = pm.slice(1, -1).replace(/\\n/g, '\n').replace(/[^\x20-\x7E\u0600-\u06FF\n\r\t]/g, ' ').trim();
+          if (inner.length > 2 && /[\u0600-\u06FFa-zA-Z]{2,}/.test(inner)) {
+            chunks.push(inner);
+          }
+        }
+        const arabicRuns = utf8Text.match(/[\u0600-\u06FF][\u0600-\u06FF\s0-9،.؟!-]{4,}/g) || [];
+        for (const ar of arabicRuns) {
+          chunks.push(ar.trim());
+        }
+      }
+    } catch (_) {}
+  }
+
+  return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+async function resolveAiSourceMaterial(clientDb, instId, payload = {}) {
+  let contentDoc = null;
+  const sourceId = payload.sourceId || payload.memoId || null;
+  if (sourceId && instId) {
+    try {
+      const snap = await getDoc(doc(clientDb, 'institutions', instId, 'contents', sourceId));
+      if (snap.exists()) contentDoc = { id: snap.id, ...snap.data() };
+    } catch (_) {}
+  }
+
+  const startPage = Number(payload.startPage || contentDoc?.pageStart) || null;
+  const endPage = Number(payload.endPage || contentDoc?.pageEnd) || null;
+  const sourceTitle = payload.lessonTitle || payload.topic || contentDoc?.title || contentDoc?.fileName || '';
+  const totalPages = Number(contentDoc?.pagesCount || contentDoc?.pageEnd) || null;
+
+  let pdfBuf = null;
+
+  if (payload.pdfBase64 || payload.fileBase64) {
+    try {
+      const b64 = String(payload.pdfBase64 || payload.fileBase64);
+      const clean = b64.includes('base64,') ? b64.split('base64,')[1] : b64;
+      pdfBuf = Buffer.from(clean, 'base64');
+    } catch (_) {}
+  }
+
+  if (!pdfBuf) {
+    const candidatePaths = [
+      payload.filePath,
+      contentDoc?.localStoredPath,
+      contentDoc?.filePath,
+      findUploadedFileByName(payload.fileName || contentDoc?.fileName || (contentDoc?.title ? `${contentDoc.title}.pdf` : ''))
+    ].filter(Boolean);
+
+    for (const p of candidatePaths) {
+      try {
+        if (typeof p === 'string' && fs.existsSync(p) && fs.statSync(p).isFile()) {
+          pdfBuf = fs.readFileSync(p);
+          if (contentDoc?.id && !contentDoc.localStoredPath) {
+            const cachedPath = persistContentBinaryLocally({
+              id: contentDoc.id,
+              fileName: contentDoc.fileName || path.basename(p),
+              filePath: p,
+              isVideo: false
+            });
+            if (cachedPath) {
+              setDoc(doc(clientDb, 'institutions', instId, 'contents', contentDoc.id), {
+                localStoredPath: cachedPath,
+                filePath: cachedPath
+              }, { merge: true }).catch(() => {});
+            }
+          }
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+
+  const rawCandidateText = payload.contextText || payload.sourceText || contentDoc?.textContent || '';
+  if (!pdfBuf && isRawPdfBinaryString(rawCandidateText)) {
+    try {
+      pdfBuf = Buffer.from(rawCandidateText, 'latin1');
+    } catch (_) {}
+  }
+
+  let pdfBase64 = null;
+  let cleanText = '';
+
+  if (pdfBuf && pdfBuf.length > 0 && pdfBuf.length <= 22 * 1024 * 1024) {
+    pdfBase64 = pdfBuf.toString('base64');
+    cleanText = extractReadableTextFromPdfBuffer(pdfBuf);
+  }
+
+  if (!cleanText && rawCandidateText && !isRawPdfBinaryString(rawCandidateText)) {
+    cleanText = String(rawCandidateText);
+  }
+
+  return {
+    pdfBase64,
+    cleanText,
+    sourceTitle,
+    totalPages,
+    startPage,
+    endPage
+  };
+}
+
+async function extractLessonExplanationAi(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const clientDb = await getClientFirestoreDb(token);
+  const instId = token.institutionId || payload.institutionId;
+
+  let config = {};
+  let provMeta = {};
+  try {
+    const snap = await getDoc(doc(clientDb, 'system', 'aiConfig'));
+    if (snap.exists()) config = snap.data();
+  } catch (_) {}
+  try {
+    const pSnap = await getDoc(doc(clientDb, 'system', 'aiProviders'));
+    if (pSnap.exists()) provMeta = pSnap.data();
+  } catch (_) {}
+
+  if (config.enabled === false) {
+    throw arabicServiceError('SERVICE_DISABLED', 'محرك الذكاء الاصطناعي متوقف حالياً من قِبل السوبر أدمن.');
+  }
+
+  const geminiKeys = [];
+  if (config.geminiKey && typeof config.geminiKey === 'string' && config.geminiKey.trim()) {
+    geminiKeys.push(config.geminiKey.trim());
+  }
+  if (Array.isArray(config.geminiKeys)) {
+    for (const k of config.geminiKeys) {
+      if (typeof k === 'string' && k.trim() && !geminiKeys.includes(k.trim())) geminiKeys.push(k.trim());
+    }
+  }
+  const openrouterKey = (config.openrouterKey || '').trim();
+  const openrouterModel = config.openrouterModel || provMeta.openrouter?.model || 'nvidia/nemotron-3.5-lightning:free';
+
+  if (geminiKeys.length === 0 && !openrouterKey) {
+    throw arabicServiceError('AI_NOT_CONFIGURED', 'لم يتم ضبط مفاتيح الذكاء الاصطناعي من لوحة السوبر أدمن.');
+  }
+
+  let stageName = payload.stageName || '';
+  let subjectName = payload.subjectName || '';
+  if (!stageName && payload.stageId && instId) {
+    try {
+      const stSnap = await getDoc(doc(clientDb, 'institutions', instId, 'stages', payload.stageId));
+      if (stSnap.exists()) stageName = stSnap.data().name || '';
+    } catch (_) {}
+  }
+  if (!subjectName && payload.subjectId && instId) {
+    try {
+      const subSnap = await getDoc(doc(clientDb, 'institutions', instId, 'subjects', payload.subjectId));
+      if (subSnap.exists()) subjectName = subSnap.data().name || '';
+    } catch (_) {}
+  }
+
+  const resolvedSource = await resolveAiSourceMaterial(clientDb, instId, payload);
+  const sPage = resolvedSource.startPage || payload.startPage || 1;
+  const ePage = resolvedSource.endPage || payload.endPage || null;
+  const pdfBase64 = resolvedSource.pdfBase64 || null;
+  const lessonTitle = payload.title || payload.lessonTitle || resolvedSource.sourceTitle || 'الدرس المحدد';
+
+  const systemPrompt = `أنت خبير مناهج تعليمية ومعلم أول متخصص في إعداد الشروحات والملخصات الدراسية باللغة العربية.
+مهمتك: قراءة الصفحات المحددة من المذكرة المرفقة واستخراج شرح منظم وشامل للدرس يظهر للطلاب في تطبيق الموبايل.
+يجب إخراج النتيجة بتنسيق JSON صالح فقط (valid JSON object) يحتوي على الحقول التالية نصياً باللغة العربية:
+{
+  "suggestedTitle": "عنوان دقيق ومناسب للدرس المستخرج من الصفحات المحددة",
+  "outlines": "العناصر والأفكار الرئيسية للدرس مرتبة في نقاط مرقمة واضحة ومفصلة",
+  "concepts": "أهم التعريفات والمفاهيم والتواريخ أو القوانين والعلل الواردة في الصفحات المحددة مع شرح كل منها",
+  "summary": "ملخص وافٍ ومبسط لشرح الدرس بأسلوب شيق يغني الطالب ويساعده على الفهم والمراجعة السريعة"
+}`;
+
+  let userPrompt = `يرجى استخراج وتوليد شرح كامل ومفصل للدرس التالي:
+المرحلة الدراسية: ${stageName || 'المرحلة التعليمية المعتمدة'}
+المادة الدراسية: ${subjectName || 'المادة الدراسية'}
+عنوان الدرس / المذكرة: ${lessonTitle}
+🎯 نطاق الصفحات المطلوب قراءتها واستخراج الشرح منها حصرياً: من صفحة (${sPage}) إلى صفحة (${ePage || 'نهاية المذكرة'}).
+`;
+
+  if (pdfBase64) {
+    userPrompt += `\n📎 مرفق لك ملف الـ PDF الأصلي للمذكرة (${resolvedSource.sourceTitle || lessonTitle}). اقرأ الصفحات من (${sPage}) إلى (${ePage || 'النهاية'}) بدقة واستخرج منها العناصر الرئيسية والتعريفات والملخص الشامل.\n`;
+  }
+  if (resolvedSource.cleanText && resolvedSource.cleanText.trim().length > 40) {
+    userPrompt += `\nنص مساعد مستخرج من المذكرة:\n"""\n${resolvedSource.cleanText.slice(0, 30000)}\n"""\n`;
+  } else if (!pdfBase64) {
+    userPrompt += `\nيرجى إعداد الشرح العلمي والملخص الشامل لهذا الدرس وفق المنهج الدراسي المعتمد للمرحلة (${stageName}) والمادة (${subjectName}).\n`;
+  }
+
+  let lastErr = null;
+  let parsedResult = null;
+  let usedProvider = 'Google Gemini';
+  let usedModel = 'gemini-2.5-flash';
+
+  if (geminiKeys.length > 0) {
+    const modelsToTry = [...new Set([config.primaryModel || config.model || 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'])];
+    const attachmentAttempts = pdfBase64 ? [true, false] : [false];
+
+    outerLoop:
+    for (const withPdf of attachmentAttempts) {
+      for (const apiKey of geminiKeys) {
+        for (const m of modelsToTry) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+            const parts = [];
+            if (withPdf && pdfBase64) {
+              parts.push({
+                inline_data: {
+                  mime_type: 'application/pdf',
+                  data: pdfBase64
+                }
+              });
+            }
+            parts.push({ text: systemPrompt + '\n\n' + userPrompt });
+
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts }],
+                generationConfig: {
+                  temperature: 0.3,
+                  maxOutputTokens: 4096,
+                  responseMimeType: 'application/json'
+                }
+              })
+            });
+
+            if (!res.ok) {
+              const errText = await res.text();
+              lastErr = new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 150)}`);
+              continue;
+            }
+            const data = await res.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!rawText) throw new Error('رد نموذج Gemini فارغ');
+
+            let parsed = null;
+            try {
+              parsed = JSON.parse(rawText);
+            } catch (_) {
+              const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
+              if (match) parsed = JSON.parse(match[1]);
+            }
+            if (parsed && (parsed.outlines || parsed.concepts || parsed.summary)) {
+              parsedResult = parsed;
+              usedProvider = 'Google Gemini';
+              usedModel = m;
+              break outerLoop;
+            }
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+      }
+    }
+  }
+
+  if (!parsedResult && openrouterKey) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://educenter-saas-860c5.web.app',
+          'X-Title': 'REMAS Center Desktop App'
+        },
+        body: JSON.stringify({
+          model: openrouterModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data?.choices?.[0]?.message?.content || '';
+        let parsed = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (_) {
+          const match = rawText.match(/```(?:json)?([\s\S]*?)```/);
+          if (match) parsed = JSON.parse(match[1]);
+        }
+        if (parsed && (parsed.outlines || parsed.concepts || parsed.summary)) {
+          parsedResult = parsed;
+          usedProvider = 'OpenRouter';
+          usedModel = openrouterModel;
+        }
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  if (!parsedResult) {
+    throw arabicServiceError('AI_EXTRACTION_FAILED', `تعذر استخراج الشرح من المذكرة: ${lastErr ? lastErr.message : 'يرجى التأكد من اتصال الإنترنت ومفاتيح الذكاء الاصطناعي'}`);
+  }
+
+  const formatField = (val) => {
+    if (!val) return '';
+    if (Array.isArray(val)) return val.map((item, idx) => `${idx + 1}. ${typeof item === 'object' ? JSON.stringify(item) : item}`).join('\n');
+    if (typeof val === 'object') return Object.entries(val).map(([k, v]) => `• ${k}: ${v}`).join('\n');
+    return String(val).trim();
+  };
+
+  return {
+    success: true,
+    provider: usedProvider,
+    model: usedModel,
+    suggestedTitle: String(parsedResult.suggestedTitle || lessonTitle || '').trim(),
+    outlines: formatField(parsedResult.outlines),
+    concepts: formatField(parsedResult.concepts),
+    summary: formatField(parsedResult.summary)
+  };
 }
 
 async function getCenterAiStatusAndQuota(callerToken, payload = {}) {
@@ -12589,7 +13233,11 @@ module.exports = {
   recordHomeworkGradeDirect,
   createLessonContent,
   createDigitalContentItem,
+  updateDigitalContentItem,
   deleteDigitalContentItem,
+  deleteLesson,
+  deleteExamRecord,
+  extractLessonExplanationAi,
   updateLessonContent,
   setLessonContentStatus,
   validateContentItemInput,
