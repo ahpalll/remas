@@ -19,6 +19,7 @@ class HotpatchService {
     this.currentPatchDir = null;
     this.manifestPath = null;
     this.activeManifest = null;
+    this.appVersion = null;
     this.isInitialized = false;
   }
 
@@ -27,6 +28,7 @@ class HotpatchService {
    */
   init(userDataPath, appVersion = null) {
     this.userDataDir = userDataPath;
+    this.appVersion = appVersion;
     this.hotpatchDir = path.join(this.userDataDir, 'hotpatches');
     this.currentPatchDir = path.join(this.hotpatchDir, 'current');
     this.manifestPath = path.join(this.currentPatchDir, 'manifest.json');
@@ -41,8 +43,14 @@ class HotpatchService {
         console.log(`[Hotpatch] Active patch loaded: ${this.activeManifest.patchVersion || 'unknown'}`);
 
         if (appVersion && this.isPatchStaleComparedToApp(this.activeManifest, appVersion)) {
-          console.warn(`[Hotpatch] Stale patch detected for app version ${appVersion} (patch was ${this.activeManifest.patchVersion || 'unknown'}). Rolling back.`);
-          this.rollback();
+          console.warn(`[Hotpatch] Incompatible patch detected for app version ${appVersion}. Archiving it and using the bundled app.`);
+          const backupDir = path.join(this.hotpatchDir, `incompatible_${Date.now()}`);
+          try {
+            fs.renameSync(this.currentPatchDir, backupDir);
+          } catch (archiveError) {
+            console.warn('[Hotpatch] Could not archive incompatible patch:', archiveError.message);
+          }
+          this.activeManifest = null;
         }
       }
     } catch (err) {
@@ -57,21 +65,7 @@ class HotpatchService {
    */
   isPatchStaleComparedToApp(manifest, appVersion) {
     if (!manifest || !appVersion) return false;
-    if (manifest.targetVersion && manifest.targetVersion !== appVersion) {
-      return true;
-    }
-    const parseParts = (v) => {
-      const match = String(v).match(/(\d+)\.(\d+)\.(\d+)/);
-      if (match) return [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)];
-      return [0, 0, 0];
-    };
-    const appParts = parseParts(appVersion);
-    const patchParts = parseParts(manifest.patchVersion);
-    for (let i = 0; i < 3; i++) {
-      if (appParts[i] > patchParts[i]) return true;
-      if (appParts[i] < patchParts[i]) return false;
-    }
-    return false;
+    return manifest.targetVersion !== appVersion;
   }
 
   getCurrentPatchVersion() {
@@ -191,11 +185,17 @@ class HotpatchService {
           if (snap.exists()) data = snap.data();
         }
 
-        if (data && data.active !== false && data.patchVersion) {
+        if (
+          data &&
+          data.active !== false &&
+          data.patchVersion &&
+          data.targetVersion === currentAppVersion
+        ) {
           if (this.isNewerPatch(data.patchVersion, currentPatch)) {
             return {
               available: true,
               patchVersion: data.patchVersion,
+              targetVersion: data.targetVersion,
               description: data.description || 'تحسينات وإصلاحات فورية للواجهة والعمليات',
               publishedAt: data.publishedAt || new Date().toISOString(),
               files: data.files || [],
@@ -240,10 +240,16 @@ class HotpatchService {
           res.on('end', () => {
             try {
               const manifest = JSON.parse(raw);
-              if (manifest && manifest.patchVersion && this.isNewerPatch(manifest.patchVersion, currentPatch)) {
+              if (
+                manifest &&
+                manifest.patchVersion &&
+                manifest.targetVersion === this.appVersion &&
+                this.isNewerPatch(manifest.patchVersion, currentPatch)
+              ) {
                 return resolve({
                   available: true,
                   patchVersion: manifest.patchVersion,
+                  targetVersion: manifest.targetVersion,
                   description: manifest.description || 'تحديث فوري للنظام يتضمن تحسينات الاستقرار وسرعة الاستجابة.',
                   publishedAt: manifest.publishedAt || new Date().toISOString(),
                   files: manifest.files || [],
@@ -286,10 +292,15 @@ class HotpatchService {
               mRes.on('end', () => {
                 try {
                   const manifest = JSON.parse(mData);
-                  if (manifest.patchVersion && this.isNewerPatch(manifest.patchVersion, currentPatch)) {
+                  if (
+                    manifest.patchVersion &&
+                    manifest.targetVersion === this.appVersion &&
+                    this.isNewerPatch(manifest.patchVersion, currentPatch)
+                  ) {
                     resolve({
                       available: true,
                       patchVersion: manifest.patchVersion,
+                      targetVersion: manifest.targetVersion,
                       description: manifest.description || data.body || 'تحديث فوري للنظام',
                       publishedAt: manifest.publishedAt || data.published_at,
                       files: manifest.files || [],
@@ -315,6 +326,9 @@ class HotpatchService {
   async downloadAndApplyHotpatch(patchInfo, bundledBaseDir) {
     if (!patchInfo || !Array.isArray(patchInfo.files) || patchInfo.files.length === 0) {
       throw new Error('بيانات التحديث غير صالحة أو لا تحتوي على ملفات');
+    }
+    if (!this.appVersion || patchInfo.targetVersion !== this.appVersion) {
+      throw new Error('إصدار التحديث الساخن غير متوافق مع إصدار التطبيق الحالي');
     }
 
     const stagingDir = path.join(this.hotpatchDir, `staging_${Date.now()}`);
@@ -368,6 +382,7 @@ class HotpatchService {
       // Write patch manifest into staging
       const manifest = {
         patchVersion: patchInfo.patchVersion,
+        targetVersion: patchInfo.targetVersion,
         appliedAt: new Date().toISOString(),
         description: patchInfo.description || '',
         files: downloadedFiles.map(f => ({ path: f.relPath, size: f.size }))
@@ -447,3 +462,4 @@ class HotpatchService {
 }
 
 module.exports = new HotpatchService();
+module.exports.HotpatchService = HotpatchService;

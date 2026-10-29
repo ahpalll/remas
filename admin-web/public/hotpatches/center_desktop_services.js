@@ -164,6 +164,7 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID || '1:522787600693:web:2416c6c770fb98785f747c'
 };
 
+const STUDENT_APP_FIREBASE_PROJECT_ID = 'educenter-saas-860c5';
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -1171,19 +1172,6 @@ async function getStudents(callerToken, options = {}) {
   if (opts.stageId) list = list.filter(s => s.stageId === opts.stageId);
   if (opts.status) list = list.filter(s => s.status === opts.status);
 
-  // Background auto-heal: if any student has tempPassword but fallback authUid, sync to Auth
-  if (!isTestOffline() && !isUnitTestMode()) {
-    for (const s of list) {
-      if (s.tempPassword && s.normalizedPhone && (!s.authUid || s.authUid.startsWith('auth_uid_'))) {
-        provisionStudentAuthAccount(s.normalizedPhone, s.tempPassword).then(prov => {
-          if (prov && prov.success && prov.authUid && !prov.authUid.startsWith('auth_uid_')) {
-            setDoc(doc(clientDb, 'institutions', instId, 'students', s.id), { authUid: prov.authUid }, { merge: true }).catch(() => {});
-          }
-        }).catch(() => {});
-      }
-    }
-  }
-
   return list.filter(s => s.status !== 'ARCHIVED');
 }
 
@@ -1196,11 +1184,101 @@ async function getStudentById(callerToken, studentId, institutionId) {
   return normalizeStudentDoc(data);
 }
 
+function classifyStudentAuthLink({
+  centerProjectId,
+  studentAppProjectId,
+  selectedInstitutionId,
+  student,
+  authenticatedStudentUid
+}) {
+  const projectMatches = centerProjectId === studentAppProjectId;
+  const institutionMatches =
+    student.institutionId == null ||
+    student.institutionId === selectedInstitutionId;
+  const statusMatches = ['ACTIVE', 'MUST_CHANGE_PASSWORD'].includes(student.status);
+  const authUidState = !student.authUid
+    ? 'MISSING'
+    : student.authUid === authenticatedStudentUid
+      ? 'MATCH'
+      : 'MISMATCH';
+  const result = authUidState === 'MISSING'
+    ? 'MISSING'
+    : (
+      authUidState === 'MATCH' &&
+      projectMatches &&
+      institutionMatches
+        ? 'MATCH'
+        : 'MISMATCH'
+    );
+
+  return {
+    result,
+    authUidState,
+    studentDocumentId: student.id,
+    studentDocumentPath: `institutions/${selectedInstitutionId}/students/${student.id}`,
+    statusMatches,
+    institutionMatches,
+    projectMatches
+  };
+}
+
+async function diagnoseStudentAuthLink(callerToken, payload = {}) {
+  const token = resolveCallerToken(callerToken);
+  const instId = validateTenantAccess(token, payload.institutionId || token.institutionId);
+  const callerRole = String(token.role || '').toLowerCase();
+  const isAdministrator = ['superadmin', 'institutionowner', 'owner', 'admin', 'manager'].includes(callerRole);
+  if (!isAdministrator && !token.employeeId) {
+    throw arabicServiceError('PERMISSION_DENIED', 'يلزم حساب إداري لفحص ربط الطالب');
+  }
+  requirePermission(token, 'students:read');
+
+  const studentId = typeof payload.studentId === 'string' ? payload.studentId.trim() : '';
+  const authenticatedStudentUid = typeof payload.authenticatedStudentUid === 'string'
+    ? payload.authenticatedStudentUid.trim()
+    : '';
+  if (!studentId) throw arabicServiceError('INVALID_STUDENT_ID', 'معرف الطالب مطلوب');
+  if (!authenticatedStudentUid) throw arabicServiceError('AUTH_UID_REQUIRED', 'يلزم UID الحساب المتحقق منه');
+
+  let student;
+  if (isTestOffline()) {
+    student = inMemoryStudents.get(`${instId}_${studentId}`);
+    if (!student) {
+      throw arabicServiceError('NOT_FOUND', 'ملف الطالب غير موجود في المؤسسة المحددة');
+    }
+  } else {
+    const clientDb = await getClientFirestoreDb(token);
+    const studentRef = doc(clientDb, 'institutions', instId, 'students', studentId);
+    const studentSnap = await getDoc(studentRef);
+    if (!studentSnap.exists()) {
+      throw arabicServiceError('NOT_FOUND', 'ملف الطالب غير موجود في المؤسسة المحددة');
+    }
+    student = { id: studentSnap.id, ...studentSnap.data() };
+  }
+
+  const pathInstitutionId = instId;
+  const result = classifyStudentAuthLink({
+    centerProjectId: app.options.projectId || firebaseConfig.projectId,
+    studentAppProjectId: STUDENT_APP_FIREBASE_PROJECT_ID,
+    selectedInstitutionId: instId,
+    student: {
+      ...student,
+      id: student.id || studentId,
+      institutionId: student.institutionId || pathInstitutionId
+    },
+    authenticatedStudentUid
+  });
+  return result;
+}
+
 function normalizeEgyptianPhone(phoneInput) {
   if (!phoneInput || typeof phoneInput !== 'string') {
     throw new Error('INVALID_PHONE: Phone number is required');
   }
-  let cleaned = phoneInput.replace(/[^\d+]/g, '');
+  const westernDigits = phoneInput.replace(/[٠-٩۰-۹]/g, digit => {
+    const code = digit.charCodeAt(0);
+    return String(code - (code >= 0x06f0 ? 0x06f0 : 0x0660));
+  });
+  let cleaned = westernDigits.replace(/[^\d+]/g, '');
   if (cleaned.startsWith('00')) {
     cleaned = cleaned.substring(2);
   }
@@ -1263,48 +1341,172 @@ function callIdentityToolkitApi(endpoint, payload, timeoutMs = 8000) {
   });
 }
 
+function studentAuthProvisionFailureCode(errorMessage) {
+  const knownCodes = new Map([
+    ['API_KEY_INVALID', 'AUTH_API_KEY_INVALID'],
+    ['OPERATION_NOT_ALLOWED', 'AUTH_PROVIDER_DISABLED'],
+    ['TOO_MANY_ATTEMPTS_TRY_LATER', 'AUTH_RATE_LIMITED'],
+    ['WEAK_PASSWORD', 'AUTH_WEAK_PASSWORD'],
+    ['INVALID_EMAIL', 'AUTH_INVALID_EMAIL'],
+  ]);
+  return knownCodes.get(errorMessage) || 'AUTH_PROVISION_FAILED';
+}
+
+async function deleteFreshStudentAuthAccount(idToken, apiRequest = callIdentityToolkitApi) {
+  if (typeof idToken !== 'string' || idToken.length === 0) return false;
+  const response = await apiRequest('accounts:delete', { idToken });
+  return response.status === 200;
+}
+
+const studentCreatePermissionStages = {
+  firestore_access: 'التحقق من صلاحية الوصول إلى بيانات المؤسسة',
+  duplicate_phone_read: 'قراءة سجلات الطلاب للتحقق من عدم تكرار رقم الهاتف',
+  academic_reference_read: 'قراءة بيانات السنة والمرحلة الدراسية',
+  group_read: 'قراءة بيانات المجموعة المختارة',
+  card_read: 'قراءة بيانات بطاقة الطالب',
+  student_profile_create: 'إنشاء مستند الطالب',
+  group_enrollment: 'تسجيل الطالب في المجموعة وتحديث بياناتها',
+  student_profile_update: 'تحديث المجموعات في مستند الطالب',
+  card_assignment: 'ربط بطاقة الطالب',
+  created_profile_verify: 'التحقق من مستند الطالب بعد الحفظ',
+  audit_write: 'كتابة سجل التدقيق',
+};
+
+async function runStudentCreateStage(stage, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    const isPermissionDenied =
+      error &&
+      (error.code === 'permission-denied' ||
+        String(error.message || '').includes('PERMISSION_DENIED'));
+    if (!isPermissionDenied) throw error;
+
+    const label = studentCreatePermissionStages[stage] || 'تنفيذ عملية إنشاء الطالب';
+    const stagedError = arabicServiceError(
+      'STUDENT_CREATE_PERMISSION_DENIED',
+      `${label}: رفضت قواعد Firestore العملية. تحقق من حساب المؤسسة ومؤشر المؤسسة ومسار القراءة أو الكتابة.`
+    );
+    stagedError.stage = stage;
+    stagedError.cause = error;
+    throw stagedError;
+  }
+}
+
 /**
  * Provision / sync Student account in Firebase Authentication.
  * Creates an Auth user with email stu_{phone}@remas.local and temporary password.
  * Returns { authUid, success }
  */
-async function provisionStudentAuthAccount(normalizedPhone, pin, previousPin = null) {
-  if (isTestOffline() || isUnitTestMode()) {
+async function provisionStudentAuthAccount(normalizedPhone, pin, previousPin = null, apiRequest = null) {
+  if (!apiRequest && (isTestOffline() || isUnitTestMode())) {
+    if (process.env.TEST_FAIL_STUDENT_AUTH_PROVISION === 'true') {
+      return { authUid: null, success: false };
+    }
     const mockUid = `auth_uid_${crypto.createHash('md5').update(normalizedPhone).digest('hex').substring(0, 16)}`;
     return { authUid: mockUid, success: true };
   }
 
   const cleanPhone = normalizedPhone.replace(/[^\d]/g, '');
   const email = `stu_${cleanPhone}@remas.local`;
+  const request = apiRequest || callIdentityToolkitApi;
 
   try {
-    const signUpRes = await callIdentityToolkitApi('accounts:signUp', { email, password: pin, returnSecureToken: true });
+    const signUpRes = await request('accounts:signUp', { email, password: pin, returnSecureToken: true });
 
     if (signUpRes.status === 200 && signUpRes.data && signUpRes.data.localId) {
-      return { authUid: signUpRes.data.localId, success: true };
+      return {
+        authUid: signUpRes.data.localId,
+        success: true,
+        cleanupIdToken:
+          typeof signUpRes.data.idToken === 'string'
+            ? signUpRes.data.idToken
+            : null,
+      };
     }
 
-    // Account already exists (EMAIL_EXISTS): update password to the new PIN
+    // An existing Auth account must be verified with its current credential before reuse.
     if (signUpRes.status === 400 && signUpRes.data && signUpRes.data.error && signUpRes.data.error.message && signUpRes.data.error.message.includes('EMAIL_EXISTS')) {
-      const candidates = [previousPin, pin, '123456', '654321'].filter(Boolean);
-      for (const pass of candidates) {
-        try {
-          const signRes = await callIdentityToolkitApi('accounts:signInWithPassword', { email, password: pass, returnSecureToken: true });
-
-          if (signRes.status === 200 && signRes.data && signRes.data.idToken) {
-            const updRes = await callIdentityToolkitApi('accounts:update', { idToken: signRes.data.idToken, password: pin, returnSecureToken: true });
-            const finalUid = (updRes.data && updRes.data.localId) || signRes.data.localId;
-            return { authUid: finalUid, success: true };
-          }
-        } catch (_) {}
+      if (!previousPin) {
+        return {
+          authUid: null,
+          success: false,
+          failureCode: 'EXISTING_AUTH_ACCOUNT',
+        };
       }
+
+      const signRes = await request('accounts:signInWithPassword', {
+        email,
+        password: previousPin,
+        returnSecureToken: true,
+      });
+      if (signRes.status !== 200 || !signRes.data || !signRes.data.idToken) {
+        const signInError = signRes.data && signRes.data.error && signRes.data.error.message;
+        const invalidCredentialErrors = [
+          'INVALID_LOGIN_CREDENTIALS',
+          'INVALID_PASSWORD',
+          'EMAIL_NOT_FOUND',
+        ];
+        return {
+          authUid: null,
+          success: false,
+          failureCode: invalidCredentialErrors.includes(signInError)
+            ? 'EXISTING_AUTH_CREDENTIALS_INVALID'
+            : 'AUTH_PROVISION_FAILED',
+        };
+      }
+
+      const updRes = await request('accounts:update', {
+        idToken: signRes.data.idToken,
+        password: pin,
+        returnSecureToken: true,
+      });
+      const finalUid = updRes.data && updRes.data.localId;
+      if (updRes.status === 200 && typeof finalUid === 'string' && finalUid.length > 0) {
+        return { authUid: finalUid, success: true };
+      }
+      return {
+        authUid: null,
+        success: false,
+        failureCode: 'EXISTING_AUTH_PASSWORD_UPDATE_FAILED',
+      };
     }
+    const errorMessage =
+      signUpRes.data && signUpRes.data.error && signUpRes.data.error.message;
+    return {
+      authUid: null,
+      success: false,
+      failureCode: studentAuthProvisionFailureCode(errorMessage),
+    };
   } catch (err) {
-    console.warn('[provisionStudentAuthAccount] Warning during Firebase Auth provisioning:', err && err.message);
+    const errorCode = String(err && err.code ? err.code : '');
+    const isNetworkFailure =
+      errorCode.startsWith('E') ||
+      errorCode === 'ETIMEDOUT' ||
+      errorCode === 'TIMEOUT';
+    return {
+      authUid: null,
+      success: false,
+      failureCode: isNetworkFailure
+        ? 'AUTH_NETWORK_ERROR'
+        : 'AUTH_PROVISION_FAILED',
+    };
   }
 
-  const fallbackUid = `auth_uid_${crypto.createHash('md5').update(normalizedPhone).digest('hex').substring(0, 16)}`;
-  return { authUid: fallbackUid, success: false };
+  return { authUid: null, success: false };
+}
+
+function studentAuthUidFromProvisionResult(result, allowSyntheticUid = isUnitTestMode()) {
+  if (
+    !result ||
+    result.success !== true ||
+    typeof result.authUid !== 'string' ||
+    result.authUid.trim().length === 0 ||
+    (!allowSyntheticUid && result.authUid.startsWith('auth_uid_'))
+  ) {
+    return null;
+  }
+  return result.authUid;
 }
 
 /**
@@ -1373,6 +1575,12 @@ async function createStudent(callerToken, payload = {}) {
 
   const rawPhone = (body.phone || '').trim();
   if (!rawPhone) throw arabicServiceError('INVALID_PHONE', 'رقم هاتف الطالب مطلوب');
+  if (body.authUid) {
+    throw arabicServiceError(
+      'UNVERIFIED_AUTH_UID',
+      'لا يمكن ربط الطالب بمعرف حساب غير صادر عن عملية تحقق المصادقة'
+    );
+  }
   const normalizedPhone = normalizeEgyptianPhone(rawPhone);
   if (body.guardianPhone && String(body.guardianPhone).trim()) {
     try { normalizeEgyptianPhone(String(body.guardianPhone).trim()); } catch (e) {
@@ -1380,10 +1588,14 @@ async function createStudent(callerToken, payload = {}) {
     }
   }
 
+  const generatedStudentId = !body.id;
   const id = body.id || `STU_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
   const qrToken = `QR_${id}`;
 
-  const clientDb = await getClientFirestoreDb(token);
+  const clientDb = await runStudentCreateStage(
+    'firestore_access',
+    () => getClientFirestoreDb(token)
+  );
 
   // Duplicate phone check (same institution, active only)
   if (isTestOffline()) {
@@ -1392,7 +1604,10 @@ async function createStudent(callerToken, payload = {}) {
   } else {
     const studentsColRef = collection(clientDb, 'institutions', instId, 'students');
     const existingDupQuery = query(studentsColRef, where('normalizedPhone', '==', normalizedPhone));
-    const existingDupSnap = await getDocs(existingDupQuery);
+    const existingDupSnap = await runStudentCreateStage(
+      'duplicate_phone_read',
+      () => getDocs(existingDupQuery)
+    );
     const activeDups = existingDupSnap.docs.filter(d => d.id !== id && d.data().status !== 'ARCHIVED');
     if (activeDups.length > 0) {
       throw arabicServiceError('DUPLICATE_STUDENT_IN_INSTITUTION', 'يوجد طالب بنفس رقم الهاتف مسجل مسبقاً في هذا المركز', rawPhone);
@@ -1402,9 +1617,25 @@ async function createStudent(callerToken, payload = {}) {
   // Validate academic references when provided
   const academicYearId = body.academicYearId || '';
   const stageId = body.stageId || '';
-  if (academicYearId || stageId) {
-    await validateGroupReferences(token, clientDb, instId, { academicYearId: academicYearId || undefined, stageId: stageId || undefined });
+  const subjectId = body.subjectId || '';
+  let stageDoc = null;
+  let subjectDoc = null;
+  if (academicYearId || stageId || subjectId) {
+    const academicRefs = await runStudentCreateStage(
+      'academic_reference_read',
+      () => validateGroupReferences(token, clientDb, instId, {
+        academicYearId: academicYearId || undefined,
+        stageId: stageId || undefined,
+        subjectId: subjectId || undefined,
+      })
+    );
+    stageDoc = academicRefs.stageDoc;
+    subjectDoc = academicRefs.subjectDoc;
   }
+  // A student's subject link must be explicit: it is never inferred from the
+  // first group, and legacy group.subjectName mirrors are not authoritative.
+  const stageName = (stageDoc && stageDoc.name) ? String(stageDoc.name) : String(body.stageName || body.stage || '');
+  const subjectName = (subjectDoc && subjectDoc.name) ? String(subjectDoc.name) : String(body.subjectName || '');
 
   // Resolve requested groups (canonical groupIds). Accept groupIds array or legacy groupId.
   const requestedGroupIds = canonicalStudentGroupIds({ groupIds: body.groupIds, groupId: body.groupId });
@@ -1413,7 +1644,10 @@ async function createStudent(callerToken, payload = {}) {
   // Pre-validate every group BEFORE creating the student (no partial state)
   const validatedGroups = [];
   for (const gid of uniqueGroupIds) {
-    const g = await fetchDocSameTenant(clientDb, 'groups', gid, instId, inMemoryGroups, 'المجموعة');
+    const g = await runStudentCreateStage(
+      'group_read',
+      () => fetchDocSameTenant(clientDb, 'groups', gid, instId, inMemoryGroups, 'المجموعة')
+    );
     if (g.institutionId !== instId) throw arabicServiceError('CROSS_TENANT_VIOLATION', 'لا يمكن تسجيل الطالب في مجموعة من مؤسسة أخرى', gid);
     if (g.status === 'ARCHIVED') throw arabicServiceError('INACTIVE_GROUP', 'المجموعة المحددة مؤرشفة ولا تقبل تسجيلات جديدة', gid);
     if (g.status !== 'ACTIVE') throw arabicServiceError('INACTIVE_GROUP', 'المجموعة المحددة غير نشطة ولا تقبل تسجيلات جديدة', gid);
@@ -1422,6 +1656,11 @@ async function createStudent(callerToken, payload = {}) {
     if (enrolled >= cap) throw arabicServiceError('GROUP_FULL', `المجموعة ممتلئة ولا توجد مقاعد متاحة (${enrolled}/${cap})`, gid);
     if (stageId && g.stageId && g.stageId !== stageId) {
       throw arabicServiceError('STAGE_GROUP_MISMATCH', 'المجموعة المحددة تنتمي لمرحلة مختلفة عن مرحلة الطالب', gid);
+    }
+    // Groups of the SAME subject and stage stay selectable individually — the
+    // service never collapses them to one, it only rejects a different subject.
+    if (subjectId && g.subjectId && g.subjectId !== subjectId) {
+      throw arabicServiceError('SUBJECT_GROUP_MISMATCH', 'المجموعة المحددة تنتمي لمادة مختلفة عن المادة المختارة', gid);
     }
     validatedGroups.push(g);
   }
@@ -1432,9 +1671,15 @@ async function createStudent(callerToken, payload = {}) {
   const requestedCardRef = body.studentCardId || body.attendanceCardCode || '';
   if (requestedCardRef) {
     if (body.studentCardId) {
-      requestedCard = await fetchDocSameTenant(clientDb, 'studentCards', body.studentCardId, instId, inMemoryStudentCards, 'كارنيه الطالب');
+      requestedCard = await runStudentCreateStage(
+        'card_read',
+        () => fetchDocSameTenant(clientDb, 'studentCards', body.studentCardId, instId, inMemoryStudentCards, 'كارنيه الطالب')
+      );
     } else {
-      requestedCard = await findCardByCodeInternal(token, clientDb, instId, body.attendanceCardCode);
+      requestedCard = await runStudentCreateStage(
+        'card_read',
+        () => findCardByCodeInternal(token, clientDb, instId, body.attendanceCardCode)
+      );
     }
     if (requestedCard.institutionId !== instId) throw arabicServiceError('CROSS_TENANT_VIOLATION', 'هذا الكارنيه غير مسجل بالنظام');
     if (requestedCard.status !== 'AVAILABLE' || requestedCard.studentId) {
@@ -1444,17 +1689,69 @@ async function createStudent(callerToken, payload = {}) {
 
   // Provision / resolve Auth UID via Firebase Auth
   const initialPin = body.tempPassword || crypto.randomInt(100000, 1000000).toString();
-  let authUid = body.authUid;
-  if (!authUid || authUid.startsWith('auth_uid_')) {
-    let prov = await provisionStudentAuthAccount(normalizedPhone, initialPin, body.previousTempPassword);
-    if (!prov || !prov.success || !prov.authUid || prov.authUid.startsWith('auth_uid_')) {
-      // Retry once before failing
-      prov = await provisionStudentAuthAccount(normalizedPhone, initialPin, body.previousTempPassword);
-    }
-    if (!isTestOffline() && !isUnitTestMode() && (!prov || !prov.success || !prov.authUid || prov.authUid.startsWith('auth_uid_'))) {
-      throw arabicServiceError('AUTH_PROVISION_FAILED', 'تعذر إنشاء حساب دخول الطالب في خدمة المصادقة. يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى.');
-    }
-    authUid = (prov && prov.authUid) ? prov.authUid : (body.authUid || `auth_uid_${crypto.createHash('md5').update(normalizedPhone).digest('hex').substring(0, 16)}`);
+  let prov = await provisionStudentAuthAccount(
+    normalizedPhone,
+    initialPin,
+    body.previousTempPassword
+  );
+  let authUid = studentAuthUidFromProvisionResult(prov);
+  const existingAuthFailures = [
+    'EXISTING_AUTH_ACCOUNT',
+    'EXISTING_AUTH_CREDENTIALS_INVALID',
+    'EXISTING_AUTH_PASSWORD_UPDATE_FAILED',
+  ];
+  if (!authUid && !existingAuthFailures.includes(prov && prov.failureCode)) {
+    // Retry once before failing; never persist a placeholder UID as a real link.
+    prov = await provisionStudentAuthAccount(
+      normalizedPhone,
+      initialPin,
+      body.previousTempPassword
+    );
+    authUid = studentAuthUidFromProvisionResult(prov);
+  }
+  if (!authUid && prov && prov.failureCode === 'EXISTING_AUTH_ACCOUNT') {
+    throw arabicServiceError(
+      'EXISTING_AUTH_ACCOUNT',
+      'يوجد حساب مصادقة لهذا الرقم بالفعل، لكن لا يوجد ملف طالب جديد محفوظ. لن يتم تعديل الحساب أو ربطه تلقائيًا؛ يلزم أن يتحقق مسؤول المؤسسة من الحساب والسجل قبل استرداده.'
+    );
+  }
+  if (!authUid && prov && prov.failureCode === 'EXISTING_AUTH_CREDENTIALS_INVALID') {
+    throw arabicServiceError(
+      'EXISTING_AUTH_CREDENTIALS_INVALID',
+      'كلمة المرور الحالية للحساب الموجود غير صحيحة؛ لم يتم حفظ ملف الطالب.'
+    );
+  }
+  if (!authUid && prov && prov.failureCode === 'EXISTING_AUTH_PASSWORD_UPDATE_FAILED') {
+    throw arabicServiceError(
+      'EXISTING_AUTH_PASSWORD_UPDATE_FAILED',
+      'تم التحقق من الحساب الموجود لكن تعذر تحديث كلمة مروره؛ لم يتم حفظ ملف الطالب.'
+    );
+  }
+  const authFailureMessages = {
+    AUTH_API_KEY_INVALID:
+      'رفضت خدمة Firebase Auth إعدادات المشروع (API_KEY_INVALID). لم يتم حفظ ملف الطالب؛ تحقق من إعداد مشروع السنتر.',
+    AUTH_PROVIDER_DISABLED:
+      'تسجيل الدخول بالبريد وكلمة المرور غير مفعّل في Firebase Auth لهذا المشروع (OPERATION_NOT_ALLOWED). لم يتم حفظ ملف الطالب.',
+    AUTH_RATE_LIMITED:
+      'رفضت Firebase Auth المحاولة مؤقتًا بسبب كثرة الطلبات. انتظر قليلًا ثم أعد المحاولة؛ لم يتم حفظ ملف الطالب.',
+    AUTH_WEAK_PASSWORD:
+      'رفضت Firebase Auth كلمة المرور المؤقتة وفق سياسة المشروع. لم يتم حفظ ملف الطالب.',
+    AUTH_INVALID_EMAIL:
+      'رفضت Firebase Auth معرّف الحساب المشتق من رقم الهاتف. تحقق من صيغة الرقم؛ لم يتم حفظ ملف الطالب.',
+    AUTH_NETWORK_ERROR:
+      'تعذر الاتصال بخدمة Firebase Auth أثناء إنشاء الحساب. تحقق من اتصال الإنترنت ثم أعد المحاولة؛ لم يتم حفظ ملف الطالب.',
+  };
+  if (!authUid && prov && authFailureMessages[prov.failureCode]) {
+    throw arabicServiceError(
+      prov.failureCode,
+      authFailureMessages[prov.failureCode]
+    );
+  }
+  if (!authUid) {
+    throw arabicServiceError(
+      'AUTH_PROVISION_FAILED',
+      'تعذر إنشاء حساب دخول الطالب في خدمة المصادقة. لم يتم حفظ ملف الطالب.'
+    );
   }
 
   const nowISO = new Date().toISOString();
@@ -1470,15 +1767,23 @@ async function createStudent(callerToken, payload = {}) {
     guardianName: (body.guardianName || '').trim(),
     academicYearId: academicYearId || body.academicYearId || '',
     stageId: stageId || '',
+    stageName,
     grade: body.grade || '',
-    stage: body.stage || '',
+    stage: body.stage || stageName,
+    subjectId: subjectId || '',
+    subjectName,
+    subjectIds: subjectId ? [subjectId] : [],
+    enrolledSubjectIds: subjectId ? [subjectId] : [],
+    enrolledSubjectNames: subjectName ? [subjectName] : [],
     groupIds: [],
     groupId: '',
     qrToken,
     attendanceCardCode: '',
     studentCardId: null,
     tempPassword: initialPin,
-    status: body.status || 'ACTIVE',
+    status: 'MUST_CHANGE_PASSWORD',
+    mustChangePassword: true,
+    initialPinChanged: false,
     notes: (body.notes || '').trim(),
     createdAt: nowISO,
     updatedAt: nowISO,
@@ -1489,6 +1794,9 @@ async function createStudent(callerToken, payload = {}) {
   // On any post-create failure, compensate by rolling back student + enrollments + card.
   const createdEnrollmentIds = [];
   let cardAssignedId = null;
+  let studentDocumentCreated = false;
+  let initialStudentWriteAttempted = false;
+  const authCleanupIdToken = prov && prov.cleanupIdToken;
   const rollbackStudent = async () => {
     try {
       if (isTestOffline()) { inMemoryStudents.delete(`${instId}_${id}`); }
@@ -1516,12 +1824,20 @@ async function createStudent(callerToken, payload = {}) {
     if (isTestOffline()) {
       inMemoryStudents.set(`${instId}_${id}`, { ...student });
     } else {
-      await setDoc(doc(clientDb, 'institutions', instId, 'students', id), student, { merge: true });
+      initialStudentWriteAttempted = true;
+      await runStudentCreateStage(
+        'student_profile_create',
+        () => setDoc(doc(clientDb, 'institutions', instId, 'students', id), student, { merge: true })
+      );
     }
+    studentDocumentCreated = true;
     // Enroll sequentially with transaction-safe helper (validates again inside transaction)
     const finalGroupIds = [];
     for (const g of validatedGroups) {
-      await enrollStudentInGroupInternal(token, clientDb, instId, id, g.id);
+      await runStudentCreateStage(
+        'group_enrollment',
+        () => enrollStudentInGroupInternal(token, clientDb, instId, id, g.id)
+      );
       createdEnrollmentIds.push(enrollmentDocId(id, g.id));
       finalGroupIds.push(g.id);
     }
@@ -1529,14 +1845,27 @@ async function createStudent(callerToken, payload = {}) {
     if (isTestOffline()) {
       inMemoryStudents.set(`${instId}_${id}`, { ...withGroups });
     } else {
-      await setDoc(doc(clientDb, 'institutions', instId, 'students', id), { groupIds: finalGroupIds, groupId: finalGroupIds[0] || '', updatedAt: new Date().toISOString() }, { merge: true });
+      await runStudentCreateStage(
+        'student_profile_update',
+        () => setDoc(
+          doc(clientDb, 'institutions', instId, 'students', id),
+          { groupIds: finalGroupIds, groupId: finalGroupIds[0] || '', updatedAt: new Date().toISOString() },
+          { merge: true }
+        )
+      );
     }
     if (requestedCard) {
-      await assignStudentCardInternal(token, clientDb, instId, id, requestedCard.id);
+      await runStudentCreateStage(
+        'card_assignment',
+        () => assignStudentCardInternal(token, clientDb, instId, id, requestedCard.id)
+      );
       cardAssignedId = requestedCard.id;
     }
     // Verify final state before claiming success
-    const verified = await getStudentById(token, id, instId);
+    const verified = await runStudentCreateStage(
+      'created_profile_verify',
+      () => getStudentById(token, id, instId)
+    );
     if (verified.groupIds.length !== finalGroupIds.length) {
       await rollbackStudent();
       throw arabicServiceError('ENROLLMENT_VERIFY_FAILED', 'فشل التحقق من اكتمال التسجيل — تم التراجع عن إنشاء الطالب');
@@ -1545,15 +1874,18 @@ async function createStudent(callerToken, payload = {}) {
       await rollbackStudent();
       throw arabicServiceError('CARD_ASSIGN_VERIFY_FAILED', 'فشل ربط الكارنيه — تم التراجع عن إنشاء الطالب');
     }
-    await recordAuditEvent({
-      action: 'CREATE_STUDENT',
-      actorUid: token.uid,
-      actorRole: token.role,
-      institutionId: instId,
-      targetType: 'STUDENT',
-      targetId: id,
-      details: { name: verified.name, stageId: verified.stageId, groupIds: verified.groupIds, authUid: verified.authUid, cardCode: verified.attendanceCardCode || null }
-    });
+    await runStudentCreateStage(
+      'audit_write',
+      () => recordAuditEvent({
+        action: 'CREATE_STUDENT',
+        actorUid: token.uid,
+        actorRole: token.role,
+        institutionId: instId,
+        targetType: 'STUDENT',
+        targetId: id,
+        details: { name: verified.name, stageId: verified.stageId, groupIds: verified.groupIds, cardCode: verified.attendanceCardCode || null }
+      })
+    );
     // Auto-create & link parent account from student guardian data
     if (verified.guardianPhone && String(verified.guardianPhone).trim()) {
       try {
@@ -1570,19 +1902,77 @@ async function createStudent(callerToken, payload = {}) {
     verified.tempPassword = verified.tempPassword || initialPin;
     return verified;
   } catch (err) {
-    // Only rollback if student was created by this call and enrollment failed (not validation-before-create)
-    if (createdEnrollmentIds.length > 0 || (err.code !== 'GROUP_FULL' && err.code !== 'DUPLICATE_ENROLLMENT' && err.code !== 'INACTIVE_GROUP' && err.code !== 'STAGE_GROUP_MISMATCH' && createdEnrollmentIds.length === 0 && uniqueGroupIds.length > 0 && err.code === 'ENROLLMENT_VERIFY_FAILED')) {
-      // Check if student doc exists from this call then rollback
+    // A failed profile write must not leave the newly-created Auth account orphaned.
+    if (studentDocumentCreated) {
+      await rollbackStudent();
+    }
+
+    if (
+      authCleanupIdToken &&
+      generatedStudentId &&
+      initialStudentWriteAttempted &&
+      err.code === 'STUDENT_CREATE_PERMISSION_DENIED' &&
+      err.stage === 'student_profile_create'
+    ) {
       try {
-        const exists = await getStudentById(token, id, instId).catch(() => null);
-        if (exists && validatedGroups.length > 0) await rollbackStudent();
-      } catch (_) {}
-    } else if (uniqueGroupIds.length > 0 && validatedGroups.length === uniqueGroupIds.length) {
-      // Student doc was created then enrollment threw inside loop — rollback
+        const deleted = await deleteFreshStudentAuthAccount(authCleanupIdToken);
+        if (!deleted) throw new Error('AUTH_DELETE_REJECTED');
+      } catch (_) {
+        throw arabicServiceError(
+          'AUTH_ROLLBACK_FAILED',
+          'رفضت Firestore إنشاء مستند الطالب، وتعذر تنظيف حساب Auth الذي أُنشئ لهذه المحاولة. يلزم فحص إداري قبل إعادة المحاولة.'
+        );
+      }
+    } else if (authCleanupIdToken) {
+      let studentSnapshot;
       try {
-        const exists = await getStudentById(token, id, instId).catch(() => null);
-        if (exists) await rollbackStudent();
-      } catch (_) {}
+        studentSnapshot = await getDoc(
+          doc(clientDb, 'institutions', instId, 'students', id)
+        );
+      } catch (verifyError) {
+        throw arabicServiceError(
+          'AUTH_ROLLBACK_FAILED',
+          `فشلت العملية (${err.code || 'CREATE_STUDENT_FAILED'}) وتعذر التحقق من إزالة ملف الطالب؛ لم يُحذف حساب Auth تلقائيًا.`
+        );
+      }
+      if (studentSnapshot.exists()) {
+        const remainingAuthUid = studentSnapshot.data().authUid;
+        if (remainingAuthUid !== authUid) {
+          throw arabicServiceError(
+            'AUTH_ROLLBACK_FAILED',
+            `فشلت العملية (${err.code || 'CREATE_STUDENT_FAILED'}) ومعرّف المستند مرتبط ببيانات أخرى؛ لم يُحذف حساب Auth تلقائيًا.`
+          );
+        }
+        await rollbackStudent();
+        try {
+          studentSnapshot = await getDoc(
+            doc(clientDb, 'institutions', instId, 'students', id)
+          );
+        } catch (_) {
+          throw arabicServiceError(
+            'AUTH_ROLLBACK_FAILED',
+            `فشلت العملية (${err.code || 'CREATE_STUDENT_FAILED'}) وتعذر التحقق من التراجع؛ لم يُحذف حساب Auth تلقائيًا.`
+          );
+        }
+      }
+      if (studentSnapshot.exists()) {
+        throw arabicServiceError(
+          'AUTH_ROLLBACK_FAILED',
+          `فشلت العملية (${err.code || 'CREATE_STUDENT_FAILED'}) وما زال ملف الطالب موجودًا؛ لم يُحذف حساب Auth لتجنب ترك سجل بلا حساب.`
+        );
+      }
+
+      try {
+        const deleted = await deleteFreshStudentAuthAccount(authCleanupIdToken);
+        if (!deleted) {
+          throw new Error('AUTH_DELETE_REJECTED');
+        }
+      } catch (_) {
+        throw arabicServiceError(
+          'AUTH_ROLLBACK_FAILED',
+          `فشلت العملية (${err.code || 'CREATE_STUDENT_FAILED'}) وتعذر حذف حساب Auth الذي أُنشئ خلالها. يلزم فحص إداري قبل إعادة المحاولة.`
+        );
+      }
     }
     throw err;
   }
@@ -1654,6 +2044,16 @@ async function updateStudent(callerToken, studentIdOrPayload, payload = {}) {
         }
       }
     }
+    // Subject compatibility for newly added groups (same rule as creation).
+    const effectiveSubject = body.subjectId || existing.subjectId || '';
+    if (effectiveSubject) {
+      for (const gid of desired) {
+        const g = await fetchDocSameTenant(clientDb, 'groups', gid, instId, inMemoryGroups, 'المجموعة');
+        if (g.subjectId && g.subjectId !== effectiveSubject) {
+          throw arabicServiceError('SUBJECT_GROUP_MISMATCH', 'إحدى المجموعات المحددة تنتمي لمادة مختلفة عن مادة الطالب — يلزم معالجة صريحة قبل الحفظ', gid);
+        }
+      }
+    }
     const current = new Set(existing.groupIds);
     const want = new Set(desired);
     const toAdd = desired.filter(g => !current.has(g));
@@ -1686,6 +2086,21 @@ async function updateStudent(callerToken, studentIdOrPayload, payload = {}) {
   delete patch.groupIds; delete patch.groupId;
   delete patch.studentCardId; delete patch.attendanceCardCode;
   if (body.phone !== undefined) { patch.phone = String(body.phone).trim(); patch.normalizedPhone = normalizedPhone; }
+  // Keep the display mirrors aligned with the real stage/subject documents so
+  // the student app never shows a placeholder stage after an edit.
+  if (body.stageId && body.stageId !== existing.stageId) {
+    const stageDoc = await fetchDocSameTenant(clientDb, 'stages', body.stageId, instId, inMemoryStages, 'المرحلة الدراسية');
+    if (stageDoc.name) { patch.stageName = String(stageDoc.name); patch.stage = String(stageDoc.name); }
+  }
+  if (body.subjectId && body.subjectId !== existing.subjectId) {
+    const subjectDoc = await fetchDocSameTenant(clientDb, 'subjects', body.subjectId, instId, inMemorySubjects, 'المادة الدراسية');
+    if (subjectDoc.name) {
+      patch.subjectName = String(subjectDoc.name);
+      patch.enrolledSubjectNames = [String(subjectDoc.name)];
+    }
+    patch.subjectIds = [body.subjectId];
+    patch.enrolledSubjectIds = [body.subjectId];
+  }
   const finalGroupState = groupChangeRequested
     ? normalizeStudentDoc({ groupIds: [...new Set(canonicalStudentGroupIds({ groupIds: body.groupIds, groupId: body.groupId }))] })
     : null;
@@ -2716,6 +3131,16 @@ const inMemoryReceipts = new Map();
 const inMemoryGuardians = new Map();
 const inMemoryStudentGuardians = new Map();
 const inMemoryAuditLog = [];
+
+// Local calendar day ("YYYY-MM-DD") for anything the operator schedules by
+// wall clock. toISOString() yields the UTC day, which is already "tomorrow"
+// (or still "yesterday") around local midnight.
+function localDateString(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function isTestOffline() {
   return process.env.NODE_ENV === 'test' && !process.env.FIRESTORE_EMULATOR_HOST && !isPackagedProduction();
@@ -4406,8 +4831,16 @@ async function assignStudentCardInternal(token, clientDb, instId, studentId, car
   if (student.institutionId !== instId) throw arabicServiceError('CROSS_TENANT_VIOLATION', 'لا يمكن ربط كارنيه من مؤسسة أخرى');
   if (student.status === 'ARCHIVED') throw arabicServiceError('INACTIVE_STUDENT', 'الطالب مؤرشف ولا يمكن ربط كارنيه له');
   if (student.studentCardId) {
-    const cur = isTestOffline() ? inMemoryStudentCards.get(`${instId}_${student.studentCardId}`) : null;
-    if (cur && cur.status === 'ASSIGNED') throw arabicServiceError('STUDENT_ALREADY_HAS_CARD', 'الطالب مرتبط بكارنيه نشط بالفعل — استخدم الاستبدال', student.studentCardId);
+    // Same guard online and offline: one active card per student, ever.
+    let cur = null;
+    try {
+      cur = isTestOffline()
+        ? inMemoryStudentCards.get(`${instId}_${student.studentCardId}`)
+        : await fetchDocSameTenant(clientDb, 'studentCards', student.studentCardId, instId, inMemoryStudentCards, 'كارنيه الطالب');
+    } catch (_) { cur = null; }
+    if (cur && cur.status === 'ASSIGNED' && cur.studentId === studentId) {
+      throw arabicServiceError('STUDENT_ALREADY_HAS_CARD', 'الطالب مرتبط بكارنيه نشط بالفعل — استخدم الاستبدال', student.studentCardId);
+    }
   }
   const nowISO = new Date().toISOString();
   const updatedCard = { ...card, status: 'ASSIGNED', studentId, assignedAt: nowISO, issuedAt: card.issuedAt || nowISO, updatedAt: nowISO };
@@ -4592,7 +5025,7 @@ async function recordAttendanceCore(token, clientDb, instId, { studentId, groupI
   if (group.status !== 'ACTIVE') throw arabicServiceError('INACTIVE_GROUP', 'المجموعة غير نشطة');
 
   let session = null;
-  const day = date || new Date().toISOString().split('T')[0];
+  const day = date || localDateString();
   if (sessionId) {
     session = await fetchDocSameTenant(clientDb, 'sessions', sessionId, instId, inMemorySessions, 'الحصة');
     if (session.institutionId !== instId) throw arabicServiceError('CROSS_TENANT_VIOLATION', 'الحصة من مؤسسة أخرى');
@@ -5203,14 +5636,25 @@ async function getSessions(callerToken, options = {}) {
   if (isTestOffline()) {
     let list = Array.from(inMemorySessions.values()).filter(s => s.institutionId === instId);
     if (options.groupId) list = list.filter(s => s.groupId === options.groupId);
+    if (options.startDate) list = list.filter(s => {
+      const d = String(s.date || s.sessionDate || '');
+      return d >= String(options.startDate) && (!options.endDate || d <= String(options.endDate));
+    });
     if (options.date) list = list.filter(s => s.date === options.date || s.sessionDate === options.date);
     if (options.status) list = list.filter(s => s.status === options.status);
     return list;
   }
   const clientDb = await getClientFirestoreDb(token);
   const colRef = collection(clientDb, 'institutions', instId, 'sessions');
+  // Date range: lets callers (auto start/close poller) fetch only the window
+  // they need instead of the whole collection + slice(0,500), which kept the
+  // OLDEST rows and silently dropped today's sessions on busy centers.
+  const rangeStart = options.startDate ? String(options.startDate) : null;
+  const rangeEnd = options.endDate ? String(options.endDate) : null;
   let snap;
-  if (options.groupId && options.date) snap = await getDocs(query(colRef, where('groupId', '==', options.groupId), where('date', '==', options.date)));
+  if (rangeStart && rangeEnd) snap = await getDocs(query(colRef, where('date', '>=', rangeStart), where('date', '<=', rangeEnd)));
+  else if (rangeStart) snap = await getDocs(query(colRef, where('date', '>=', rangeStart)));
+  else if (options.groupId && options.date) snap = await getDocs(query(colRef, where('groupId', '==', options.groupId), where('date', '==', options.date)));
   else if (options.status && options.date) snap = await getDocs(query(colRef, where('status', '==', options.status), where('date', '==', options.date)));
   else if (options.teacherId && options.date) snap = await getDocs(query(colRef, where('teacherId', '==', options.teacherId), where('date', '==', options.date)));
   else if (options.groupId) snap = await getDocs(query(colRef, where('groupId', '==', options.groupId)));
@@ -5219,10 +5663,16 @@ async function getSessions(callerToken, options = {}) {
   else if (options.date) snap = await getDocs(query(colRef, where('date', '==', options.date)));
   else snap = await getDocs(colRef);
   let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const rowDate = (s) => String(s.date || s.sessionDate || '');
+  if (rangeStart) list = list.filter(s => {
+    const d = rowDate(s);
+    return d >= rangeStart && (!rangeEnd || d <= rangeEnd);
+  });
   if (options.groupId) list = list.filter(s => s.groupId === options.groupId);
   if (options.date) list = list.filter(s => s.date === options.date || s.sessionDate === options.date);
   if (options.status) list = list.filter(s => s.status === options.status);
   if (options.teacherId) list = list.filter(s => s.teacherId === options.teacherId);
+  list.sort((a, b) => (rowDate(a) + String(a.startTime || '')).localeCompare(rowDate(b) + String(b.startTime || '')));
   const lim = Number(options.limit) || 500;
   return list.slice(0, lim);
 }
@@ -5286,7 +5736,7 @@ async function createSession(callerToken, payload = {}) {
   token = resolveCallerToken(token);
 
   const instId = validateTenantAccess(token, body.institutionId || token.institutionId);
-  const sessionDate = body.date || body.sessionDate || new Date().toISOString().split('T')[0];
+  const sessionDate = body.date || body.sessionDate || localDateString();
   const room = body.room || 'قاعة 1';
   const startTime = body.startTime || '16:00';
 
@@ -5563,7 +6013,7 @@ async function markSessionRemainingAbsent(callerToken, payload = {}) {
 async function generateTodaySessions(callerToken, options = {}) {
   const token = resolveCallerToken(callerToken);
   const instId = validateTenantAccess(token, options.institutionId || token.institutionId);
-  const date = options.date || new Date().toISOString().split('T')[0];
+  const date = options.date || localDateString();
   const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
   const clientDb = await getClientFirestoreDb(token);
   const schedules = await getSchedules(token, { institutionId: instId, status: 'ACTIVE', dayOfWeek });
@@ -10770,17 +11220,34 @@ async function resetStudentPassword(callerToken, payload = {}) {
 
   // Provision / update password in Firebase Auth so student mobile login works immediately
   const normPhone = student.normalizedPhone || (student.phone ? normalizeEgyptianPhone(student.phone) : '');
-  let updatedAuthUid = student.authUid;
-  if (normPhone) {
-    try {
-      const prov = await provisionStudentAuthAccount(normPhone, newPin, student.tempPassword);
-      if (prov && prov.authUid && !prov.authUid.startsWith('auth_uid_')) {
-        updatedAuthUid = prov.authUid;
-      }
-    } catch (authErr) {
-      console.warn('[resetStudentPassword] Auth provisioning warning:', authErr && authErr.message);
-    }
+  if (!normPhone) {
+    throw arabicServiceError(
+      'AUTH_PROVISION_FAILED',
+      'تعذر التحقق من رقم هاتف الطالب لإعادة تعيين كلمة المرور.'
+    );
   }
+  let prov;
+  try {
+    prov = await provisionStudentAuthAccount(normPhone, newPin, student.tempPassword);
+  } catch (authErr) {
+    console.warn(
+      '[resetStudentPassword] Auth provisioning failed:',
+      authErr && authErr.code ? authErr.code : 'request-failed'
+    );
+  }
+  if (
+    !prov ||
+    !prov.success ||
+    typeof prov.authUid !== 'string' ||
+    prov.authUid.length === 0 ||
+    (!isUnitTestMode() && prov.authUid.startsWith('auth_uid_'))
+  ) {
+    throw arabicServiceError(
+      'AUTH_PROVISION_FAILED',
+      'تعذر إعادة تعيين كلمة مرور الطالب في خدمة المصادقة. لم يتم تحديث ملف الطالب.'
+    );
+  }
+  const updatedAuthUid = prov.authUid;
 
   const patch = {
     status: 'MUST_CHANGE_PASSWORD',
@@ -10793,19 +11260,15 @@ async function resetStudentPassword(callerToken, payload = {}) {
     patch.authUid = updatedAuthUid;
   }
 
-  try {
-    await setDoc(doc(clientDb, 'institutions', instId, 'students', studentId), patch, { merge: true });
-  } catch (setErr) {
-    const isPermDenied = setErr && (setErr.code === 'permission-denied' || (setErr.message && setErr.message.includes('PERMISSION_DENIED')));
-    if (isPermDenied && patch.authUid) {
-      console.warn('[resetStudentPassword] setDoc failed with authUid update due to rules, retrying without authUid patch...');
-      const patchWithoutAuthUid = { ...patch };
-      delete patchWithoutAuthUid.authUid;
-      await setDoc(doc(clientDb, 'institutions', instId, 'students', studentId), patchWithoutAuthUid, { merge: true });
-    } else {
-      throw setErr;
-    }
-  }
+  await writeStudentPasswordResetPatch(
+    (studentPatch) =>
+      setDoc(
+        doc(clientDb, 'institutions', instId, 'students', studentId),
+        studentPatch,
+        { merge: true }
+      ),
+    patch
+  );
   student.tempPassword = newPin;
   student.status = 'MUST_CHANGE_PASSWORD';
   student.mustChangePassword = true;
@@ -10823,6 +11286,20 @@ async function resetStudentPassword(callerToken, payload = {}) {
   });
 
   return { success: true, studentId, studentName: student.name, pin: newPin };
+}
+
+async function writeStudentPasswordResetPatch(writePatch, patch) {
+  try {
+    await writePatch(patch);
+  } catch (error) {
+    if (patch.authUid) {
+      throw arabicServiceError(
+        'AUTH_LINK_UPDATE_FAILED',
+        'تعذر حفظ ربط حساب الدخول بملف الطالب. لم يتم تأكيد إعادة التعيين.'
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -12995,7 +13472,10 @@ async function generateAiVoucherBatch(callerToken, payload = {}) {
   for (let i = 0; i < count; i++) {
     const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
     const code = `VIP-${Math.floor(1000 + Math.random() * 9000)}-${randomHex}`;
-    const id = `VCH_${Date.now()}_${i}_${randomHex}`;
+    // The document id IS the code: the student app reads the single voucher doc
+    // for the exact code typed, which Firestore Rules can authorize per-document
+    // (a collection query cannot be proven safe).
+    const id = code;
     const voucher = {
       id,
       code,
@@ -13134,21 +13614,38 @@ async function redeemAiVoucher(callerToken, payload = {}) {
 
   if (!student) throw arabicServiceError('STUDENT_NOT_FOUND', 'الطالب غير موجود');
 
+  // A code already linked to another student can only be redeemed for that
+  // same student (re-linking is handled by the allocation flow, never here).
+  const allocatedTo = String(voucher.allocatedStudentId || '');
+  if (voucher.status === 'ALLOCATED' && allocatedTo && allocatedTo !== studentId) {
+    throw arabicServiceError('ALREADY_ALLOCATED', 'هذا الكود مرتبط مسبقاً بطالب آخر');
+  }
+
   // Update voucher state
   voucher.status = 'REDEEMED';
   voucher.redeemedByStudentId = studentId;
   voucher.redeemedByStudentName = student.name || 'طالب';
   voucher.redeemedAt = now;
 
-  // Update student quota & feature entitlements
-  const newBalance = (student.aiQuestionsBalance || 0) + voucher.quotaQuestions;
+  // Update student quota & feature entitlements. When the code was already
+  // linked (ALLOCATED) the quota was credited at link time — never credit it
+  // twice for the same code.
+  const entitlementsAlreadyGranted = Boolean(voucher.entitlementsGrantedAt);
+  const addedQuota = entitlementsAlreadyGranted ? 0 : voucher.quotaQuestions;
+  const newBalance = (student.aiQuestionsBalance || 0) + addedQuota;
   const existingFeatures = Array.isArray(student.unlockedFeatures) ? student.unlockedFeatures : [];
   const voucherFeatures = Array.isArray(voucher.features) ? voucher.features : ['ai_tutor'];
   const mergedFeatures = [...new Set([...existingFeatures, ...voucherFeatures])];
 
   student.isVip = true;
   student.aiQuestionsBalance = newBalance;
-  student.aiVipExpiresAt = voucher.expiresAt;
+  // Never shorten a live VIP window that a previously linked code granted.
+  const currentExpiryMs = Date.parse(student.aiVipExpiresAt || '');
+  const voucherExpiryMs = Date.parse(voucher.expiresAt || '');
+  student.aiVipExpiresAt = new Date(Math.max(
+    Number.isFinite(currentExpiryMs) ? currentExpiryMs : 0,
+    Number.isFinite(voucherExpiryMs) ? voucherExpiryMs : Date.now() + 30 * 24 * 60 * 60 * 1000
+  )).toISOString();
   student.unlockedFeatures = mergedFeatures;
   student.updatedAt = now;
 
@@ -13160,8 +13657,8 @@ async function redeemAiVoucher(callerToken, payload = {}) {
   // Sync to Firestore if online
   if (!isTestOffline()) {
     try {
-      if (vDocRef) await updateDoc(vDocRef, { status: 'REDEEMED', redeemedByStudentId: studentId, redeemedByStudentName: student.name || 'طالب', redeemedAt: now });
-      if (sDocRef) await updateDoc(sDocRef, { isVip: true, aiQuestionsBalance: newBalance, aiVipExpiresAt: voucher.expiresAt, unlockedFeatures: mergedFeatures, updatedAt: now });
+      if (vDocRef) await updateDoc(vDocRef, { status: 'REDEEMED', redeemedByStudentId: studentId, redeemedByStudentName: student.name || 'طالب', redeemedAt: now, entitlementsGrantedAt: voucher.entitlementsGrantedAt || now, updatedAt: now });
+      if (sDocRef) await updateDoc(sDocRef, { isVip: true, aiQuestionsBalance: newBalance, aiVipExpiresAt: student.aiVipExpiresAt, unlockedFeatures: mergedFeatures, updatedAt: now });
     } catch (fsErr) {
       console.warn('[RedeemVoucher] Firestore sync notice:', fsErr.message);
     }
@@ -13174,7 +13671,7 @@ async function redeemAiVoucher(callerToken, payload = {}) {
     institutionId: instId,
     targetType: 'VOUCHER',
     targetId: voucher.id || code,
-    details: { code, studentId, studentName: student.name, addedQuota: voucher.quotaQuestions, features: mergedFeatures }
+    details: { code, studentId, studentName: student.name, addedQuota, features: mergedFeatures }
   });
 
   // Automatically record cash collection in finance for sold voucher if price > 0
@@ -13246,15 +13743,24 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
 
   if (!voucher) throw arabicServiceError('VOUCHER_NOT_FOUND', 'كود الباقة غير صالح أو غير موجود');
   if (voucher.status === 'REDEEMED') throw arabicServiceError('ALREADY_REDEEMED', 'تم تفعيل واستخدام هذا الكود مسبقاً');
+  if (['EXPIRED', 'CANCELLED', 'REVOKED'].includes(String(voucher.status || '').toUpperCase())) {
+    throw arabicServiceError('VOUCHER_INACTIVE', 'هذا الكود لم يعد صالحاً — تواصل مع إدارة السنتر.');
+  }
+  const previouslyAllocatedTo = voucher.status === 'ALLOCATED' ? String(voucher.allocatedStudentId || '') : '';
+  if (previouslyAllocatedTo && previouslyAllocatedTo !== studentId) {
+    throw arabicServiceError('ALREADY_ALLOCATED', 'هذا الكود مرتبط مسبقاً بطالب آخر — اطلب كوداً جديداً أو ألغِ ربطه أولاً.');
+  }
 
   // Find student
   let student = null;
+  let sDocRef = null;
   if (isTestOffline()) {
     student = inMemoryStudents.get(`${instId}_${studentId}`);
   } else {
     try {
       const clientDb = await getClientFirestoreDb(token);
-      const sSnap = await getDoc(doc(clientDb, 'institutions', instId, 'students', studentId));
+      sDocRef = doc(clientDb, 'institutions', instId, 'students', studentId);
+      const sSnap = await getDoc(sDocRef);
       if (sSnap.exists()) student = sSnap.data();
     } catch (_) {}
     if (!student) student = inMemoryStudents.get(`${instId}_${studentId}`);
@@ -13262,15 +13768,42 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
 
   if (!student) throw arabicServiceError('STUDENT_NOT_FOUND', 'الطالب غير موجود');
 
+  // ربط الكود بالطالب = تفعيل فعلي لرصيد المساعد الذكي على ملف الطالب.
+  // (كان الربط يكتب حالة الكود فقط، فيبقى المساعد مقفلاً في تطبيق الطالب
+  // لأن شرط الفتح هو isVip + رصيد أسئلة على ملف الطالب نفسه.)
+  const quota = Number(voucher.quotaQuestions) || 0;
+  const entitlementsAlreadyGranted = Boolean(voucher.entitlementsGrantedAt);
+  const existingFeatures = Array.isArray(student.unlockedFeatures) ? student.unlockedFeatures : [];
+  const voucherFeatures = Array.isArray(voucher.features) && voucher.features.length ? voucher.features : ['ai_tutor'];
+  const mergedFeatures = [...new Set([...existingFeatures, ...voucherFeatures])];
+  const currentExpiryMs = Date.parse(student.aiVipExpiresAt || '');
+  const voucherExpiryMs = Date.parse(voucher.expiresAt || '');
+  const newExpiryMs = Math.max(
+    Number.isFinite(currentExpiryMs) ? currentExpiryMs : 0,
+    Number.isFinite(voucherExpiryMs) ? voucherExpiryMs : Date.now() + 30 * 24 * 60 * 60 * 1000
+  );
+  const newExpiry = new Date(newExpiryMs).toISOString();
+  const newBalance = (Number(student.aiQuestionsBalance) || 0) + (entitlementsAlreadyGranted ? 0 : quota);
+
   // Update voucher state to ALLOCATED (Linked to student, waiting for student activation)
   voucher.status = 'ALLOCATED';
   voucher.allocatedStudentId = studentId;
   voucher.allocatedStudentName = student.name || 'طالب';
-  voucher.allocatedAt = now;
+  voucher.allocatedAt = voucher.allocatedAt || now;
+  voucher.entitlementsGrantedAt = voucher.entitlementsGrantedAt || now;
+  voucher.updatedAt = now;
+
+  // Apply the entitlements on the student file (same contract redeem uses).
+  student.isVip = true;
+  student.aiQuestionsBalance = newBalance;
+  student.aiVipExpiresAt = newExpiry;
+  student.unlockedFeatures = mergedFeatures;
+  student.updatedAt = now;
 
   inMemoryAiVouchers.set(`${instId}_${code}`, voucher);
   const updatedLocal = localList.map(v => v.code === code ? voucher : v);
   writeLocalData(`ai_vouchers_${instId}`, updatedLocal);
+  if (isTestOffline()) inMemoryStudents.set(`${instId}_${studentId}`, { ...student });
 
   if (!isTestOffline()) {
     try {
@@ -13279,7 +13812,17 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
           status: 'ALLOCATED',
           allocatedStudentId: studentId,
           allocatedStudentName: student.name || 'طالب',
-          allocatedAt: now,
+          allocatedAt: voucher.allocatedAt,
+          entitlementsGrantedAt: voucher.entitlementsGrantedAt,
+          updatedAt: now
+        });
+      }
+      if (sDocRef) {
+        await updateDoc(sDocRef, {
+          isVip: true,
+          aiQuestionsBalance: newBalance,
+          aiVipExpiresAt: newExpiry,
+          unlockedFeatures: mergedFeatures,
           updatedAt: now
         });
       }
@@ -13295,7 +13838,7 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
     institutionId: instId,
     targetType: 'VOUCHER',
     targetId: voucher.id || code,
-    details: { code, studentId, studentName: student.name, quota: voucher.quotaQuestions }
+    details: { code, studentId, studentName: student.name, quota, addedQuota: entitlementsAlreadyGranted ? 0 : quota, newBalance, features: mergedFeatures }
   });
 
   return {
@@ -13304,7 +13847,10 @@ async function allocateAiVoucherToStudent(callerToken, payload = {}) {
     studentId,
     studentName: student.name,
     studentPhone: student.phone || student.guardianPhone,
-    quota: voucher.quotaQuestions,
+    quota,
+    newBalance,
+    isVip: true,
+    aiVipExpiresAt: newExpiry,
     voucher
   };
 }
@@ -13427,7 +13973,13 @@ module.exports = {
   // Students (Batch A canonical)
   getStudents,
   getStudentById,
+  diagnoseStudentAuthLink,
+  classifyStudentAuthLink,
   createStudent,
+  provisionStudentAuthAccount,
+  deleteFreshStudentAuthAccount,
+  studentAuthUidFromProvisionResult,
+  runStudentCreateStage,
   addStudent,
   updateStudent,
   archiveStudent,
@@ -13435,6 +13987,7 @@ module.exports = {
   // Student Authentication Management
   generateStudentPin,
   resetStudentPassword,
+  writeStudentPasswordResetPatch,
   getStudentAccountStatus,
   // Teachers
   getTeachers,
@@ -13876,4 +14429,3 @@ async function generateBarcode(callerToken, payload = {}) {
   });
   return { success: true, dataUrl: `data:image/png;base64,${png.toString('base64')}` };
 }
-

@@ -35,7 +35,11 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      // The renderer runs a 30s session auto start/close poller; Chromium
+      // throttles background timers to once per minute when the window is
+      // minimized or unfocused, which delayed/missed scheduled transitions.
+      backgroundThrottling: false
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
   });

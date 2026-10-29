@@ -1,30 +1,30 @@
 {
-  "patchVersion": "1.0.0-hp.53.2.6",
+  "patchVersion": "1.0.0-hp.53.2.7",
   "targetVersion": "1.0.0-release.53.0.0",
-  "publishedAt": "2026-10-26T23:25:27.148Z",
+  "publishedAt": "2026-10-29T01:32:18.054Z",
   "active": true,
-  "description": "ضمان توليد أسئلة الاختبارات باللغة العربية 100% وتنقية بيانات ملفات PDF المصورة",
-  "totalSizeKb": "1659.6",
+  "description": "إصلاح 3 أخطاء: اسم الطالب الحقيقي (حقل name)، تفعيل المساعد الذكي فور ربط كود VIP بالطالب، والفتح/الإغلاق التلقائي للحصص بتوقيت الجهاز المحلي",
+  "totalSizeKb": "1699.4",
   "files": [
     {
       "relativePath": "src/desktop_app.js",
       "filename": "desktop_app.js",
-      "size": 970546,
-      "sha256": "85e2fd76ced72160088dbe5363072da6b7709aac921f4835f08432c92ee9cc57",
+      "size": 988305,
+      "sha256": "6ac73f953e2ad15cee2b3b62cf64a1f383759c7927551e29d8ffd440179d5609",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/desktop_app.js"
     },
     {
       "relativePath": "src/center_desktop_services.js",
       "filename": "center_desktop_services.js",
-      "size": 691596,
-      "sha256": "170fc4fe7109737ba0ba89dfd994a3c60bea64ffd40d4ab47fd30ec8d193d42f",
+      "size": 713873,
+      "sha256": "c952676b1542d56d17535354524b586f267856387013e0625e7a16f7e40f22c8",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/center_desktop_services.js"
     },
     {
       "relativePath": "src/hotpatch_service.js",
       "filename": "hotpatch_service.js",
-      "size": 17316,
-      "sha256": "2f845049c91dd69212ddf402e215fcdd54ecaed951dda4f0cbe7e1cc87c7baf0",
+      "size": 17955,
+      "sha256": "fce83739b27345bb39d1e3630fd82ebb53f4b48a2fe5b4f6694de91aff982d4a",
       "url": "https://raw.githubusercontent.com/ahpalll/remas/master/center-desktop/release_hotpatches/hotpatch_service.js"
     },
     {

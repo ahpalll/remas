@@ -1349,6 +1349,9 @@ function showToast(msg, isError = false) {
 // ----------------------------------------------------------------------------
 function friendlyBatchAError(err) {
   const raw = (err && err.message) ? err.message : String(err || 'حدث خطأ');
+  if (err && err.code === 'STUDENT_CREATE_PERMISSION_DENIED') {
+    return raw.split(':').slice(1).join(':').trim();
+  }
   if (raw.includes('GROUP_FULL') || raw.includes('GROUP_CAPACITY_EXCEEDED') || raw.includes('FULL_GROUP')) {
     const m = raw.match(/\((\d+)\/(\d+)\)/);
     return m ? `المجموعة ممتلئة ولا توجد مقاعد متاحة (${m[1]}/${m[2]})` : 'المجموعة ممتلئة ولا توجد مقاعد متاحة';
@@ -1367,7 +1370,13 @@ function friendlyBatchAError(err) {
   if (raw.includes('DUPLICATE_STUDENT')) return 'يوجد طالب بنفس رقم الهاتف مسجل مسبقاً في هذا المركز';
   if (raw.includes('INVALID_PHONE') || raw.includes('INVALID_GUARDIAN_PHONE')) return 'رقم الهاتف غير صالح — يجب أن يكون رقماً مصرياً صحيحاً (مثال: 01012345678)';
   if (raw.includes('NOT_FOUND')) return 'السجل المطلوب غير موجود';
-  if (raw.includes('PERMISSION') || raw.includes('UNAUTHENTICATED') || raw.includes('UNAUTHORIZED')) return 'غير مصرح — تحقق من الصلاحيات وتسجيل الدخول';
+  if (raw.includes('PERMISSION_DENIED') && raw.includes('صلاحية مرفوضة')) {
+    return raw.split(':').slice(1).join(':').trim();
+  }
+  if (err && err.code === 'permission-denied') {
+    return 'رفضت Firestore العملية بسبب صلاحيات قراءة أو كتابة غير كافية. لا تغيّر قواعد Firestore؛ اطلب من مدير المؤسسة مراجعة صلاحية إنشاء الطلاب ومسار الكتابة.';
+  }
+  if (raw.includes('PERMISSION_DENIED') || raw.includes('UNAUTHENTICATED') || raw.includes('UNAUTHORIZED')) return 'غير مصرح — تحقق من الصلاحيات وتسجيل الدخول';
   if (raw.includes('NETWORK_TIMEOUT')) return 'استغرقت العملية وقتاً أطول من المعتاد — يرجى المحاولة مرة أخرى أو تقليل عدد الأسئلة/الصفحات';
   if (raw.includes('NETWORK_DISCONNECTED') || raw.includes('ERR_INTERNET_DISCONNECTED')) return 'تعذر الاتصال — تحقق من الإنترنت وحاول مجدداً';
   const parts = raw.split(':');
@@ -2084,6 +2093,7 @@ async function renderStudentsView(container) {
                 </div></td>
                 <td><div style="display:flex; gap:0.25rem; flex-wrap:wrap;">
                   <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.72rem; background:#0284c7;" onclick="showStudentPinModal('${s.id}')">🔑 الـ PIN</button>
+                  <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.72rem; background:#0f766e;" onclick="diagnoseStudentAuthLink('${s.id}')">فحص ربط Auth</button>
                   <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.72rem; background:#8b5cf6;" onclick="viewStudentDetailsModal('${s.id}')">البروفايل</button>
                   <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.72rem;" onclick="openStudentGroupsModal('${s.id}')">المجموعات</button>
                   <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.72rem; background:#475569;" onclick="openEditStudentModal('${s.id}')">تعديل</button>
@@ -2128,6 +2138,87 @@ function filterStudentsTable() {
   });
 }
 
+function diagnoseStudentAuthLink(studentId) {
+  const container = document.getElementById('modalContainer');
+  const selectedDocumentPath =
+    `institutions/${currentCallerToken.institutionId}/students/${studentId}`;
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:520px; max-width:94vw;">
+        <div class="modal-header">فحص ربط حساب الطالب</div>
+        <p style="color:#cbd5e1;">أدخل UID حساب الطالب من Firebase Authentication. لا تستخدم UID مالك المؤسسة. لن يُحفظ UID أو يظهر في نتيجة الفحص.</p>
+        <p style="color:#94a3b8; word-break:break-all;">المستند المحدد: <code>${escapeHtml(studentId)}</code><br>المسار: <code>${escapeHtml(selectedDocumentPath)}</code></p>
+        <input id="studentAuthDiagnosticUid" type="password" autocomplete="off" spellcheck="false"
+          placeholder="UID حساب الطالب"
+          style="width:100%; box-sizing:border-box; margin:0.75rem 0; padding:0.7rem; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff;">
+        <div id="studentAuthDiagnosticResult" role="status" aria-live="polite" style="min-height:1.5rem; color:#94a3b8; margin:0.5rem 0;"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button class="btn" id="studentAuthDiagnosticClose" style="background:#334155;">إغلاق</button>
+          <button class="btn btn-primary" id="studentAuthDiagnosticSubmit">بدء الفحص</button>
+        </div>
+      </div>
+    </div>`;
+
+  const uidInput = document.getElementById('studentAuthDiagnosticUid');
+  const resultElement = document.getElementById('studentAuthDiagnosticResult');
+  const submitButton = document.getElementById('studentAuthDiagnosticSubmit');
+  document.getElementById('studentAuthDiagnosticClose').addEventListener('click', closeModal);
+  submitButton.addEventListener('click', async () => {
+    const authenticatedStudentUid = uidInput.value.trim();
+    if (!authenticatedStudentUid) {
+      resultElement.textContent = 'أدخل UID حساب الطالب أولًا.';
+      resultElement.style.color = '#fca5a5';
+      uidInput.focus();
+      return;
+    }
+
+    submitButton.disabled = true;
+    uidInput.disabled = true;
+    resultElement.textContent = 'جارٍ التحقق من الحساب وملف الطالب داخل مؤسسة الجلسة...';
+    resultElement.style.color = '#93c5fd';
+    try {
+      const result = await callBackend('diagnoseStudentAuthLink', currentCallerToken, {
+        studentId,
+        institutionId: currentCallerToken.institutionId,
+        authenticatedStudentUid
+      });
+      if (
+        !result ||
+        !['MATCH', 'MISMATCH', 'MISSING'].includes(result.result) ||
+        !['MATCH', 'MISMATCH', 'MISSING'].includes(result.authUidState) ||
+        result.studentDocumentId !== studentId ||
+        result.studentDocumentPath !== selectedDocumentPath ||
+        typeof result.statusMatches !== 'boolean' ||
+        typeof result.institutionMatches !== 'boolean' ||
+        typeof result.projectMatches !== 'boolean'
+      ) {
+        throw new Error('INVALID_DIAGNOSTIC_RESULT');
+      }
+
+      uidInput.value = '';
+      resultElement.style.color = result.result === 'MATCH' ? '#86efac' : '#fcd34d';
+      resultElement.innerHTML =
+        `<strong>ربط الحساب: ${result.result}</strong><br>` +
+        `حالة authUid: ${result.authUidState}<br>` +
+        `معرّف المستند: <code>${escapeHtml(result.studentDocumentId)}</code><br>` +
+        `مسار المستند: <code>${escapeHtml(result.studentDocumentPath)}</code><br>` +
+        `حالة السجل: ${result.statusMatches ? 'مطابقة' : 'غير مطابقة'}<br>` +
+        `المؤسسة: ${result.institutionMatches ? 'مطابقة' : 'غير مطابقة'}<br>` +
+        `مشروع Firebase: ${result.projectMatches ? 'مطابق' : 'غير مطابق'}`;
+    } catch (error) {
+      uidInput.value = '';
+      const code = error && error.code ? String(error.code) : 'UNKNOWN_ERROR';
+      resultElement.textContent = `فشل الفحص (${code}): ${friendlyBatchAError(error)}`;
+      resultElement.style.color = '#fca5a5';
+    } finally {
+      submitButton.disabled = false;
+      uidInput.disabled = false;
+      uidInput.focus();
+    }
+  });
+  uidInput.focus();
+}
+
 // 2.5 Student Cards & Barcodes View
 let cardSearchQuery = '';
 async function renderCardsView(container) {
@@ -2136,6 +2227,7 @@ async function renderCardsView(container) {
     const cards = await callBackend('getStudentCards', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
     const students = await callBackend('getStudents', currentCallerToken, { institutionId: currentCallerToken.institutionId }).catch(() => []) || [];
     const studentMap = new Map((students || []).map(s => [s.id, s]));
+    window._cardsContext = { cards: cards || [], students: students || [] };
 
     const assignedCount = cards.filter(c => c.status === 'ASSIGNED').length;
     const availableCount = cards.filter(c => c.status === 'AVAILABLE').length;
@@ -2232,7 +2324,12 @@ async function renderCardsView(container) {
                   const statusText = isAssigned ? 'مسند لطالب 🟢' : (isAvailable ? 'شاغر متاح 🔵' : 'ملغى 🛑');
                   return `
                     <tr>
-                      <td><span class="code-box" style="font-weight:700; color:#38bdf8; font-size:0.85rem;">${escapeHtmlAttr(c.cardCode || c.id)}</span></td>
+                      <td>
+                        <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                          <span class="code-box" style="font-weight:700; color:#38bdf8; font-size:0.85rem;">${escapeHtmlAttr(c.cardCode || c.id)}</span>
+                          ${isAvailable ? `<button class="btn" style="padding:0.2rem 0.5rem; font-size:0.72rem; background:#7c3aed;" onclick="openLinkCardToStudentModal('${c.id}')" title="ربط هذا الكارت بطالب">🔗 ربط بطالب</button>` : ''}
+                        </div>
+                      </td>
                       <td><strong style="color:#f1f5f9;">${stu ? escapeHtmlAttr(stu.name) : '<span style="color:#64748b;">— غير مسند —</span>'}</strong></td>
                       <td style="color:#cbd5e1;">${stu ? escapeHtmlAttr(stu.grade || '—') : '—'}</td>
                       <td><span class="badge" style="${badgeStyle}">${statusText}</span></td>
@@ -2305,6 +2402,88 @@ async function submitGenerateCards() {
   } catch (err) {
     showToast(friendlyBatchAError(err), true);
     if (btn) btn.disabled = false;
+  }
+}
+
+// Barcode → card → student link from the center panel.
+// Only an AVAILABLE, unassigned card can be linked, and a student can never
+// hold two active cards — the service re-checks both inside the write path.
+async function openLinkCardToStudentModal(cardId) {
+  const ctx = window._cardsContext || { cards: [], students: [] };
+  const card = (ctx.cards || []).find(c => c.id === cardId);
+  if (!card) { showToast('تعذر العثور على الكارت المحدد — أعد تحميل الشاشة', true); return; }
+  if (card.status !== 'AVAILABLE' || card.studentId) {
+    showToast('هذا الكارت مرتبط بطالب بالفعل. استخدم الاستبدال من ملف الطالب.', true);
+    return;
+  }
+  const container = document.getElementById('modalContainer');
+  const students = (ctx.students || []).filter(s => s.status !== 'ARCHIVED');
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal-card" style="width:560px; max-height:86vh; overflow-y:auto;">
+        <div class="modal-header">🔗 ربط الكارت <span class="code-box" style="color:#38bdf8;">${escapeHtmlAttr(card.cardCode || card.id)}</span> بطالب</div>
+        <div class="form-group"><label>بحث بالاسم أو كود الطالب أو الهاتف</label><input type="text" id="mLinkCardSearch" placeholder="🔍 ابحث..." oninput="filterLinkCardStudents(this.value)"></div>
+        <div id="mLinkCardStudentsBox" style="max-height:320px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;"></div>
+        <div id="mLinkCardErr" style="color:#fca5a5; font-size:0.75rem; margin-top:0.35rem;"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
+          <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
+        </div>
+      </div>
+    </div>`;
+  window._linkCardState = { cardId, cardCode: card.cardCode || card.id, students, selected: null };
+  renderLinkCardStudents('');
+}
+
+function filterLinkCardStudents(q) {
+  renderLinkCardStudents(q || '');
+}
+
+function renderLinkCardStudents(q) {
+  const box = document.getElementById('mLinkCardStudentsBox');
+  const state = window._linkCardState;
+  if (!box || !state) return;
+  const needle = (q || '').toLowerCase().trim();
+  const list = (state.students || []).filter(s => {
+    if (!needle) return true;
+    return [s.name, s.studentCode, s.phone, s.guardianPhone].some(v => (v || '').toString().toLowerCase().includes(needle));
+  });
+  if (list.length === 0) {
+    box.innerHTML = '<p style="color:#94a3b8; font-size:0.85rem;">لا يوجد طالب مطابق. تحقق من التسجيل أولاً.</p>';
+    return;
+  }
+  box.innerHTML = list.slice(0, 100).map(s => {
+    const hasCard = !!(s.studentCardId || s.attendanceCardCode);
+    return `<label style="display:flex; gap:0.6rem; padding:0.55rem; border:1px solid #334155; border-radius:6px; margin-bottom:0.4rem; background:#1e293b; cursor:pointer;">
+      <input type="radio" name="mLinkCardStudent" value="${s.id}" onchange="selectLinkCardStudent('${s.id}')">
+      <span style="flex:1;">
+        <strong>${escapeHtmlAttr(s.name)}</strong> <span class="code-box" style="font-size:0.65rem;">${escapeHtmlAttr(s.studentCode || s.id)}</span><br>
+        <span style="font-size:0.8rem; color:#94a3b8;">هاتف: ${escapeHtmlAttr(s.phone || '-')} | المرحلة: ${escapeHtmlAttr(s.stageName || s.stage || '-')}${hasCard ? ' | لديه كارت حالياً ⚠️' : ''}</span>
+      </span>
+    </label>`;
+  }).join('');
+}
+
+function selectLinkCardStudent(studentId) {
+  if (window._linkCardState) window._linkCardState.selected = studentId;
+  submitLinkCardToStudent();
+}
+
+async function submitLinkCardToStudent() {
+  const state = window._linkCardState;
+  const errBox = document.getElementById('mLinkCardErr');
+  if (errBox) errBox.innerText = '';
+  if (!state || !state.selected) return;
+  const studentId = state.selected;
+  try {
+    const res = await callBackend('assignStudentCard', currentCallerToken, studentId, state.cardId, currentCallerToken.institutionId);
+    closeModal();
+    const studentName = res && res.student ? (res.student.name || '') : '';
+    showToast(`تم ربط الكارت ${state.cardCode} ${studentName ? 'بالطالب ' + studentName : 'بالطالب'} بنجاح`);
+    window._linkCardState = null;
+    await renderActiveView('cards');
+  } catch (err) {
+    if (errBox) errBox.innerText = friendlyBatchAError(err);
+    showToast(friendlyBatchAError(err), true);
   }
 }
 
@@ -3545,8 +3724,19 @@ const SESSION_STATUS_AR = {
   CANCELLED: 'ملغاة ❌'
 };
 
+// Local calendar day ("YYYY-MM-DD"). NEVER use toISOString().split('T')[0]
+// here: that is the UTC day, which is wrong for the early local hours
+// (e.g. 02:50 local == 00:50 UTC) and left today's sessions stuck at
+// "مجدولة" because they never compared as due.
+function localDayString(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function filterTodaySessions() {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDayString();
   const searchInput = document.getElementById('sessionSearchInput');
   if (searchInput) searchInput.value = todayStr;
   filterSessionsTable();
@@ -3561,50 +3751,69 @@ function openRecordAttendanceForSession(sessionId) {
 
 async function checkAndAutoStartDueSessions() {
   if (!currentCallerToken || !currentCallerToken.institutionId) return;
+  // A poll that is still running must not overlap the next 30s tick.
+  if (window._sessionAutoStartBusy) return;
+  window._sessionAutoStartBusy = true;
   try {
-    const sessions = await callBackend('getSessions', currentCallerToken, { institutionId: currentCallerToken.institutionId }) || [];
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    // Local calendar day — toISOString() gives the UTC day, which breaks the
+    // comparison during the first hours after local midnight.
+    const todayStr = localDayString(now);
+    const yesterdayStr = localDayString(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     const nowHours = String(now.getHours()).padStart(2, '0');
     const nowMins = String(now.getMinutes()).padStart(2, '0');
     const nowTimeStr = `${nowHours}:${nowMins}`;
 
+    // Only the sessions that can still transition: yesterday (late close) and
+    // today. Fetching the whole collection kept the oldest 500 rows and could
+    // drop today's sessions entirely on a busy center.
+    const sessions = await callBackend('getSessions', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      startDate: yesterdayStr,
+      endDate: todayStr
+    }) || [];
+
     let shouldRefresh = false;
 
     for (const s of sessions) {
-      const sDate = s.date || s.sessionDate || todayStr;
+      // A failure on one session must never abort the remaining transitions.
+      try {
+        const sDate = s.date || s.sessionDate || todayStr;
 
-      // 1. Auto-Start: Open scheduled session when scheduled start time arrives
-      if (s.status === 'SCHEDULED' && sDate && s.startTime) {
-        const isDue = sDate < todayStr || (sDate === todayStr && nowTimeStr >= s.startTime);
-        const notEnded = !s.endTime || sDate < todayStr || nowTimeStr < s.endTime;
-        if (isDue && notEnded) {
-          console.log(`[AutoStart] Session ${s.id} (${s.title}) reached scheduled time (${s.startTime}). Auto-starting...`);
-          await callBackend('startSession', currentCallerToken, s.id, currentCallerToken.institutionId);
-          showToast(`🔔 حان موعد حصة: "${s.title}" — تم فتح الحصة تلقائياً وبدء استقبال الحضور بالباركود! 🟢`);
-          playAudioNotification('attendance');
-          addNotificationAlert('بدء حصة تلقائياً', `تم فتح الحصة "${s.title}" تلقائياً لحلول وقت البدء المحدد (${s.startTime}).`, 'attendance');
-          shouldRefresh = true;
-        } else if (isDue && !notEnded) {
-          // Both start time and end time passed before opening: close directly
-          console.log(`[AutoClose] Scheduled session ${s.id} (${s.title}) was never opened and passed end time (${s.endTime}). Closing...`);
-          await callBackend('closeSession', currentCallerToken, s.id, currentCallerToken.institutionId);
-          showToast(`⏹️ انتهى الموعد المحدد لحصة: "${s.title}" — تم إغلاق الحصة تلقائياً.`);
-          shouldRefresh = true;
+        // 1. Auto-Start: Open scheduled session when scheduled start time arrives
+        if (s.status === 'SCHEDULED' && sDate && s.startTime) {
+          const isDue = sDate < todayStr || (sDate === todayStr && nowTimeStr >= s.startTime);
+          const notEnded = !s.endTime || sDate < todayStr || nowTimeStr < s.endTime;
+          if (isDue && notEnded) {
+            console.log(`[AutoStart] Session ${s.id} (${s.title}) reached scheduled time (${s.startTime}). Auto-starting...`);
+            await callBackend('startSession', currentCallerToken, s.id, currentCallerToken.institutionId);
+            showToast(`🔔 حان موعد حصة: "${s.title}" — تم فتح الحصة تلقائياً وبدء استقبال الحضور بالباركود! 🟢`);
+            playAudioNotification('attendance');
+            addNotificationAlert('بدء حصة تلقائياً', `تم فتح الحصة "${s.title}" تلقائياً لحلول وقت البدء المحدد (${s.startTime}).`, 'attendance');
+            shouldRefresh = true;
+          } else if (isDue && !notEnded) {
+            // Both start time and end time passed before opening: close directly
+            console.log(`[AutoClose] Scheduled session ${s.id} (${s.title}) was never opened and passed end time (${s.endTime}). Closing...`);
+            await callBackend('closeSession', currentCallerToken, s.id, currentCallerToken.institutionId);
+            showToast(`⏹️ انتهى الموعد المحدد لحصة: "${s.title}" — تم إغلاق الحصة تلقائياً.`);
+            shouldRefresh = true;
+          }
         }
-      }
 
-      // 2. Auto-Close: Close open session when scheduled end time arrives
-      if (s.status === 'OPEN' && s.endTime) {
-        const isPastEnd = sDate < todayStr || (sDate === todayStr && nowTimeStr >= s.endTime);
-        if (isPastEnd) {
-          console.log(`[AutoClose] Open session ${s.id} (${s.title}) reached scheduled end time (${s.endTime}). Auto-closing...`);
-          await callBackend('closeSession', currentCallerToken, s.id, currentCallerToken.institutionId);
-          showToast(`⏹️ انتهى الموعد المحدد لحصة: "${s.title}" (${s.endTime}) — تم إغلاق الحصة تلقائياً وإنهاء استقبال الحضور.`);
-          playAudioNotification('soft');
-          addNotificationAlert('إغلاق حصة تلقائياً', `تم إغلاق الحصة "${s.title}" تلقائياً لانتهاء وقتها المحدد (${s.endTime}).`, 'alert');
-          shouldRefresh = true;
+        // 2. Auto-Close: Close open session when scheduled end time arrives
+        if (s.status === 'OPEN' && s.endTime) {
+          const isPastEnd = sDate < todayStr || (sDate === todayStr && nowTimeStr >= s.endTime);
+          if (isPastEnd) {
+            console.log(`[AutoClose] Open session ${s.id} (${s.title}) reached scheduled end time (${s.endTime}). Auto-closing...`);
+            await callBackend('closeSession', currentCallerToken, s.id, currentCallerToken.institutionId);
+            showToast(`⏹️ انتهى الموعد المحدد لحصة: "${s.title}" (${s.endTime}) — تم إغلاق الحصة تلقائياً وإنهاء استقبال الحضور.`);
+            playAudioNotification('soft');
+            addNotificationAlert('إغلاق حصة تلقائياً', `تم إغلاق الحصة "${s.title}" تلقائياً لانتهاء وقتها المحدد (${s.endTime}).`, 'alert');
+            shouldRefresh = true;
+          }
         }
+      } catch (sessErr) {
+        console.warn(`[AutoSyncSessions] Session ${s && s.id} notice:`, sessErr && sessErr.message);
       }
     }
 
@@ -3617,6 +3826,8 @@ async function checkAndAutoStartDueSessions() {
     }
   } catch (err) {
     console.warn('[AutoSyncSessions] Notice:', err.message);
+  } finally {
+    window._sessionAutoStartBusy = false;
   }
 }
 
@@ -3629,7 +3840,14 @@ async function renderScheduleView(container) {
   checkAndAutoStartDueSessions();
   let sessions = [];
   try {
-    sessions = await callBackend('getSessions', currentCallerToken, { institutionId: currentCallerToken.institutionId }) || [];
+    // Bounded window instead of the whole collection: getSessions keeps the
+    // oldest 500 rows, so unbounded fetches could hide today's sessions.
+    const now = new Date();
+    sessions = await callBackend('getSessions', currentCallerToken, {
+      institutionId: currentCallerToken.institutionId,
+      startDate: localDayString(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)),
+      endDate: localDayString(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000))
+    }) || [];
   } catch (err) {
     console.error('Failed to get sessions:', err);
     sessions = [];
@@ -6238,7 +6456,8 @@ async function renderSubscriptionsView(container) {
 
   const activeTab = window._subActiveTab || 'plans';
   const activeVouchers = vouchers.filter(v => v.status === 'ACTIVE');
-  const redeemedVouchers = vouchers.filter(v => v.status === 'REDEEMED');
+  // Linked-but-not-yet-activated codes (ALLOCATED) count as issued, not lost.
+  const redeemedVouchers = vouchers.filter(v => v.status === 'REDEEMED' || v.status === 'ALLOCATED');
 
   container.innerHTML = `
     <div class="view-title">
@@ -6400,14 +6619,16 @@ async function renderSubscriptionsView(container) {
                     </td>
                     <td style="color:#4ade80; font-weight:bold;">${fmtMoney(v.price)}</td>
                     <td>
-                      ${v.status === 'ACTIVE' 
-                        ? '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للتسليم 🟢</span>' 
-                        : '<span class="badge" style="background:#451a03; color:#fde047;">مستخدم ومفعل ⚡</span>'}
+                      ${v.status === 'ACTIVE'
+                        ? '<span class="badge" style="background:#064e3b; color:#86efac;">متاح للتسليم 🟢</span>'
+                        : (v.status === 'ALLOCATED'
+                          ? '<span class="badge" style="background:#1e3a8a; color:#93c5fd;">مربوط بطالب — فعّال 🔗</span>'
+                          : '<span class="badge" style="background:#451a03; color:#fde047;">مستخدم ومفعل ⚡</span>')}
                     </td>
                     <td><small style="color:#94a3b8;">${(v.createdAt || '').split('T')[0]}</small></td>
                     <td>
-                      ${v.redeemedByStudentName 
-                        ? `<strong style="color:#f8fafc;">👨‍🎓 ${escapeHtmlAttr(v.redeemedByStudentName)}</strong>` 
+                      ${(v.redeemedByStudentName || v.allocatedStudentName)
+                        ? `<strong style="color:#f8fafc;">👨‍🎓 ${escapeHtmlAttr(v.redeemedByStudentName || v.allocatedStudentName)}</strong>`
                         : '<span style="color:#64748b;">—</span>'}
                     </td>
                     <td>
@@ -6415,9 +6636,11 @@ async function renderSubscriptionsView(container) {
                         <button class="btn btn-warning" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openRedeemVoucherModal('${v.code}')">
                           🔗 ربط بطالب
                         </button>
+                      ` : (v.status === 'ALLOCATED' ? `
+                        <span style="color:#93c5fd; font-size:0.75rem;">مُفعّل على ملف الطالب ✅</span>
                       ` : `
                         <span style="color:#64748b; font-size:0.75rem;">مكتمل ✅</span>
-                      `}
+                      `)}
                     </td>
                   </tr>
                 `).join('')}
@@ -6762,8 +6985,8 @@ async function submitAllocateVoucher() {
         <div class="modal-card" style="width:480px; background:#0f172a; border:1px solid #22c55e;">
           <div class="modal-header" style="color:#4ade80;">✅ تم ربط كود VIP بنجاح!</div>
           <div style="color:#cbd5e1; font-size:0.9rem; line-height:1.6; margin-bottom:1rem;">
-            تم ربط وتخصيص الكود للطالب <strong>${escapeHtmlAttr(res.studentName)}</strong> بنجاح.<br>
-            يمكن للطالب الآن إدخال الكود في تطبيق الطالب لفتح المساعد الذكي VIP.
+            تم ربط الكود وتفعيل رصيده على ملف الطالب <strong>${escapeHtmlAttr(res.studentName)}</strong> فوراً.<br>
+            المساعد الذكي VIP أصبح مفتوحاً في تطبيق الطالب${typeof res.newBalance === 'number' ? ` (الرصيد الآن: ${res.newBalance} سؤال)` : ''} — ويمكنه أيضاً إدخال الكود في التطبيق لتأكيد التفعيل.
           </div>
           <div style="background:#1e1b4b; border:2px dashed #8b5cf6; border-radius:8px; padding:1rem; text-align:center; margin-bottom:1.2rem;">
             <div style="font-size:0.8rem; color:#a5b4fc; font-weight:bold;">كود التفعيل (VIP Code)</div>
@@ -9116,9 +9339,11 @@ async function openAddStudentModal() {
           <div class="form-group"><label>اسم ولي الأمر *</label><input type="text" id="mGuardianName" placeholder="محمد علي"></div>
           <div class="form-group"><label>السنة الدراسية *</label><select id="mStudentYear" onchange="onStudentModalYearChange()">${activeYears.map(y => `<option value="${y.id}">${escapeHtmlAttr(y.name)}</option>`).join('') || '<option value="">لا توجد سنة نشطة — أضف من الإعداد الأكاديمي</option>'}</select></div>
           <div class="form-group"><label>المرحلة الدراسية *</label><select id="mStudentStage" onchange="onStudentModalStageChange()">${activeStages.map(s => `<option value="${s.id}" data-year="${s.academicYearId || ''}">${escapeHtmlAttr(s.name)}</option>`).join('') || '<option value="">لا توجد مراحل — أضف من الإعداد الأكاديمي</option>'}</select><div id="mStageGroupHint" style="color:#94a3b8; font-size:0.75rem; margin-top:0.25rem;"></div></div>
+          <div class="form-group"><label>المادة الدراسية * (مواد المرحلة المختارة فقط)</label><select id="mStudentSubject" onchange="onStudentModalSubjectChange()"></select><div id="mSubjectGroupHint" style="color:#94a3b8; font-size:0.75rem; margin-top:0.25rem;"></div></div>
         </div>
-        <div class="form-group"><label>بحث في المجموعات</label><input type="text" id="mGroupSearch" placeholder="🔍 ابحث باسم المجموعة، المادة أو المعلم..." oninput="onStudentModalGroupSearch(this.value)"></div>
-        <div class="form-group"><label>المجموعات (اختيار متعدد — تظهر فقط مجموعات المرحلة المحددة)</label><div id="mStudentGroupsBox" style="max-height:220px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;"></div><div id="mGroupsErr" style="color:#fca5a5; font-size:0.75rem; margin-top:0.25rem;"></div></div>
+        <div class="form-group"><label>بحث في المجموعات</label><input type="text" id="mGroupSearch" placeholder="🔍 ابحث باسم المجموعة أو المعلم..." oninput="onStudentModalGroupSearch(this.value)"></div>
+        <div class="form-group"><label>المجموعات المتاحة للمادة والمرحلة (اختر المجموعة صراحةً)</label><div id="mStudentGroupsBox" style="max-height:220px; overflow-y:auto; border:1px solid #334155; border-radius:6px; padding:0.5rem; background:#0f172a;"></div><div id="mGroupsErr" style="color:#fca5a5; font-size:0.75rem; margin-top:0.25rem;"></div></div>
+        <div class="form-group"><label>كود كارنيه الباركود (اختياري — امسح أو اكتب كود الكارت الجاهز لربطه بالطالب)</label><input type="text" id="mStudentCardCode" placeholder="REMAS-XXXX" style="font-family:monospace; letter-spacing:1px;"><div id="mCardCodeHint" style="color:#94a3b8; font-size:0.75rem; margin-top:0.25rem;"></div></div>
         <div class="form-group"><label>ملاحظات</label><input type="text" id="mStudentNotes" placeholder="ملاحظات اختيارية"></div>
         <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
           <button class="btn" style="background:#475569;" onclick="closeModal()">إلغاء</button>
@@ -9129,6 +9354,52 @@ async function openAddStudentModal() {
     onStudentModalStageChange();
   } catch (err) {
     container.innerHTML = `<div class="modal-overlay"><div class="modal-card"><p style="color:#fca5a5;">${friendlyBatchAError(err)}</p><button class="btn" onclick="closeModal()">إغلاق</button></div></div>`;
+  }
+}
+
+function studentModalEffectiveStages(subject) {
+  if (subject && Array.isArray(subject.stageIds) && subject.stageIds.length) return subject.stageIds;
+  return subject && subject.stageId ? [subject.stageId] : [];
+}
+
+function studentModalSubjectsForStage(stageId) {
+  const subjects = (window._batchA && window._batchA.subjects) || [];
+  return subjects.filter(s => {
+    if (s.status === 'ARCHIVED') return false;
+    const eff = studentModalEffectiveStages(s);
+    if (!stageId) return true;
+    return eff.length === 0 || eff.includes(stageId);
+  });
+}
+
+// Subjects are rebuilt from the REAL subjects of the selected stage; nothing is
+// pre-selected silently and no legacy group.subjectName is trusted.
+function refreshStudentSubjectOptions(stageId) {
+  const sel = document.getElementById('mStudentSubject');
+  if (!sel) return '';
+  const previous = sel.value;
+  const list = studentModalSubjectsForStage(stageId);
+  // No implicit subject: the operator must choose it (step 2 of the flow).
+  sel.innerHTML = list.length
+    ? `<option value="">— اختر المادة الدراسية —</option>${list.map(s => `<option value="${s.id}">${escapeHtmlAttr(s.name)}</option>`).join('')}`
+    : '<option value="">لا توجد مواد لهذه المرحلة — أضف المادة من الإعداد الأكاديمي</option>';
+  if (list.some(s => s.id === previous)) sel.value = previous;
+  return sel.value || '';
+}
+
+function updateStudentModalGroupHints(stageId, subjectId) {
+  const groups = (window._batchA && window._batchA.groups) || [];
+  const stageHint = document.getElementById('mStageGroupHint');
+  const subjectHint = document.getElementById('mSubjectGroupHint');
+  const stageGroups = groups.filter(g => g.status !== 'ARCHIVED' && (!stageId || !g.stageId || g.stageId === stageId));
+  const subjectGroups = stageGroups.filter(g => !subjectId || g.subjectId === subjectId);
+  if (stageHint) stageHint.innerText = stageId ? `مجموعات هذه المرحلة: ${stageGroups.length}` : 'اختر المرحلة لعرض المجموعات المتاحة';
+  if (subjectHint) {
+    subjectHint.innerText = !stageId
+      ? 'اختر المرحلة أولاً لعرض موادها'
+      : (!subjectId
+        ? 'اختر المادة لعرض مجموعاتها فقط'
+        : `مجموعات المادة المختارة: ${subjectGroups.length} — اختر المجموعة الصحيحة بنفسك`);
   }
 }
 
@@ -9146,20 +9417,28 @@ function onStudentModalYearChange() {
 function onStudentModalStageChange() {
   const stageId = document.getElementById('mStudentStage')?.value || '';
   const box = document.getElementById('mStudentGroupsBox');
-  const hint = document.getElementById('mStageGroupHint');
   if (!box || !window._batchA) return;
-  renderStudentGroupOptions(stageId, document.getElementById('mGroupSearch')?.value || '');
-  const groups = window._batchA.groups || [];
-  const valid = groups.filter(g => g.status === 'ACTIVE' && (!stageId || !g.stageId || g.stageId === stageId));
-  if (hint) hint.innerText = stageId ? `المجموعات المتاحة لهذه المرحلة: ${valid.length}` : 'اختر المرحلة لعرض المجموعات المتاحة';
+  const subjectId = refreshStudentSubjectOptions(stageId);
+  renderStudentGroupOptions(stageId, document.getElementById('mGroupSearch')?.value || '', subjectId);
+  updateStudentModalGroupHints(stageId, subjectId);
+}
+
+function onStudentModalSubjectChange() {
+  const stageId = document.getElementById('mStudentStage')?.value || '';
+  const subjectId = document.getElementById('mStudentSubject')?.value || '';
+  renderStudentGroupOptions(stageId, document.getElementById('mGroupSearch')?.value || '', subjectId);
+  updateStudentModalGroupHints(stageId, subjectId);
+  const errBox = document.getElementById('mGroupsErr');
+  if (errBox) errBox.innerText = '';
 }
 
 function onStudentModalGroupSearch(q) {
   const stageId = document.getElementById('mStudentStage')?.value || '';
-  renderStudentGroupOptions(stageId, q || '');
+  const subjectId = document.getElementById('mStudentSubject')?.value || '';
+  renderStudentGroupOptions(stageId, q || '', subjectId);
 }
 
-function renderStudentGroupOptions(stageId, searchQ) {
+function renderStudentGroupOptions(stageId, searchQ, subjectId) {
   const box = document.getElementById('mStudentGroupsBox');
   if (!box || !window._batchA) return;
   const { groups = [], subjects = [], teachers = [], rooms = [] } = window._batchA;
@@ -9167,14 +9446,21 @@ function renderStudentGroupOptions(stageId, searchQ) {
   const teacherMap = new Map(teachers.map(t => [t.id, t.fullName || t.name]));
   const roomMap = new Map(rooms.map(r => [r.id, r.name]));
   const q = (searchQ || '').toLowerCase().trim();
+  // Stage AND subject are both enforced: a group of another subject must never
+  // be offered, so two same-subject groups stay individually selectable.
   const list = groups.filter(g => {
     if (g.status === 'ARCHIVED') return false;
     if (stageId && g.stageId && g.stageId !== stageId) return false;
+    if (subjectId && g.subjectId !== subjectId) return false;
     if (q && !((g.name || '').toLowerCase().includes(q) || (subjectMap.get(g.subjectId) || '').toLowerCase().includes(q) || (teacherMap.get(g.teacherId) || '').toLowerCase().includes(q))) return false;
     return true;
   });
+  if (!subjectId) {
+    box.innerHTML = '<p style="color:#94a3b8; font-size:0.85rem;">اختر المادة الدراسية أولاً لعرض المجموعات المرتبطة بها.</p>';
+    return;
+  }
   if (list.length === 0) {
-    box.innerHTML = '<p style="color:#94a3b8; font-size:0.85rem;">لا توجد مجموعات متاحة لهذه المرحلة. أنشئ مجموعة من شاشة المجموعات أولاً.</p>';
+    box.innerHTML = '<p style="color:#94a3b8; font-size:0.85rem;">لا توجد مجموعات لهذه المادة والمرحلة. أنشئ مجموعة من شاشة المجموعات أولاً.</p>';
     return;
   }
   box.innerHTML = list.map(g => {
@@ -9204,6 +9490,8 @@ async function submitAddStudent() {
   const guardianName = document.getElementById('mGuardianName')?.value || '';
   const academicYearId = document.getElementById('mStudentYear')?.value || '';
   const stageId = document.getElementById('mStudentStage')?.value || '';
+  const subjectId = document.getElementById('mStudentSubject')?.value || '';
+  const cardCode = (document.getElementById('mStudentCardCode')?.value || '').trim().toUpperCase();
   const notes = document.getElementById('mStudentNotes')?.value || '';
   const selectedGroups = Array.from(document.querySelectorAll('.mStudentGroupChk:checked')).map(c => c.value);
   const errBox = document.getElementById('mGroupsErr');
@@ -9212,12 +9500,26 @@ async function submitAddStudent() {
   if (!phone.trim()) { showToast('رقم هاتف الطالب مطلوب', true); return; }
   if (!guardianPhone.trim()) { showToast('هاتف ولي الأمر مطلوب', true); return; }
   if (!guardianName.trim()) { showToast('اسم ولي الأمر مطلوب', true); return; }
+  if (!stageId) { showToast('اختر المرحلة الدراسية أولاً', true); return; }
+  if (!subjectId) { showToast('اختر المادة الدراسية المتاحة لهذه المرحلة', true); return; }
+  if (selectedGroups.length === 0) {
+    if (errBox) errBox.innerText = 'اختر مجموعة واحدة على الأقل من مجموعات المادة المختارة';
+    showToast('يجب اختيار المجموعة صراحةً — لن يتم ربط الطالب بأي مجموعة تلقائيًا', true);
+    return;
+  }
+  const batches = window._batchA || {};
+  const subjectDoc = (batches.subjects || []).find(s => s.id === subjectId);
+  const stageDoc = (batches.stages || []).find(s => s.id === stageId);
   if (btn) { btn.disabled = true; btn.innerText = 'جاري الحفظ... ⏳'; }
   try {
     const res = await callBackend('createStudent', currentCallerToken, {
       institutionId: currentCallerToken.institutionId,
       name: name.trim(), phone: phone.trim(), guardianPhone: guardianPhone.trim(), guardianName: guardianName.trim(),
-      academicYearId, stageId, groupIds: selectedGroups, notes, status: 'ACTIVE'
+      academicYearId, stageId, subjectId,
+      stageName: stageDoc ? stageDoc.name : '',
+      subjectName: subjectDoc ? subjectDoc.name : '',
+      attendanceCardCode: cardCode || undefined,
+      groupIds: selectedGroups, notes, status: 'ACTIVE'
     });
     closeModal();
     showToast(`تم حفظ الطالب ${res.name} بنجاح${selectedGroups.length ? ` مع التسجيل في ${selectedGroups.length} مجموعة` : ''}!`);
@@ -13409,7 +13711,7 @@ async function openAddSessionModal() {
     teachers = tRes || [];
   } catch (_) {}
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDayString();
 
   modal.innerHTML = `
     <div class="modal-overlay" onclick="closeModalOnOverlay(event)">
@@ -16539,7 +16841,3 @@ function addAppNotification(title, text, onClickAction) {
   }
   list.prepend(item);
 }
-
-
-
-
